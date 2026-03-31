@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=Inter:wght@300;400;500;600&amp;display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary-fixed-dim": "#97ee00",
+                        "outline-variant": "#484847",
+                        "outline": "#767575",
+                        "on-tertiary-fixed": "#4c4800",
+                        "surface-dim": "#0e0e0e",
+                        "secondary-container": "#5a6400",
+                        "tertiary": "#fffade",
+                        "surface": "#0e0e0e",
+                        "on-error-container": "#ffd2c8",
+                        "error-container": "#b92902",
+                        "background": "#0e0e0e",
+                        "tertiary-fixed": "#fcf35d",
+                        "on-primary-container": "#385d00",
+                        "on-secondary-fixed-variant": "#576100",
+                        "surface-container-high": "#20201f",
+                        "secondary-fixed": "#dcec62",
+                        "inverse-primary": "#416a00",
+                        "secondary": "#dcec62",
+                        "primary-dim": "#97ee00",
+                        "on-tertiary-container": "#5d5900",
+                        "tertiary-fixed-dim": "#ede450",
+                        "surface-container-highest": "#262626",
+                        "tertiary-container": "#f9f05b",
+                        "surface-tint": "#ddffb0",
+                        "surface-container-low": "#131313",
+                        "on-primary-fixed-variant": "#3f6800",
+                        "on-secondary-container": "#f4ffa4",
+                        "surface-bright": "#2c2c2c",
+                        "primary-fixed": "#a1fe00",
+                        "primary-container": "#a1fe00",
+                        "on-error": "#450900",
+                        "inverse-surface": "#fcf9f8",
+                        "on-primary": "#3e6600",
+                        "on-background": "#ffffff",
+                        "on-surface-variant": "#adaaaa",
+                        "error-dim": "#d53d18",
+                        "tertiary-dim": "#ede450",
+                        "primary": "#ddffb0",
+                        "inverse-on-surface": "#565555",
+                        "error": "#ff7351",
+                        "on-primary-fixed": "#2b4900",
+                        "secondary-fixed-dim": "#cede56",
+                        "surface-container-lowest": "#000000",
+                        "surface-variant": "#262626",
+                        "on-secondary-fixed": "#3c4300",
+                        "on-tertiary": "#666100",
+                        "on-surface": "#ffffff",
+                        "secondary-dim": "#cede56",
+                        "on-secondary": "#4e5700",
+                        "on-tertiary-fixed-variant": "#6a6500",
+                        "surface-container": "#1a1a1a"
+                    },
+                    fontFamily: {
+                        "headline": ["Space Grotesk"],
+                        "body": ["Inter"],
+                        "label": ["Inter"]
+                    },
+                    borderRadius: {"DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem"},
+                },
+            },
+        }
+    </script>
+    <style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body {
+            background-color: #0e0e0e;
+            color: #ffffff;
+            font-family: 'Inter', sans-serif;
+        }
+        .space-grotesk {
+            font-family: 'Space Grotesk', sans-serif;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #0e0e0e;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #2c2c2c;
+            border-radius: 10px;
+        }
+        .glow-accent {
+            box-shadow: 0 0 15px rgba(161, 254, 0, 0.2);
+        }
+    </style>
+</head>
+<body class="overflow-hidden h-screen bg-surface">
+<!-- Sidebar Navigation -->
+<aside class="fixed left-0 top-0 h-full z-50 flex flex-col items-center justify-between bg-[#1a1a1a] w-20 py-6 font-['Space_Grotesk'] text-sm tracking-tight">
+    <div class="flex flex-col items-center gap-10 w-full">
+        <div class="text-[#a1fe00] font-bold text-lg tracking-tighter flex flex-col items-center">
+            <span class="material-symbols-outlined text-3xl mb-1" data-icon="polymer">polymer</span>
+            <span class="text-[8px] uppercase tracking-[0.2em] opacity-50">v1.0.4</span>
+        </div>
+        <nav class="flex flex-col gap-8 w-full items-center">
+            <a href="projects.html" class="flex flex-col items-center gap-1 text-[#adaaaa] hover:text-white transition-colors duration-200 active:scale-95">
+                <span class="material-symbols-outlined text-2xl" data-icon="folder_open">folder_open</span>
+                <span class="text-[10px] font-medium">Projects</span>
+            </a>
+            <a href="markup.html" class="flex flex-col items-center gap-1 text-[#adaaaa] hover:text-white transition-colors duration-200 active:scale-95">
+                <span class="material-symbols-outlined text-2xl" data-icon="edit_note">edit_note</span>
+                <span class="text-[10px] font-medium">Markup</span>
+            </a>
+            <a href="adjustments.html" class="flex flex-col items-center gap-1 text-[#adaaaa] hover:text-white transition-colors duration-200 active:scale-95">
+                <span class="material-symbols-outlined text-2xl" data-icon="tune">tune</span>
+                <span class="text-[10px] font-medium">Adjustments</span>
+            </a>
+            <a href="scoring.html" class="flex flex-col items-center gap-1 text-[#adaaaa] hover:text-white transition-colors duration-200 active:scale-95">
+                <span class="material-symbols-outlined text-2xl" data-icon="scoreboard">scoreboard</span>
+                <span class="text-[10px] font-medium">Scoring</span>
+            </a>
+            <a href="export.html" class="relative group flex flex-col items-center gap-1 text-[#a1fe00] after:absolute after:left-0 after:w-1 after:h-8 after:bg-[#a1fe00] after:rounded-r-full active:scale-95 transition-transform duration-150">
+                <span class="material-symbols-outlined text-2xl" data-icon="ios_share" style="font-variation-settings: 'FILL' 1;">ios_share</span>
+                <span class="text-[10px] font-medium">Exports</span>
+            </a>
+        </nav>
+    </div>
+    <div class="flex flex-col items-center gap-6">
+        <button class="w-10 h-10 rounded-full bg-surface-container-highest flex items-center justify-center hover:bg-surface-bright transition-colors">
+            <span class="material-symbols-outlined text-on-surface-variant" data-icon="settings">settings</span>
+        </button>
+    </div>
+</aside>
+<!-- Main Content Canvas -->
+<main class="ml-20 h-screen flex overflow-hidden">
+    <!-- Left Panel: Export Configuration -->
+    <section class="w-[380px] bg-surface-container p-8 flex flex-col gap-8 overflow-y-auto custom-scrollbar">
+        <div class="flex flex-col gap-1">
+            <h1 class="text-2xl font-headline font-bold tracking-tighter text-on-surface uppercase">Export Settings</h1>
+            <p class="text-xs text-on-surface-variant tracking-wider font-label">CONFIGURATION MODULE V1.0.4</p>
+        </div>
+        <div class="flex flex-col gap-6">
+            <!-- Resolution -->
+            <div class="flex flex-col gap-3">
+                <label class="text-[10px] font-bold text-on-surface-variant uppercase tracking-[0.2em] font-label">Output Resolution</label>
+                <div class="grid grid-cols-2 gap-2">
+                    <button class="bg-surface-container-lowest border border-transparent hover:border-primary-fixed p-3 flex flex-col items-start transition-all group">
+                        <span class="text-xs font-bold font-headline group-hover:text-primary-fixed">4K ULTRA HD</span>
+                        <span class="text-[10px] text-on-surface-variant">3840 x 2160</span>
+                    </button>
+                    <button class="bg-surface-bright border border-primary-fixed p-3 flex flex-col items-start transition-all group">
+                        <span class="text-xs font-bold font-headline text-primary-fixed">1080P FHD</span>
+                        <span class="text-[10px] text-on-surface-variant">1920 x 1080</span>
+                    </button>
+                </div>
+            </div>
+            <!-- Bitrate Control -->
+            <div class="flex flex-col gap-3">
+                <div class="flex justify-between items-center">
+                    <label class="text-[10px] font-bold text-on-surface-variant uppercase tracking-[0.2em] font-label">Target Bitrate</label>
+                    <span class="text-xs font-mono text-primary-fixed">45 Mbps</span>
+                </div>
+                <div class="h-1 bg-surface-container-lowest relative rounded-full overflow-hidden">
+                    <div class="absolute top-0 left-0 h-full w-[65%] bg-primary-fixed"></div>
+                </div>
+                <div class="flex justify-between text-[9px] text-outline font-mono">
+                    <span>10MBPS</span>
+                    <span>100MBPS</span>
+                </div>
+            </div>
+            <!-- Idle Trim Toggle (above Scoreboard) -->
+            <div class="bg-surface-container-high p-4 flex items-center justify-between">
+                <div class="flex flex-col">
+                    <span class="text-xs font-bold font-headline">Remove Idle Time Between Points</span>
+                    <span class="text-[10px] text-on-surface-variant">Auto-trim downtime between rallies</span>
+                </div>
+                <button class="w-10 h-5 bg-primary-fixed rounded-full relative flex items-center px-1">
+                    <div class="w-3 h-3 bg-on-primary-fixed rounded-full ml-auto"></div>
+                </button>
+            </div>
+            <!-- Scoreboard Toggle -->
+            <div class="bg-surface-container-high p-4 flex items-center justify-between">
+                <div class="flex flex-col">
+                    <span class="text-xs font-bold font-headline">Scoreboard Overlay</span>
+                    <span class="text-[10px] text-on-surface-variant">Burn-in dynamic metadata</span>
+                </div>
+                <button class="w-10 h-5 bg-primary-fixed rounded-full relative flex items-center px-1">
+                    <div class="w-3 h-3 bg-on-primary-fixed rounded-full ml-auto"></div>
+                </button>
+            </div>
+            <!-- Codec Selection -->
+            <div class="flex flex-col gap-3">
+                <label class="text-[10px] font-bold text-on-surface-variant uppercase tracking-[0.2em] font-label">Encoder Engine</label>
+                <div class="space-y-2">
+                    <div class="flex items-center gap-3 p-3 bg-surface-container-lowest">
+                        <span class="material-symbols-outlined text-primary-fixed-dim text-sm">memory</span>
+                        <span class="text-xs font-label">H.265 / HEVC (Hardware Accelerated)</span>
+                    </div>
+                    <div class="flex items-center gap-3 p-3 bg-surface-container-low opacity-50">
+                        <span class="material-symbols-outlined text-on-surface-variant text-sm">settings_ethernet</span>
+                        <span class="text-xs font-label">ProRes 422 HQ</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="mt-auto pt-8">
+            <button class="w-full py-4 bg-gradient-to-br from-primary to-primary-container text-on-primary-fixed font-headline font-extrabold tracking-tighter uppercase text-sm flex items-center justify-center gap-2 hover:brightness-110 transition-all glow-accent">
+                <span class="material-symbols-outlined text-lg">rocket_launch</span>
+                Initialize Render
+            </button>
+        </div>
+    </section>
+    <!-- Right Panel: Queue & Completed -->
+    <section class="flex-1 bg-surface-dim p-10 flex flex-col gap-10 overflow-y-auto custom-scrollbar">
+        <!-- Active Processing Section -->
+        <div class="flex flex-col gap-6">
+            <div class="flex items-center justify-between">
+                <h2 class="text-lg font-headline font-bold flex items-center gap-3 tracking-tight">
+                    <span class="w-2 h-2 bg-primary-fixed rounded-full"></span>
+                    Active Processing
+                </h2>
+            </div>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <!-- Progress Card 1 -->
+                <div class="bg-surface-container border-l-2 border-primary-fixed p-5 flex flex-col gap-4">
+                    <div class="flex justify-between items-start">
+                        <div class="flex flex-col gap-1">
+                            <h3 class="text-sm font-headline font-bold text-on-surface">Main_Event_Final_v2.mp4</h3>
+                            <span class="text-[10px] text-on-surface-variant font-mono">ID: 8842-XPS-01</span>
+                        </div>
+                        <span class="text-xs font-mono text-primary-fixed">74%</span>
+                    </div>
+                    <div class="w-full h-[2px] bg-surface-container-highest relative">
+                        <div class="absolute top-0 left-0 h-full w-[74%] bg-primary-fixed shadow-[0_0_8px_rgba(161,254,0,0.6)]"></div>
+                    </div>
+                    <div class="flex justify-between text-[10px] text-outline font-mono">
+                        <span>ETA: 02:14</span>
+                        <span>4.2GB / 5.8GB</span>
+                    </div>
+                </div>
+                <!-- Progress Card 2 -->
+                <div class="bg-surface-container border-l-2 border-primary-fixed p-5 flex flex-col gap-4">
+                    <div class="flex justify-between items-start">
+                        <div class="flex flex-col gap-1">
+                            <h3 class="text-sm font-headline font-bold text-on-surface">Social_Teaser_Vertical.mov</h3>
+                            <span class="text-[10px] text-on-surface-variant font-mono">ID: 8842-XPS-02</span>
+                        </div>
+                        <span class="text-xs font-mono text-primary-fixed">12%</span>
+                    </div>
+                    <div class="w-full h-[2px] bg-surface-container-highest relative">
+                        <div class="absolute top-0 left-0 h-full w-[12%] bg-primary-fixed shadow-[0_0_8px_rgba(161,254,0,0.6)]"></div>
+                    </div>
+                    <div class="flex justify-between text-[10px] text-outline font-mono">
+                        <span>ETA: 18:45</span>
+                        <span>120MB / 1.1GB</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Completed Renders -->
+        <div class="flex flex-col gap-6 flex-1">
+            <div class="flex items-center justify-between">
+                <h2 class="text-lg font-headline font-bold flex items-center gap-3 tracking-tight">
+                    <span class="w-2 h-2 bg-outline rounded-full"></span>
+                    Completed Renders
+                </h2>
+                <button class="text-[10px] text-on-surface-variant hover:text-white uppercase font-bold tracking-widest transition-colors">Clear Finished</button>
+            </div>
+            <div class="flex flex-col gap-1">
+                <!-- List Header -->
+                <div class="grid grid-cols-12 px-4 py-2 text-[10px] font-bold text-outline uppercase tracking-widest font-label">
+                    <div class="col-span-6">Asset Name</div>
+                    <div class="col-span-2">Format</div>
+                    <div class="col-span-2">Size</div>
+                    <div class="col-span-2 text-right">Action</div>
+                </div>
+                <!-- List Items -->
+                <div class="flex flex-col">
+                    <div class="grid grid-cols-12 px-4 py-4 bg-surface-container items-center mb-[1px] hover:bg-surface-bright transition-colors group">
+                        <div class="col-span-6 flex items-center gap-3">
+                            <span class="material-symbols-outlined text-primary-fixed-dim text-sm">check_circle</span>
+                            <span class="text-xs font-medium">Tournament_Recap_Highlights.mp4</span>
+                        </div>
+                        <div class="col-span-2 text-xs font-mono text-on-surface-variant">H.264 / 4K</div>
+                        <div class="col-span-2 text-xs font-mono text-on-surface-variant">8.42 GB</div>
+                        <div class="col-span-2 flex justify-end">
+                            <button class="px-4 py-1.5 bg-surface-container-highest text-[10px] font-bold uppercase tracking-tighter hover:bg-primary-fixed hover:text-on-primary-fixed transition-all flex items-center gap-2">
+                                <span class="material-symbols-outlined text-xs">download</span>
+                                Open folder
+                            </button>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-12 px-4 py-4 bg-surface-container items-center mb-[1px] hover:bg-surface-bright transition-colors group">
+                        <div class="col-span-6 flex items-center gap-3">
+                            <span class="material-symbols-outlined text-primary-fixed-dim text-sm">check_circle</span>
+                            <span class="text-xs font-medium">B-Roll_SloMo_Package_01.mov</span>
+                        </div>
+                        <div class="col-span-2 text-xs font-mono text-on-surface-variant">ProRes 422</div>
+                        <div class="col-span-2 text-xs font-mono text-on-surface-variant">24.1 GB</div>
+                        <div class="col-span-2 flex justify-end">
+                            <button class="px-4 py-1.5 bg-surface-container-highest text-[10px] font-bold uppercase tracking-tighter hover:bg-primary-fixed hover:text-on-primary-fixed transition-all flex items-center gap-2">
+                                <span class="material-symbols-outlined text-xs">download</span>
+                                Open folder
+                            </button>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-12 px-4 py-4 bg-surface-container items-center mb-[1px] hover:bg-surface-bright transition-colors group">
+                        <div class="col-span-6 flex items-center gap-3">
+                            <span class="material-symbols-outlined text-primary-fixed-dim text-sm">check_circle</span>
+                            <span class="text-xs font-medium">Interview_Audio_Stem_Clean.wav</span>
+                        </div>
+                        <div class="col-span-2 text-xs font-mono text-on-surface-variant">WAV / 48kHz</div>
+                        <div class="col-span-2 text-xs font-mono text-on-surface-variant">420 MB</div>
+                        <div class="col-span-2 flex justify-end">
+                            <button class="px-4 py-1.5 bg-surface-container-highest text-[10px] font-bold uppercase tracking-tighter hover:bg-primary-fixed hover:text-on-primary-fixed transition-all flex items-center gap-2">
+                                <span class="material-symbols-outlined text-xs">download</span>
+                                Open folder
+                            </button>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-12 px-4 py-4 bg-surface-container items-center mb-[1px] hover:bg-surface-bright transition-colors group">
+                        <div class="col-span-6 flex items-center gap-3">
+                            <span class="material-symbols-outlined text-primary-fixed-dim text-sm">check_circle</span>
+                            <span class="text-xs font-medium">Draft_Sequence_Review_V1.mp4</span>
+                        </div>
+                        <div class="col-span-2 text-xs font-mono text-on-surface-variant">H.264 / 1080P</div>
+                        <div class="col-span-2 text-xs font-mono text-on-surface-variant">1.2 GB</div>
+                        <div class="col-span-2 flex justify-end">
+                            <button class="px-4 py-1.5 bg-surface-container-highest text-[10px] font-bold uppercase tracking-tighter hover:bg-primary-fixed hover:text-on-primary-fixed transition-all flex items-center gap-2">
+                                <span class="material-symbols-outlined text-xs">download</span>
+                                Open folder
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+</main>
+</body></html>

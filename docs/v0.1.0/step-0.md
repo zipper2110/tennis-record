@@ -1,0 +1,119 @@
+# v0.1.0 — Step 0: New/Open Project — Task Breakdown
+
+- [ ] 0.1 — Projects tab shell (UI scaffolding)
+  - Description: Implement the Projects tab per `design/projects.html` with primary actions (New Project, Open Project) and a Recent Projects list area.
+  - Acceptance Criteria:
+    - The Projects tab is reachable and visually matches the draft (layout, primary actions, list placeholder).
+    - Keyboard and mouse interactions work for buttons (focus, click states).
+  - Implementation Guide:
+    - UI toolkit: use JavaFX (or Compose for Desktop) — keep layout minimal and match `design/projects.html` structure.
+    - Create a `ProjectsTab` view with two primary buttons: `New Project`, `Open Project`, and a `Recent Projects` list placeholder.
+    - Wire buttons to dispatcher methods: `onNewProjectClicked()` and `onOpenProjectClicked()`.
+    - Provide basic focus visuals and keyboard activation (Enter/Space) via default button handling.
+    - Keep styling in a single CSS (or theme) file so later adjustments don’t touch logic.
+
+- [ ] 0.2 — Define project manifest schema (v1)
+  - Description: Define the minimal JSON structure for a `*.trproj` file (project manifest) including project `id`, `name`, `createdAt`, `lastOpenedAt`, `version`, and optional `sourceVideo` path placeholder.
+  - Acceptance Criteria:
+    - `docs/solution-outline.md` (or code comments) documents the JSON keys and example.
+    - A new project writes a valid manifest file to disk.
+  - Implementation Guide:
+    - Define a Kotlin data class `ProjectManifestV1` with the fields above; store times as ISO-8601 UTC strings.
+    - Add `version: 1` to allow forward compatibility; unknown fields must be ignored on read.
+    - Choose JSON lib: Jackson Kotlin module or kotlinx.serialization; create `ManifestIO` with `read(path)` and `write(path, manifest)`.
+    - File name convention: `project.trproj` in the project root folder.
+    - Document the schema and an example manifest in `docs/solution-outline.md`.
+
+- [ ] 0.3 — New Project flow (choose folder + name)
+  - Description: Implement a guided flow to choose or create a project folder and enter a project name. Create the folder if needed and write an initial `project.trproj` manifest.
+  - Acceptance Criteria:
+    - User can browse to/select a folder and input a project name; invalid names are rejected with a clear message.
+    - If the folder doesn’t exist, user can create it from the dialog.
+    - A `project.trproj` file is created containing the manifest with the chosen name and generated `id`.
+    - After creation, the project is opened in the app context and navigates to Step 1 (Select Source Video).
+  - Implementation Guide:
+    - Show a folder chooser dialog (default to user documents or last used path) and an input for project name.
+    - Validate name: non-empty, no reserved characters for Windows paths, max length 64; show inline error.
+    - On confirm: create folder if missing; generate `id` (UUID v4); fill manifest defaults and write `project.trproj`.
+    - Initialize app project context (paths, manifest) and push to a central `ProjectStore`.
+    - Update MRU list with the new project path and timestamp.
+    - Navigate to Step 1 view when done.
+
+- [ ] 0.4 — Open Existing Project flow (*.trproj picker)
+  - Description: Implement an Open dialog filtered to `*.trproj` files that validates and loads the manifest into the app.
+  - Acceptance Criteria:
+    - File chooser filters to `*.trproj` and remembers the last directory.
+    - Opening updates `lastOpenedAt` and loads app state (project context).
+    - If the manifest contains `sourceVideo`, app proceeds to Step 2; otherwise navigates to Step 1.
+  - Implementation Guide:
+    - Show file chooser with filter `*.trproj`; remember last directory in user settings.
+    - Read manifest via `ManifestIO.read`; validate required fields and `version`.
+    - If valid: set `lastOpenedAt = now`, persist manifest to disk, then load `ProjectStore`.
+    - Update MRU entry (move to top with new timestamp), then navigate to Step 1 or Step 2 depending on `sourceVideo` presence.
+    - On failure: show error dialog with options to view file, retry, or learn more.
+
+- [ ] 0.5 — Recent Projects list (MRU)
+  - Description: Persist a Most-Recently-Used list (path, name, lastOpenedAt) and render it in the Projects tab with click-to-open and remove-from-list.
+  - Acceptance Criteria:
+    - Up to 10 projects are shown, sorted by `lastOpenedAt` desc.
+    - Clicking an item opens the project; a context action removes an entry without deleting files.
+    - MRU persists across restarts (stored in user config dir).
+  - Implementation Guide:
+    - Persist MRU JSON in user config dir: `%APPDATA%/TennisRecord/mru.json` on Windows (or platform app data dir).
+    - Structure: array of `{ path, name, lastOpenedAt }`; keep only existing paths when loading.
+    - Provide API: `MruStore.load/save/updateOnOpen/remove(path)`.
+    - Render list in `ProjectsTab`; clicking an item calls the same open flow with the stored path.
+    - Add context menu or small "×" button to remove without touching files.
+
+- [ ] 0.6 — Project lifecycle and switching
+  - Description: Handle loading/unloading of a project context, with a prompt to save if there are unsaved changes when switching projects or exiting.
+  - Acceptance Criteria:
+    - Switching between projects via Open/Recents unloads the previous project safely.
+    - Unsaved-changes prompt appears when needed; user choices are honored (Save/Discard/Cancel).
+  - Implementation Guide:
+    - Centralize current project state in `ProjectStore` with `load(path)`, `unload()`, and a `dirty` flag.
+    - Intercept project-open actions: if `dirty`, prompt Save/Discard/Cancel; handle accordingly.
+    - On `load`, close media/resources from previous project, then initialize new context and emit an event.
+    - Subscribe views to project-changed events to refresh UI safely.
+
+- [ ] 0.7 — Autosave (manifest only, initial)
+  - Description: Implement a lightweight autosave that updates the manifest on key changes (e.g., project rename, source video selection in Step 1).
+  - Acceptance Criteria:
+    - Autosave writes within 2 seconds of a change and debounces rapid updates.
+    - No data loss when the app is closed unexpectedly (best-effort with last autosave).
+  - Implementation Guide:
+    - Implement `AutosaveScheduler` with debounce (e.g., 2s) on manifest-affecting events.
+    - Persist using `ManifestIO.write` to the current project’s `project.trproj`.
+    - Mark `dirty` until write completes; clear on success; surface errors via logging + toast/dialog.
+    - Ensure shutdown hook triggers a final flush without blocking excessively.
+
+- [ ] 0.8 — Validation and error handling
+  - Description: Validate folder writability, file collisions, malformed or version-mismatched manifests; show clear, actionable error messages.
+  - Acceptance Criteria:
+    - New Project prevents overwriting non-empty folders unless explicitly confirmed.
+    - Opening a corrupt/outdated manifest shows an error with options (View file, Learn more) and does not crash the app.
+  - Implementation Guide:
+    - Preflight checks for New Project: path exists, writable, empty or confirmed overwrite; handle exceptions gracefully.
+    - Manifest validation: check `version == 1`, required fields present, `sourceVideo` if present points to readable file.
+    - Provide consistent error dialogs; include copyable details and a short summary.
+    - Guard all file I/O with try/catch and surface friendly messages.
+
+- [ ] 0.9 — Telemetry-free logging for project I/O
+  - Description: Add basic info/error logs around project creation/opening and MRU updates. No telemetry or external calls.
+  - Acceptance Criteria:
+    - Logs include timestamps and file paths involved.
+    - Errors include stack traces and user-readable summaries.
+  - Implementation Guide:
+    - Add a simple logger facade (SLF4J + simple backend, or Kotlin logging) initialized at app start.
+    - Log at INFO: project create/open paths, MRU updates; at WARN/ERROR: validation failures and exceptions.
+    - Include correlation IDs per session (UUID) to group related messages in future.
+
+- [ ] 0.10 — Navigation wiring from Projects tab
+  - Description: After creating/opening a project, navigate to Step 1 (Select Source Video) unless a `sourceVideo` is already present.
+  - Acceptance Criteria:
+    - New Project ends on Step 1.
+    - Open Existing Project routes to Step 1 or Step 2 based on manifest content.
+  - Implementation Guide:
+    - Define a simple `Navigator` with routes: `Projects`, `Step1SelectSource`, `Step2Trim`.
+    - From `onNewProjectClicked` and `onOpenProject...`, call `Navigator.goTo(Step1/Step2)` after context is ready.
+    - Ensure routes can be re-entered safely after project switches.

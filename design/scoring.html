@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              colors: {
+                "primary-fixed-dim": "#97ee00",
+                "outline-variant": "#484847",
+                "outline": "#767575",
+                "on-tertiary-fixed": "#4c4800",
+                "surface-dim": "#0e0e0e",
+                "secondary-container": "#5a6400",
+                "tertiary": "#fffade",
+                "surface": "#0e0e0e",
+                "on-error-container": "#ffd2c8",
+                "error-container": "#b92902",
+                "background": "#0e0e0e",
+                "tertiary-fixed": "#fcf35d",
+                "on-primary-container": "#385d00",
+                "on-secondary-fixed-variant": "#576100",
+                "surface-container-high": "#20201f",
+                "secondary-fixed": "#dcec62",
+                "inverse-primary": "#416a00",
+                "secondary": "#dcec62",
+                "primary-dim": "#97ee00",
+                "on-tertiary-container": "#5d5900",
+                "tertiary-fixed-dim": "#ede450",
+                "surface-container-highest": "#262626",
+                "tertiary-container": "#f9f05b",
+                "surface-tint": "#ddffb0",
+                "surface-container-low": "#131313",
+                "on-primary-fixed-variant": "#3f6800",
+                "on-secondary-container": "#f4ffa4",
+                "surface-bright": "#2c2c2c",
+                "primary-fixed": "#a1fe00",
+                "primary-container": "#a1fe00",
+                "on-error": "#450900",
+                "inverse-surface": "#fcf9f8",
+                "on-primary": "#3e6600",
+                "on-background": "#ffffff",
+                "on-surface-variant": "#adaaaa",
+                "error-dim": "#d53d18",
+                "tertiary-dim": "#ede450",
+                "primary": "#ddffb0",
+                "inverse-on-surface": "#565555",
+                "error": "#ff7351",
+                "on-primary-fixed": "#2b4900",
+                "secondary-fixed-dim": "#cede56",
+                "surface-container-lowest": "#000000",
+                "surface-variant": "#262626",
+                "on-secondary-fixed": "#3c4300",
+                "on-tertiary": "#666100",
+                "on-surface": "#ffffff",
+                "secondary-dim": "#cede56",
+                "on-secondary": "#4e5700",
+                "on-tertiary-fixed-variant": "#6a6500",
+                "surface-container": "#1a1a1a"
+              },
+              fontFamily: {
+                "headline": ["Space Grotesk"],
+                "body": ["Inter"],
+                "label": ["Inter"]
+              },
+              borderRadius: {"DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem"},
+            },
+          },
+        }
+    </script>
+    <style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .neon-gradient {
+            background: linear-gradient(135deg, #ddffb0 0%, #a1fe00 100%);
+        }
+        /* 16:9 video frame helper */
+        .video-frame {
+            aspect-ratio: 16 / 9;
+            width: 100%;
+            position: relative;
+        }
+        /* Simple flash ring effect for feedback */
+        .flash {
+            box-shadow: 0 0 0 2px rgba(161, 254, 0, 0.6) inset;
+            transition: box-shadow 200ms ease;
+        }
+        /* KBD style for hotkey hints */
+        .kbd {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+            border: 1px solid #484847;
+            padding: 1px 6px;
+            border-radius: 4px;
+            font-size: 10px;
+            opacity: 0.7;
+        }
+        .obsidian-scroll::-webkit-scrollbar {
+            width: 4px;
+        }
+        .obsidian-scroll::-webkit-scrollbar-track {
+            background: #000000;
+        }
+        .obsidian-scroll::-webkit-scrollbar-thumb {
+            background: #2c2c2c;
+        }
+        .obsidian-scroll::-webkit-scrollbar-thumb:hover {
+            background: #a1fe00;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-surface font-body overflow-hidden">
+<!-- Shared SideNavBar Shell -->
+<aside class="fixed left-0 top-0 h-full z-50 flex flex-col items-center justify-between bg-[#1a1a1a] w-20 py-6 font-['Space_Grotesk'] text-sm tracking-tight">
+    <div class="flex flex-col items-center gap-10 w-full">
+        <div class="text-[#a1fe00] font-bold text-lg tracking-tighter flex flex-col items-center">
+            <span class="material-symbols-outlined text-3xl mb-1" data-icon="polymer">polymer</span>
+            <span class="text-[8px] uppercase tracking-[0.2em] opacity-50">v1.0.4</span>
+        </div>
+        <nav class="flex flex-col gap-8 w-full items-center">
+            <a href="projects.html" class="flex flex-col items-center gap-1 text-[#adaaaa] hover:text-white transition-colors duration-200 active:scale-95">
+                <span class="material-symbols-outlined text-2xl" data-icon="folder_open">folder_open</span>
+                <span class="text-[10px] font-medium">Projects</span>
+            </a>
+            <a href="markup.html" class="flex flex-col items-center gap-1 text-[#adaaaa] hover:text-white transition-colors duration-200 active:scale-95">
+                <span class="material-symbols-outlined text-2xl" data-icon="edit_note">edit_note</span>
+                <span class="text-[10px] font-medium">Markup</span>
+            </a>
+            <a href="adjustments.html" class="flex flex-col items-center gap-1 text-[#adaaaa] hover:text-white transition-colors duration-200 active:scale-95">
+                <span class="material-symbols-outlined text-2xl" data-icon="tune">tune</span>
+                <span class="text-[10px] font-medium">Adjustments</span>
+            </a>
+            <a href="scoring.html" class="relative group flex flex-col items-center gap-1 text-[#a1fe00] after:absolute after:left-0 after:w-1 after:h-8 after:bg-[#a1fe00] after:rounded-r-full active:scale-95 transition-transform duration-150">
+                <span class="material-symbols-outlined text-2xl" data-icon="scoreboard" style="font-variation-settings: 'FILL' 1;">scoreboard</span>
+                <span class="text-[10px] font-medium">Scoring</span>
+            </a>
+            <a href="export.html" class="flex flex-col items-center gap-1 text-[#adaaaa] hover:text-white transition-colors duration-200 active:scale-95">
+                <span class="material-symbols-outlined text-2xl" data-icon="ios_share">ios_share</span>
+                <span class="text-[10px] font-medium">Exports</span>
+            </a>
+        </nav>
+    </div>
+    <div class="flex flex-col items-center gap-6">
+        <button class="w-10 h-10 rounded-full bg-surface-container-highest flex items-center justify-center hover:bg-surface-bright transition-colors">
+            <span class="material-symbols-outlined text-on-surface-variant" data-icon="settings">settings</span>
+        </button>
+    </div>
+</aside>
+<!-- Main Canvas -->
+<main class="ml-20 h-screen grid grid-cols-[320px_1fr] overflow-hidden min-h-0">
+    <!-- Left Panel: Point Markers -->
+    <section class="bg-surface-container-low flex flex-col border-r border-outline-variant/10 min-h-0">
+        <div class="p-4 border-b border-outline-variant/10 flex justify-between items-center">
+            <h2 class="font-headline font-bold text-sm tracking-widest uppercase text-on-surface-variant">Point Markers</h2>
+            <span class="text-[10px] bg-surface-container-highest px-2 py-0.5 rounded text-primary-fixed">14 TOTAL</span>
+        </div>
+        <div class="flex-1 overflow-y-auto obsidian-scroll p-2 space-y-1">
+            <!-- Marker Item Active -->
+            <div class="p-3 bg-surface-bright rounded-lg border-l-2 border-primary-fixed flex items-center gap-3">
+                <div class="text-[10px] font-mono text-primary-fixed">00:12:45</div>
+                <div class="flex-1">
+                    <div class="text-xs font-medium">ACE - Player 1</div>
+                    <div class="text-[10px] text-on-surface-variant">Service Winner</div>
+                </div>
+                <span class="material-symbols-outlined text-sm text-primary-fixed" data-icon="check_circle" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+            </div>
+            <!-- Marker Items -->
+            <div class="p-3 hover:bg-surface-container-high rounded-lg transition-colors flex items-center gap-3 group">
+                <div class="text-[10px] font-mono text-on-surface-variant group-hover:text-on-surface">00:14:02</div>
+                <div class="flex-1">
+                    <div class="text-xs font-medium text-on-surface-variant group-hover:text-on-surface">Fault - Player 2</div>
+                    <div class="text-[10px] text-on-surface-variant/60">First Serve</div>
+                </div>
+            </div>
+            <div class="p-3 hover:bg-surface-container-high rounded-lg transition-colors flex items-center gap-3 group">
+                <div class="text-[10px] font-mono text-on-surface-variant group-hover:text-on-surface">00:14:33</div>
+                <div class="flex-1">
+                    <div class="text-xs font-medium text-on-surface-variant group-hover:text-on-surface">Winner - Player 1</div>
+                    <div class="text-[10px] text-on-surface-variant/60">Backhand Crosscourt</div>
+                </div>
+            </div>
+            <div class="p-3 hover:bg-surface-container-high rounded-lg transition-colors flex items-center gap-3 group">
+                <div class="text-[10px] font-mono text-on-surface-variant group-hover:text-on-surface">00:15:10</div>
+                <div class="flex-1">
+                    <div class="text-xs font-medium text-on-surface-variant group-hover:text-on-surface">Unforced Error - P2</div>
+                    <div class="text-[10px] text-on-surface-variant/60">Net Cord</div>
+                </div>
+            </div>
+            <!-- Repeat for density -->
+            <div class="p-3 hover:bg-surface-container-high rounded-lg transition-colors flex items-center gap-3 group opacity-40">
+                <div class="text-[10px] font-mono text-on-surface-variant">00:16:00</div>
+                <div class="flex-1"><div class="text-xs font-medium">Pending Entry...</div></div>
+            </div>
+        </div>
+        <div class="p-4 bg-surface-container-lowest">
+            <button class="w-full py-2 flex items-center justify-center gap-2 border border-outline-variant/30 rounded text-xs hover:bg-surface-container-high transition-colors">
+                <span class="material-symbols-outlined text-sm" data-icon="add">add</span>
+                Manual Marker
+            </button>
+            <button class="w-full mt-2 py-2 flex items-center justify-center gap-2 border border-outline-variant/30 rounded text-xs hover:bg-surface-container-high transition-colors">
+                <span class="material-symbols-outlined text-sm" data-icon="tune">tune</span>
+                Scoreboard Settings
+            </button>
+        </div>
+    </section>
+    <!-- Center: Video Preview & Scoreboard Overlay -->
+    <section class="relative bg-surface flex flex-col min-h-0 overflow-hidden">
+        <div class="flex-1 relative flex items-center justify-center bg-black min-h-0 overflow-hidden">
+            <!-- 16:9 Video Frame Wrapper -->
+            <div class="video-frame w-full max-w-[1600px] md:rounded-lg overflow-hidden max-h-full">
+                <img alt="Tennis Match" class="absolute inset-0 w-full h-full object-cover opacity-80" data-alt="wide angle shot of a professional tennis stadium at night with intense stadium lighting and blue hardcourt" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBX60oc5kRiHHr12io0FNQG01YXtzEFbYDlx4nn5o8By70ht8pwuL1ds--lEWoiqSru9EYsa0FDLJaVifMuqTar8RrDYBkDF81GOEUBT2lcDqEDzUrVQg09oXYJgbvT962GT8b0qKUWpSJEf2gHopBOfNYG7UKnp3sRFTADOAyTOgqzEnEK6U1R1qDnCLZ1hheoZP32HR3MYNAcW2bxCO3GdyW1k5GIrGnvt9pUB7Nxrbgigz_8E6LvXNWQqDMac3l1emcXzZZP35Dq"/>
+                <!-- Scoreboard Overlay (relative to frame) -->
+                <div class="absolute top-4 left-4 md:top-10 md:left-10 flex flex-col gap-px bg-black/60 backdrop-blur-md border border-white/10 rounded-lg overflow-hidden shadow-2xl">
+                    <div class="flex items-center h-10 px-4 gap-8">
+                        <span class="font-headline font-bold text-xs tracking-tighter text-white/50">MATCH STATUS</span>
+                        <div class="flex items-center gap-2">
+                            <span class="w-1.5 h-1.5 rounded-full bg-primary-fixed shadow-[0_0_8px_#a1fe00]"></span>
+                            <span class="text-[10px] font-bold text-primary-fixed uppercase tracking-widest">Live Recording</span>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-[160px_40px_40px_60px] bg-black/40">
+                        <div class="px-4 py-3 text-xs font-bold uppercase tracking-tight text-white flex items-center gap-2 border-r border-white/5">
+                            <span class="w-2 h-2 rounded-sm bg-blue-500"></span>
+                            N. DJOKOVIC
+                        </div>
+                        <div class="flex items-center justify-center text-sm font-mono text-white/40 border-r border-white/5">6</div>
+                        <div class="flex items-center justify-center text-sm font-mono text-white/40 border-r border-white/5">4</div>
+                        <div class="flex items-center justify-center text-lg font-headline font-bold text-primary-fixed bg-primary-fixed/10">40</div>
+                    </div>
+                    <div class="grid grid-cols-[160px_40px_40px_60px] bg-black/20">
+                        <div class="px-4 py-3 text-xs font-bold uppercase tracking-tight text-white/70 flex items-center gap-2 border-r border-white/5">
+                            <span class="w-2 h-2 rounded-sm bg-red-500"></span>
+                            C. ALCARAZ
+                        </div>
+                        <div class="flex items-center justify-center text-sm font-mono text-white/40 border-r border-white/5">3</div>
+                        <div class="flex items-center justify-center text-sm font-mono text-white/40 border-r border-white/5">6</div>
+                        <div class="flex items-center justify-center text-lg font-headline font-bold text-white/30">15</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Bottom Controls and Player Panels -->
+        <div class="bg-surface-container border-t border-outline-variant/10 px-6 py-4 shrink-0">
+            <div class="w-full flex items-start justify-between gap-6">
+                <!-- Player 1 Controls (moved from right panel) -->
+                <div class="w-[360px]">
+                    <div class="space-y-4">
+                        <div class="flex items-center justify-between">
+                            <button accesskey="a" class="inline-flex items-center gap-2 px-3 py-1.5 rounded bg-surface-container-highest hover:bg-surface-bright text-blue-400 border border-outline-variant/20 focus:outline-none">
+                                <span class="material-symbols-outlined text-sm" data-icon="sports_score">sports_score</span>
+                                <span class="font-headline font-bold text-sm tracking-widest uppercase">Point for Player 1</span>
+                                <span class="kbd ml-2">A</span>
+                            </button>
+                            <span class="text-[10px] text-on-surface-variant font-mono">SERVE</span>
+                        </div>
+                        <div class="grid grid-cols-3 gap-2">
+                            <!-- Points -->
+                            <div class="bg-surface-container-lowest p-3 rounded-lg flex flex-col items-center gap-2">
+                                <span class="text-[10px] text-on-surface-variant font-bold">POINTS</span>
+                                <div class="text-3xl font-headline font-bold text-primary-fixed">40</div>
+                                <div class="flex w-full gap-1">
+                                    <button class="flex-1 h-8 bg-surface-container-highest rounded flex items-center justify-center hover:bg-surface-bright"><span class="material-symbols-outlined text-sm" data-icon="remove">remove</span></button>
+                                    <button class="flex-1 h-8 bg-surface-container-highest rounded flex items-center justify-center hover:bg-surface-bright"><span class="material-symbols-outlined text-sm" data-icon="add">add</span></button>
+                                </div>
+                            </div>
+                            <!-- Games -->
+                            <div class="bg-surface-container-lowest p-3 rounded-lg flex flex-col items-center gap-2">
+                                <span class="text-[10px] text-on-surface-variant font-bold">GAMES</span>
+                                <div class="text-3xl font-headline font-bold text-on-surface">4</div>
+                                <div class="flex w-full gap-1">
+                                    <button class="flex-1 h-8 bg-surface-container-highest rounded flex items-center justify-center hover:bg-surface-bright"><span class="material-symbols-outlined text-sm" data-icon="remove">remove</span></button>
+                                    <button class="flex-1 h-8 bg-surface-container-highest rounded flex items-center justify-center hover:bg-surface-bright"><span class="material-symbols-outlined text-sm" data-icon="add">add</span></button>
+                                </div>
+                            </div>
+                            <!-- Sets -->
+                            <div class="bg-surface-container-lowest p-3 rounded-lg flex flex-col items-center gap-2">
+                                <span class="text-[10px] text-on-surface-variant font-bold">SETS</span>
+                                <div class="text-3xl font-headline font-bold text-on-surface">1</div>
+                                <div class="flex w-full gap-1">
+                                    <button class="flex-1 h-8 bg-surface-container-highest rounded flex items-center justify-center hover:bg-surface-bright"><span class="material-symbols-outlined text-sm" data-icon="remove">remove</span></button>
+                                    <button class="flex-1 h-8 bg-surface-container-highest rounded flex items-center justify-center hover:bg-surface-bright"><span class="material-symbols-outlined text-sm" data-icon="add">add</span></button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Center: Current Frame + Playback Controls -->
+                <div class="flex flex-col items-center gap-3">
+                    <div class="flex flex-col items-center">
+                        <span class="text-[10px] text-on-surface-variant uppercase tracking-widest font-bold">Current Frame</span>
+                        <span class="font-mono text-lg text-primary-fixed">00:12:45:12</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button class="w-10 h-10 rounded-full flex items-center justify-center hover:bg-surface-bright text-on-surface transition-colors">
+                            <span class="material-symbols-outlined" data-icon="fast_rewind">fast_rewind</span>
+                        </button>
+                        <button class="w-12 h-12 rounded-full bg-surface-container-highest flex items-center justify-center text-primary-fixed hover:scale-105 transition-transform">
+                            <span class="material-symbols-outlined text-3xl" data-icon="play_arrow" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
+                        </button>
+                        <button class="w-10 h-10 rounded-full flex items-center justify-center hover:bg-surface-bright text-on-surface transition-colors">
+                            <span class="material-symbols-outlined" data-icon="fast_forward">fast_forward</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Player 2 Controls (moved from right panel) -->
+                <div class="w-[360px]">
+                    <div class="space-y-4">
+                        <div class="flex items-center justify-between">
+                            <button accesskey="l" class="inline-flex items-center gap-2 px-3 py-1.5 rounded bg-surface-container-highest hover:bg-surface-bright text-red-400 border border-outline-variant/20 focus:outline-none">
+                                <span class="material-symbols-outlined text-sm" data-icon="sports_score">sports_score</span>
+                                <span class="font-headline font-bold text-sm tracking-widest uppercase">Point for Player 2</span>
+                                <span class="kbd ml-2">L</span>
+                            </button>
+                            <button class="w-6 h-6 rounded bg-surface-container-highest flex items-center justify-center"><span class="material-symbols-outlined text-xs" data-icon="sports_tennis">sports_tennis</span></button>
+                        </div>
+                        <div class="grid grid-cols-3 gap-2">
+                            <!-- Points -->
+                            <div class="bg-surface-container-lowest p-3 rounded-lg flex flex-col items-center gap-2">
+                                <span class="text-[10px] text-on-surface-variant font-bold">POINTS</span>
+                                <div class="text-3xl font-headline font-bold text-on-surface">15</div>
+                                <div class="flex w-full gap-1">
+                                    <button class="flex-1 h-8 bg-surface-container-highest rounded flex items-center justify-center hover:bg-surface-bright"><span class="material-symbols-outlined text-sm" data-icon="remove">remove</span></button>
+                                    <button class="flex-1 h-8 bg-surface-container-highest rounded flex items-center justify-center hover:bg-surface-bright"><span class="material-symbols-outlined text-sm" data-icon="add">add</span></button>
+                                </div>
+                            </div>
+                            <!-- Games -->
+                            <div class="bg-surface-container-lowest p-3 rounded-lg flex flex-col items-center gap-2">
+                                <span class="text-[10px] text-on-surface-variant font-bold">GAMES</span>
+                                <div class="text-3xl font-headline font-bold text-on-surface">6</div>
+                                <div class="flex w-full gap-1">
+                                    <button class="flex-1 h-8 bg-surface-container-highest rounded flex items-center justify-center hover:bg-surface-bright"><span class="material-symbols-outlined text-sm" data-icon="remove">remove</span></button>
+                                    <button class="flex-1 h-8 bg-surface-container-highest rounded flex items-center justify-center hover:bg-surface-bright"><span class="material-symbols-outlined text-sm" data-icon="add">add</span></button>
+                                </div>
+                            </div>
+                            <!-- Sets -->
+                            <div class="bg-surface-container-lowest p-3 rounded-lg flex flex-col items-center gap-2">
+                                <span class="text-[10px] text-on-surface-variant font-bold">SETS</span>
+                                <div class="text-3xl font-headline font-bold text-on-surface">0</div>
+                                <div class="flex w-full gap-1">
+                                    <button class="flex-1 h-8 bg-surface-container-highest rounded flex items-center justify-center hover:bg-surface-bright"><span class="material-symbols-outlined text-sm" data-icon="remove">remove</span></button>
+                                    <button class="flex-1 h-8 bg-surface-container-highest rounded flex items-center justify-center hover:bg-surface-bright"><span class="material-symbols-outlined text-sm" data-icon="add">add</span></button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+</main>
+</body></html>

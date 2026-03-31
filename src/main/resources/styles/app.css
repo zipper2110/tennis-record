@@ -1,0 +1,144 @@
+/* Dark theme base */
+.root {
+    -fx-font-family: "Inter", "Segoe UI", Roboto, Arial, sans-serif;
+    -fx-font-size: 14px;
+    -fx-background-color: #0e0e0e; /* surface-dim */
+    -fx-text-fill: #ffffff;
+}
+
+/* Colors (approx from design) */
+/* primary gradient: #ddffb0 → #a1fe00 */
+
+/* Layout shells */
+.tr-root { /* container HBox: sidebar + main */ }
+
+.sidebar {
+    -fx-background-color: #1a1a1a; /* surface-container */
+    -fx-alignment: center;
+}
+.brand-icon {
+    -fx-text-fill: #a1fe00; /* primary-fixed */
+    -fx-font-size: 26px;
+    -fx-font-weight: 700;
+}
+.brand-version {
+    -fx-text-fill: rgba(255,255,255,0.5);
+    -fx-font-size: 9px;
+    -fx-letter-spacing: 1px;
+}
+.nav-item { -fx-cursor: hand; }
+.nav-icon { -fx-text-fill: #adAAAA; -fx-font-size: 18px; }
+.nav-label { -fx-text-fill: #adAAAA; -fx-font-size: 10px; -fx-font-weight: 600; }
+.nav-icon-active { -fx-text-fill: #a1fe00; -fx-font-size: 18px; }
+.nav-label-active { -fx-text-fill: #a1fe00; -fx-font-size: 10px; -fx-font-weight: 700; }
+.settings-btn {
+    -fx-background-color: #262626; /* surface-container-highest */
+    -fx-text-fill: #adaaaa; /* on-surface-variant */
+    -fx-background-radius: 16px; -fx-min-width: 40px; -fx-min-height: 40px;
+}
+.settings-btn:hover { -fx-background-color: #2c2c2c; }
+
+.main {
+    -fx-background-color: #0e0e0e; /* surface-dim */
+}
+
+/* Header */
+.header-title {
+    -fx-font-family: "Space Grotesk", "Inter", "Segoe UI", sans-serif;
+    -fx-text-fill: #ffffff;
+    -fx-font-size: 30px;
+    -fx-font-weight: 800;
+    -fx-letter-spacing: 1px;
+    -fx-text-transform: uppercase;
+}
+.header-subtitle {
+    -fx-text-fill: #adaaaa;
+    -fx-font-size: 12px;
+    -fx-letter-spacing: 1.5px;
+}
+
+/* CTA primary */
+.button.cta-primary {
+    -fx-background-color: linear-gradient(to right, #ddffb0 0%, #a1fe00 100%);
+    -fx-text-fill: #2b4900; /* on-primary-fixed */
+    -fx-font-family: "Space Grotesk", "Inter";
+    -fx-font-weight: 800;
+    -fx-padding: 8 16 8 16;
+    -fx-background-radius: 4px;
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.2), 4, 0.2, 0, 1);
+}
+.button.cta-primary:hover { -fx-opacity: 0.95; }
+.button.cta-primary:pressed { -fx-opacity: 0.9; }
+
+/* Section title */
+.section-title {
+    -fx-font-family: "Space Grotesk", "Inter";
+    -fx-text-fill: #ffffff;
+    -fx-font-size: 18px;
+    -fx-font-weight: 800;
+    -fx-text-transform: uppercase;
+}
+
+/* Chips */
+.chip {
+    -fx-background-radius: 4px;
+    -fx-font-size: 10px;
+    -fx-font-weight: 800;
+    -fx-text-fill: #111;
+}
+.chip-primary { -fx-background-color: #a1fe00; -fx-text-fill: #2b4900; }
+.chip-dim { -fx-background-color: rgba(255,255,255,0.15); -fx-text-fill: #fff; }
+
+/* Project card */
+.card {
+    -fx-background-color: #1a1a1a; /* surface-container */
+    -fx-background-radius: 8px;
+    -fx-border-color: transparent transparent #00000000 transparent;
+    -fx-border-width: 0 0 2 0;
+}
+.card:hover {
+    -fx-border-color: transparent transparent #a1fe00 transparent;
+}
+.card-title {
+    -fx-font-family: "Space Grotesk", "Inter";
+    -fx-text-fill: #ffffff;
+    -fx-font-size: 16px;
+    -fx-font-weight: 800;
+    -fx-text-transform: uppercase;
+}
+.card-subtitle {
+    -fx-text-fill: #adaaaa;
+    -fx-font-size: 11px;
+    -fx-font-weight: 600;
+}
+.card-more { -fx-text-fill: #adaaaa; }
+.card-footer { -fx-padding: 8 0 0 0; -fx-border-color: rgba(173,170,170,0.2); -fx-border-width: 1 0 0 0; }
+.avatar { -fx-border-color: #0e0e0e; -fx-border-width: 1; }
+
+/* Link-like button */
+.button.link-button {
+    -fx-background-color: transparent;
+    -fx-text-fill: #a1fe00;
+    -fx-font-size: 10px;
+    -fx-font-weight: 800;
+    -fx-underline: false;
+}
+.button.link-button:hover { -fx-underline: true; }
+
+/* Footer bar */
+.footer-bar {
+    -fx-background-color: #131313; /* surface-container-low */
+    -fx-background-radius: 12 12 0 0;
+    -fx-padding: 16;
+}
+.pulse-dot { -fx-background-color: #a1fe00; -fx-background-radius: 5px; }
+.footer-active-text { -fx-text-fill: #adaaaa; -fx-font-size: 11px; -fx-font-weight: 800; -fx-text-transform: uppercase; }
+.metric-caption { -fx-text-fill: #adaaaa; -fx-font-size: 10px; -fx-font-weight: 800; -fx-text-transform: uppercase; }
+.metric-value { -fx-text-fill: #ffffff; -fx-font-size: 14px; -fx-font-family: "Space Grotesk"; -fx-font-weight: 800; }
+.progress-track { -fx-background-color: #000000; -fx-opacity: 0.4; -fx-background-radius: 10px; -fx-min-height: 6px; }
+.progress-fill { -fx-background-color: linear-gradient(to right, #ddffb0 0%, #a1fe00 100%); -fx-background-radius: 10px; }
+
+/* Focus ring */
+.button:focused, .list-view:focused, .chip:focused, .link-button:focused {
+    -fx-effect: dropshadow(gaussian, rgba(161,254,0,0.5), 8, 0.2, 0, 0);
+}

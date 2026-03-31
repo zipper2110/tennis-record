@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>Obsidian Engine - Video Adjustments</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=Inter:wght@300;400;500;600&amp;display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary-fixed-dim": "#97ee00",
+                        "outline-variant": "#484847",
+                        "outline": "#767575",
+                        "on-tertiary-fixed": "#4c4800",
+                        "surface-dim": "#0e0e0e",
+                        "secondary-container": "#5a6400",
+                        "tertiary": "#fffade",
+                        "surface": "#0e0e0e",
+                        "on-error-container": "#ffd2c8",
+                        "error-container": "#b92902",
+                        "background": "#0e0e0e",
+                        "tertiary-fixed": "#fcf35d",
+                        "on-primary-container": "#385d00",
+                        "on-secondary-fixed-variant": "#576100",
+                        "surface-container-high": "#20201f",
+                        "secondary-fixed": "#dcec62",
+                        "inverse-primary": "#416a00",
+                        "secondary": "#dcec62",
+                        "primary-dim": "#97ee00",
+                        "on-tertiary-container": "#5d5900",
+                        "tertiary-fixed-dim": "#ede450",
+                        "surface-container-highest": "#262626",
+                        "tertiary-container": "#f9f05b",
+                        "surface-tint": "#ddffb0",
+                        "surface-container-low": "#131313",
+                        "on-primary-fixed-variant": "#3f6800",
+                        "on-secondary-container": "#f4ffa4",
+                        "surface-bright": "#2c2c2c",
+                        "primary-fixed": "#a1fe00",
+                        "primary-container": "#a1fe00",
+                        "on-error": "#450900",
+                        "inverse-surface": "#fcf9f8",
+                        "on-primary": "#3e6600",
+                        "on-background": "#ffffff",
+                        "on-surface-variant": "#adaaaa",
+                        "error-dim": "#d53d18",
+                        "tertiary-dim": "#ede450",
+                        "primary": "#ddffb0",
+                        "inverse-on-surface": "#565555",
+                        "error": "#ff7351",
+                        "on-primary-fixed": "#2b4900",
+                        "secondary-fixed-dim": "#cede56",
+                        "surface-container-lowest": "#000000",
+                        "surface-variant": "#262626",
+                        "on-secondary-fixed": "#3c4300",
+                        "on-tertiary": "#666100",
+                        "on-surface": "#ffffff",
+                        "secondary-dim": "#cede56",
+                        "on-secondary": "#4e5700",
+                        "on-tertiary-fixed-variant": "#6a6500",
+                        "surface-container": "#1a1a1a"
+                    },
+                    fontFamily: {
+                        "headline": ["Space Grotesk"],
+                        "body": ["Inter"],
+                        "label": ["Inter"]
+                    },
+                    borderRadius: {"DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem"},
+                },
+            },
+        }
+    </script>
+    <style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #000000;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #262626;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #a1fe00;
+        }
+        input[type=range] {
+            -webkit-appearance: none;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 2px;
+            background: #484847;
+            border: none;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 12px;
+            width: 4px;
+            background: #a1fe00;
+            margin-top: -5px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body class="bg-surface text-on-surface font-body overflow-hidden">
+<!-- Predicted SideNavBar Shell -->
+<aside class="fixed left-0 top-0 h-full z-50 flex flex-col items-center justify-between bg-[#1a1a1a] w-20 py-6 font-['Space_Grotesk'] text-sm tracking-tight">
+    <div class="flex flex-col items-center gap-10 w-full">
+        <div class="text-[#a1fe00] font-bold text-lg tracking-tighter flex flex-col items-center">
+            <span class="material-symbols-outlined text-3xl mb-1" data-icon="polymer">polymer</span>
+            <span class="text-[8px] uppercase tracking-[0.2em] opacity-50">v1.0.4</span>
+        </div>
+        <nav class="flex flex-col gap-8 w-full items-center">
+            <a href="projects.html" class="flex flex-col items-center gap-1 text-[#adaaaa] hover:text-white transition-colors duration-200 active:scale-95">
+                <span class="material-symbols-outlined text-2xl" data-icon="folder_open">folder_open</span>
+                <span class="text-[10px] font-medium">Projects</span>
+            </a>
+            <a href="markup.html" class="flex flex-col items-center gap-1 text-[#adaaaa] hover:text-white transition-colors duration-200 active:scale-95">
+                <span class="material-symbols-outlined text-2xl" data-icon="edit_note">edit_note</span>
+                <span class="text-[10px] font-medium">Markup</span>
+            </a>
+            <a href="adjustments.html" class="relative group flex flex-col items-center gap-1 text-[#a1fe00] after:absolute after:left-0 after:w-1 after:h-8 after:bg-[#a1fe00] after:rounded-r-full active:scale-95 transition-transform duration-150">
+                <span class="material-symbols-outlined text-2xl" data-icon="tune" style="font-variation-settings: 'FILL' 1;">tune</span>
+                <span class="text-[10px] font-medium">Adjustments</span>
+            </a>
+            <a href="scoring.html" class="flex flex-col items-center gap-1 text-[#adaaaa] hover:text-white transition-colors duration-200 active:scale-95">
+                <span class="material-symbols-outlined text-2xl" data-icon="scoreboard">scoreboard</span>
+                <span class="text-[10px] font-medium">Scoring</span>
+            </a>
+            <a href="export.html" class="flex flex-col items-center gap-1 text-[#adaaaa] hover:text-white transition-colors duration-200 active:scale-95">
+                <span class="material-symbols-outlined text-2xl" data-icon="ios_share">ios_share</span>
+                <span class="text-[10px] font-medium">Exports</span>
+            </a>
+        </nav>
+    </div>
+    <div class="flex flex-col items-center gap-6">
+        <button class="w-10 h-10 rounded-full bg-surface-container-highest flex items-center justify-center hover:bg-surface-bright transition-colors">
+            <span class="material-symbols-outlined text-on-surface-variant" data-icon="settings">settings</span>
+        </button>
+    </div>
+</aside>
+<!-- Main Content Area -->
+<main class="ml-20 flex h-screen">
+    <!-- Center Workspace: Video Player -->
+    <div class="flex-grow flex flex-col bg-surface-container-lowest relative overflow-hidden">
+        <!-- Canvas -->
+        <div class="flex-grow flex items-center justify-center p-8">
+            <div class="aspect-video w-full max-w-5xl bg-surface-container shadow-2xl relative group ring-1 ring-outline-variant/10">
+                <video id="video" class="w-full h-full object-cover" preload="metadata" playsinline poster="https://lh3.googleusercontent.com/aida-public/AB6AXuDpajsfqJWQOGTp76IrwkyO9shhZZGsmWy9xUcxmvVwObXOriP2jbUi4Jr719B64bKGu7AFVmG0MN8JIWyzopKmGBSaEoU5PvvCHOeKRwyHFWJ8MWJ20VdoGaqc_k2an8OKLTG7VITygwyT4zw9WbkdbRNz1FU8Fp3BjZgRgDs767v3KfM6nzyyEkXTBmI4nG3FFLEwBzMfS9j3XKnF1T9QA4m1hEC4ig1SR4AdjWhzw3v1sGwjzDIMifVhZvmC0LHTVI6CPL4zn4ct">
+                    <source src="https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4" type="video/mp4" />
+                    Your browser does not support the HTML5 video tag.
+                </video>
+                <!-- Viewport Overlay -->
+                <div class="absolute inset-0 flex items-center justify-center pointer-events-none border border-primary-fixed/20 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div class="absolute top-4 right-4 bg-surface-container-highest/80 backdrop-blur px-3 py-1 text-[10px] font-headline text-primary-fixed tracking-widest uppercase">4K RAW • 23.976 FPS</div>
+                    <div class="absolute bottom-4 left-4 bg-surface-container-highest/80 backdrop-blur px-3 py-1 text-[10px] font-headline text-on-surface-variant tracking-widest uppercase">REC 709 • 1.78:1</div>
+                </div>
+            </div>
+        </div>
+        <!-- Bottom Playback Controls -->
+        <div class="h-20 bg-surface-container flex items-center justify-between px-10 relative">
+            <!-- Seek Bar -->
+            <input id="seek" type="range" min="0" max="1000" value="0" class="absolute left-0 right-0 top-0 w-full h-2 cursor-pointer" aria-label="Seek video" title="Seek" />
+            <div class="flex items-center gap-6">
+                <div class="flex flex-col">
+                    <span class="text-[10px] font-headline text-on-surface-variant tracking-tighter uppercase">Current Time</span>
+                    <span id="currentTime" class="text-lg font-headline font-bold text-primary-fixed tracking-tight">00:00:00</span>
+                </div>
+                <div class="flex flex-col border-l border-outline-variant/30 pl-6">
+                    <span class="text-[10px] font-headline text-on-surface-variant tracking-tighter uppercase">Duration</span>
+                    <span id="duration" class="text-sm font-headline text-on-surface tracking-tight">--:--:--</span>
+                </div>
+            </div>
+            <div class="absolute left-1/2 -translate-x-1/2 flex items-center gap-8">
+                <button id="playBtn" class="w-12 h-12 rounded-full bg-gradient-to-br from-primary to-primary-container flex items-center justify-center text-on-primary-fixed shadow-lg hover:scale-105 active:scale-95 transition-all">
+                    <span id="playIcon" class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
+                </button>
+            </div>
+        </div>
+    </div>
+    <!-- Right Panel: Inspector -->
+    <aside class="w-80 bg-surface-container border-l border-outline-variant/10 flex flex-col h-full overflow-hidden">
+        <div class="p-6 border-b border-outline-variant/10 flex items-center justify-between">
+            <h2 class="font-headline font-bold text-sm tracking-widest uppercase">Inspector</h2>
+            <div class="flex gap-2">
+                <span class="w-2 h-2 rounded-full bg-primary-fixed"></span>
+                <span class="w-2 h-2 rounded-full bg-surface-container-highest"></span>
+            </div>
+        </div>
+        <div class="flex-grow overflow-y-auto custom-scrollbar p-6 space-y-8">
+            <!-- Transform Section -->
+            <section>
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="font-headline text-xs text-on-surface-variant font-bold tracking-widest uppercase">Transform</h3>
+                    <button class="text-[10px] text-primary-fixed/60 hover:text-primary-fixed uppercase tracking-tighter">Reset</button>
+                </div>
+                <div class="space-y-4">
+                    <div class="space-y-2">
+                        <div class="flex justify-between items-center text-[10px] font-label text-on-surface-variant">
+                            <span>Zoom</span>
+                            <span class="text-on-surface">1.45x</span>
+                        </div>
+                        <input class="w-full" max="200" min="0" type="range" value="145"/>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="space-y-2">
+                            <div class="flex justify-between items-center text-[10px] font-label text-on-surface-variant">
+                                <span>Position X</span>
+                                <span class="text-on-surface">0.0</span>
+                            </div>
+                            <input class="w-full" max="100" min="-100" type="range" value="0"/>
+                        </div>
+                        <div class="space-y-2">
+                            <div class="flex justify-between items-center text-[10px] font-label text-on-surface-variant">
+                                <span>Position Y</span>
+                                <span class="text-on-surface">0.0</span>
+                            </div>
+                            <input class="w-full" max="100" min="-100" type="range" value="0"/>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            <!-- Color Grade Section -->
+            <section>
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="font-headline text-xs text-on-surface-variant font-bold tracking-widest uppercase">Color Grade</h3>
+                    <span class="material-symbols-outlined text-sm text-primary-fixed">palette</span>
+                </div>
+                <div class="space-y-5">
+                    <div class="space-y-2">
+                        <div class="flex justify-between items-center text-[10px] font-label text-on-surface-variant">
+                            <span>Brightness</span>
+                            <span class="text-on-surface">+12</span>
+                        </div>
+                        <input class="w-full" max="100" min="-100" type="range" value="12"/>
+                    </div>
+                    <div class="space-y-2">
+                        <div class="flex justify-between items-center text-[10px] font-label text-on-surface-variant">
+                            <span>Contrast</span>
+                            <span class="text-on-surface">1.1</span>
+                        </div>
+                        <input class="w-full" max="200" min="0" type="range" value="110"/>
+                    </div>
+                    <div class="space-y-2">
+                        <div class="flex justify-between items-center text-[10px] font-label text-on-surface-variant">
+                            <span>Saturation</span>
+                            <span class="text-on-surface">105</span>
+                        </div>
+                        <input class="w-full" max="200" min="0" type="range" value="105"/>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </aside>
+</main>
+
+<script>
+  (function(){
+    const video = document.getElementById('video');
+    const seek = document.getElementById('seek');
+    const currentTimeEl = document.getElementById('currentTime');
+    const durationEl = document.getElementById('duration');
+    const playBtn = document.getElementById('playBtn');
+    const playIcon = document.getElementById('playIcon');
+
+    if(!video || !seek) return;
+
+    const SEEK_MAX = 1000; // finer granularity than seconds
+    seek.max = String(SEEK_MAX);
+
+    let wasPlayingBeforeSeek = false;
+    let isSeeking = false;
+
+    function pad(n){ return String(Math.floor(n)).padStart(2,'0'); }
+    function formatTime(seconds){
+      if(!isFinite(seconds)) return '--:--:--';
+      const hrs = Math.floor(seconds / 3600);
+      const mins = Math.floor((seconds % 3600) / 60);
+      const secs = Math.floor(seconds % 60);
+      if (hrs > 0) return `${pad(hrs)}:${pad(mins)}:${pad(secs)}`;
+      return `00:${pad(mins)}:${pad(secs)}`;
+    }
+
+    function updatePlayIcon(){
+      if(video.paused || video.ended){
+        playIcon.textContent = 'play_arrow';
+      } else {
+        playIcon.textContent = 'pause';
+      }
+    }
+
+    function syncSeekToVideo(){
+      if(!isFinite(video.duration) || video.duration <= 0) return;
+      const ratio = video.currentTime / video.duration;
+      seek.value = String(Math.min(SEEK_MAX, Math.max(0, Math.round(ratio * SEEK_MAX))));
+    }
+
+    function syncTimeDisplays(){
+      currentTimeEl && (currentTimeEl.textContent = formatTime(video.currentTime));
+      if (durationEl) {
+        const d = isFinite(video.duration) ? video.duration : NaN;
+        durationEl.textContent = isFinite(d) ? formatTime(d) : '--:--:--';
+      }
+    }
+
+    // Init after metadata loaded
+    video.addEventListener('loadedmetadata', () => {
+      syncTimeDisplays();
+      syncSeekToVideo();
+    });
+
+    // Update while playing
+    video.addEventListener('timeupdate', () => {
+      if(!isSeeking){
+        syncSeekToVideo();
+        syncTimeDisplays();
+      }
+    });
+
+    video.addEventListener('play', updatePlayIcon);
+    video.addEventListener('pause', updatePlayIcon);
+    video.addEventListener('ended', updatePlayIcon);
+
+    // Play/Pause controls
+    function togglePlay(){
+      if(video.paused || video.ended){ video.play(); } else { video.pause(); }
+    }
+    playBtn && playBtn.addEventListener('click', togglePlay);
+    video.addEventListener('click', togglePlay);
+
+    // Keyboard: Space to toggle
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'Space' && !e.repeat) {
+        e.preventDefault();
+        togglePlay();
+      }
+    });
+
+    // Seeking behavior
+    function setVideoTimeFromSeek(){
+      if(!isFinite(video.duration) || video.duration <= 0) return;
+      const ratio = Number(seek.value) / SEEK_MAX;
+      video.currentTime = Math.min(video.duration, Math.max(0, ratio * video.duration));
+    }
+
+    seek.addEventListener('input', () => {
+      if(!isSeeking){ isSeeking = true; }
+      setVideoTimeFromSeek();
+      syncTimeDisplays();
+    });
+
+    seek.addEventListener('pointerdown', () => {
+      wasPlayingBeforeSeek = !video.paused && !video.ended;
+      isSeeking = true;
+      if (wasPlayingBeforeSeek) video.pause();
+    });
+    seek.addEventListener('pointerup', () => {
+      isSeeking = false;
+      if (wasPlayingBeforeSeek) video.play();
+    });
+
+    // Fallback for mouse/touch if pointer events not fully supported
+    seek.addEventListener('mousedown', () => {
+      wasPlayingBeforeSeek = !video.paused && !video.ended;
+      isSeeking = true;
+      if (wasPlayingBeforeSeek) video.pause();
+    });
+    seek.addEventListener('mouseup', () => {
+      isSeeking = false;
+      if (wasPlayingBeforeSeek) video.play();
+    });
+
+    // Initial state
+    updatePlayIcon();
+  })();
+</script>
+
+</body></html>

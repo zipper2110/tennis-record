@@ -1,0 +1,71 @@
+[
+  {
+    "id": "fast",
+    "label": "Fast",
+    "description": "Fastest export, smaller files",
+    "video": {
+      "codec": "libx264",
+      "x264Preset": "veryfast",
+      "crf": 24,
+      "vbvMaxrateK": 6000,
+      "vbvBufsizeK": 12000,
+      "pixelFormat": "yuv420p",
+      "gopSeconds": 2
+    },
+    "audio": {
+      "codec": "aac",
+      "bitrateK": 128,
+      "channels": 2
+    },
+    "container": {
+      "format": "mp4",
+      "fastStart": true
+    }
+  },
+  {
+    "id": "balanced",
+    "label": "Balanced",
+    "description": "Good quality vs size (default)",
+    "video": {
+      "codec": "libx264",
+      "x264Preset": "medium",
+      "crf": 21,
+      "vbvMaxrateK": 8000,
+      "vbvBufsizeK": 16000,
+      "pixelFormat": "yuv420p",
+      "gopSeconds": 2
+    },
+    "audio": {
+      "codec": "aac",
+      "bitrateK": 192,
+      "channels": 2
+    },
+    "container": {
+      "format": "mp4",
+      "fastStart": true
+    }
+  },
+  {
+    "id": "quality",
+    "label": "Quality",
+    "description": "Best visual quality, slower",
+    "video": {
+      "codec": "libx264",
+      "x264Preset": "slow",
+      "crf": 18,
+      "vbvMaxrateK": null,
+      "vbvBufsizeK": null,
+      "pixelFormat": "yuv420p",
+      "gopSeconds": 2
+    },
+    "audio": {
+      "codec": "aac",
+      "bitrateK": 256,
+      "channels": 2
+    },
+    "container": {
+      "format": "mp4",
+      "fastStart": true
+    }
+  }
+]
