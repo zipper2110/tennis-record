@@ -83,7 +83,18 @@
             <artifactId>kotlin-stdlib</artifactId>
             <version>2.2.20</version>
         </dependency>
+        <dependency>
+            <groupId>org.jetbrains.kotlin</groupId>
+            <artifactId>kotlin-reflect</artifactId>
+            <version>2.2.20</version>
+        </dependency>
 
+        <!-- Jackson for JSON (Kotlin module) -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.module</groupId>
+            <artifactId>jackson-module-kotlin</artifactId>
+            <version>2.17.2</version>
+        </dependency>
         <!-- JavaFX (controls pulls in graphics/base); choose LTS 21.0.4 for stability -->
         <dependency>
             <groupId>org.openjfx</groupId>

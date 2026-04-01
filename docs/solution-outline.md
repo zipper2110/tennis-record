@@ -19,7 +19,7 @@ This document details the architecture, components, data model, and workflows fo
 - UI framework: Compose Multiplatform Desktop (Kotlin/JVM).
 - Preview engine: libVLC via VLCJ (binding). Alternative: mpv via bindings (future option).
 - Export/render: FFmpeg (initially via CLI process). Future: JavaCPP‑presets FFmpeg for in‑process control.
-- JSON processing: kotlinx.serialization.
+- JSON processing: Jackson (jackson-databind + jackson-module-kotlin).
 - DI/State management: Kotlin coroutines + flows; simple service locator at first.
 - Packaging: jpackage (MSIX/EXE, DMG, AppImage). Bundle libVLC (LGPL).
 - Logging: Kotlin Logging + slf4j simple/logback.
@@ -110,6 +110,29 @@ Note: The repository currently uses Maven; we may migrate to Gradle for better C
 - Autosave to `project.autosave.trproj` every N seconds.
 - Exports written to `/Exports/{projectName}/{timestamp}/`.
 - Temp intermediates in a cleaned temp dir per export job.
+
+### 11.1 Project manifest schema (v1)
+File name: `project.trproj` in the project root folder.
+
+Keys and types:
+- version: number — manifest schema version; currently 1. Unknown fields must be ignored on read.
+- id: string — UUID v4 identifying the project.
+- name: string — human-friendly project name.
+- createdAt: string — ISO-8601 UTC timestamp (e.g., `2026-04-01T21:00:00Z`).
+- lastOpenedAt: string — ISO-8601 UTC timestamp.
+- sourceVideo: string | null — optional absolute path to the selected source video.
+
+Example:
+```json
+{
+  "version": 1,
+  "id": "3b5f7c3d-9d7c-4b9e-9a3e-1234567890ab",
+  "name": "Untitled Project 20260401-210000",
+  "createdAt": "2026-04-01T21:00:00Z",
+  "lastOpenedAt": "2026-04-01T21:00:00Z",
+  "sourceVideo": null
+}
+```
 
 ## 12. Error handling & recovery
 - Graceful handling of missing/broken media: show placeholder and allow relink.

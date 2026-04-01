@@ -18,6 +18,7 @@ import javafx.scene.shape.Circle
 import javafx.scene.shape.Rectangle
 import javafx.scene.text.Font
 import javafx.scene.text.FontWeight
+import java.io.File
 
 /**
  * Projects screen matching design/projects.html (approximate in JavaFX)
@@ -27,7 +28,110 @@ import javafx.scene.text.FontWeight
  * - Footer activity bar
  */
 class ProjectsTab(private val dispatcher: ProjectsDispatcher) {
+
+    // MRU UI state
+    private var currentPage: Int = 0
+    private val pageSize: Int = 12
+    private lateinit var listBox: VBox
+    private lateinit var paginationBar: HBox
+    private lateinit var currentBox: VBox
+
     val view: Node = buildView()
+
+    private fun refreshCurrent() {
+        if (!::currentBox.isInitialized) return
+        currentBox.children.clear()
+        val path = ProjectsDispatcher.currentProjectPath
+        if (path == null) {
+            val row = HBox(8.0)
+            val title = Label("No open project").apply { styleClass.add("card-title") }
+            val subtitle = Label("Use 'IMPORT NEW MATCH' or open from Existing Projects").apply { styleClass.add("card-subtitle") }
+            val textBox = VBox(2.0, title, subtitle)
+            row.children.addAll(textBox)
+            row.styleClass.add("card")
+            row.padding = Insets(8.0)
+            currentBox.children.add(row)
+            return
+        }
+        // Render current project in the same row layout as recents
+        val name: String
+        var videoPath: String
+        name = try {
+            val mf = ManifestIO.read(path)
+            videoPath = mf.sourceVideo?.takeIf { it.isNotBlank() } ?: "(no source video)"
+            mf.name.ifBlank { File(path).nameWithoutExtension }
+        } catch (_: Throwable) {
+            videoPath = "(no source video)"
+            File(path).nameWithoutExtension
+        }
+        val row = HBox(8.0)
+        val nameLbl = Label(name).apply { styleClass.add("card-title") }
+        val pathLbl = Label(videoPath).apply { styleClass.add("card-subtitle") }
+        val textBox = VBox(2.0, nameLbl, pathLbl)
+        val openBtn = Button("Open").apply {
+            styleClass.add("cta-primary")
+            setOnAction {
+                dispatcher.openProject(path)
+                RecentsProvider.refresh()
+                refreshList()
+                refreshCurrent()
+            }
+        }
+        row.children.addAll(textBox, Region(), HBox(6.0, openBtn))
+        HBox.setHgrow(row.children[1], Priority.ALWAYS)
+        row.styleClass.add("card")
+        row.padding = Insets(8.0)
+        currentBox.children.add(row)
+    }
+
+    private fun refreshList() {
+        val entries = RecentsProvider.current()
+        listBox.children.clear()
+
+        if (entries.isEmpty()) {
+            listBox.children.add(Label("No projects found. Click 'IMPORT NEW MATCH' to create one."))
+            paginationBar.children.setAll()
+            return
+        }
+
+        val res = Pagination.compute(entries.size, currentPage, pageSize)
+        currentPage = res.currentPage
+        val totalPages = res.totalPages
+        val pageItems = entries.subList(res.fromIndex, res.toIndex)
+
+        pageItems.forEach { e ->
+            val row = HBox(8.0)
+            val nameLbl = Label(e.name).apply { styleClass.add("card-title") }
+            val videoPath = try { ManifestIO.read(e.path).sourceVideo?.takeIf { it.isNotBlank() } ?: "(no source video)" } catch (_: Throwable) { "(no source video)" }
+            val pathLbl = Label(videoPath).apply { styleClass.add("card-subtitle") }
+            val textBox = VBox(2.0, nameLbl, pathLbl)
+            val openBtn = Button("Open").apply {
+                styleClass.add("cta-primary")
+                setOnAction {
+                    dispatcher.openProject(e.path)
+                    RecentsProvider.refresh()
+                    refreshList()
+                    refreshCurrent()
+                }
+            }
+            row.children.addAll(textBox, Region(), HBox(6.0, openBtn))
+            HBox.setHgrow(row.children[1], Priority.ALWAYS)
+            row.styleClass.add("card")
+            row.padding = Insets(8.0)
+            listBox.children.add(row)
+        }
+
+        val prev = Button("Prev").apply {
+            isDisable = currentPage == 0
+            setOnAction { currentPage--; refreshList() }
+        }
+        val pageInfo = Label("Page ${currentPage + 1} / $totalPages")
+        val next = Button("Next").apply {
+            isDisable = currentPage >= totalPages - 1
+            setOnAction { currentPage++; refreshList() }
+        }
+        paginationBar.children.setAll(HBox(8.0, prev, pageInfo, next))
+    }
 
     private fun buildView(): Node {
         val root = HBox().apply {
@@ -93,18 +197,19 @@ class ProjectsTab(private val dispatcher: ProjectsDispatcher) {
         }
 
         // Header with CTA
-        val title = Label("tennis record").apply {
-            styleClass.add("header-title")
-        }
-        val subtitle = Label("TENNIS VIDEO ANALYTICS & EDITING SUITE").apply {
-            styleClass.add("header-subtitle")
-        }
+        val title = Label("tennis record").apply { styleClass.add("header-title") }
+        val subtitle = Label("TENNIS VIDEO ANALYTICS & EDITING SUITE").apply { styleClass.add("header-subtitle") }
         val titleBox = VBox(2.0, title, subtitle)
 
         val cta = Button("IMPORT NEW MATCH").apply {
             styleClass.add("cta-primary")
             contentDisplay = ContentDisplay.LEFT
-            setOnAction { dispatcher.onNewProjectClicked() }
+            setOnAction {
+                dispatcher.onNewProjectClicked()
+                // After creating a project, refresh recents and current header
+                refreshList()
+                refreshCurrent()
+            }
             isDefaultButton = true
         }
 
@@ -114,36 +219,24 @@ class ProjectsTab(private val dispatcher: ProjectsDispatcher) {
             alignment = Pos.BOTTOM_LEFT
         }
 
-        // Recent Projects title
-        val recentTitle = Label("Recent Match Projects").apply { styleClass.add("section-title") }
+        // Current project section (header + box)
+        val currentTitle = Label("Current Project").apply { styleClass.add("section-title") }
+        currentBox = VBox(8.0)
+        refreshCurrent()
 
-        // Grid of cards (placeholder)
-        val grid = FlowPane(16.0, 16.0).apply {
-            prefWrapLength = 1000.0
-        }
-        grid.children.addAll(
-            projectCard(
-                imageUrl = "https://lh3.googleusercontent.com/aida-public/AB6AXuAfbuvJVHlO56vBJVkpPulrcNzh5B9v5FhGRWiOb1oV_QQWo_mM_5QQrAX1MZ3Ac2ZBiu-XCmGYSipPBy86G4QM7TzaS8h-PYrOJI9nuMgeW3U5Gp_qpjfb1vlG21ubPgVE0wWAaJMZZvktRImnehxWY718pBhOXLGBNuvMZtgkF_4Qq-Zwue-v0U5Gm2dBHGOeoGPuuszniAjvSKASAEgc7CylzMEqr2bHkETkrd28Ztw-JZ6CDbO_dKkvS-_TlfOGLBkHbW7P4IBc",
-                title = "Wimbledon Finals 2024",
-                subtitle = "ALCARAZ VS. DJOKOVIC • 03:42:15"
-            ),
-            projectCard(
-                imageUrl = "https://lh3.googleusercontent.com/aida-public/AB6AXuABIWdI4fm6jUrbZx15Mx_04UMYXKUrRr_vJ_wihFujz76jOsX8scj2cinr8wktuZA4N1GcRdHCucEp2a-q6QmDbfHQxgvLRcEtqGrF4cNY56K8w2AYciSbWBEiSNr0-xNRXVcRwfDueu5uejzwL12vyzYOhtHPOk5gLTvBcvmkb8uSlK0EPMaYKkE6Uk_VErxZgL4beLYQzfSeekrvk6H84B6hSK61ELWuejevCB1O7NRBWn5p3eZDjmNicrI36IpV9J-HvtYRM22i",
-                title = "Backhand Drill Analysis",
-                subtitle = "PLAYER: M. SVATEK • 00:15:20"
-            ),
-            projectCard(
-                imageUrl = "https://lh3.googleusercontent.com/aida-public/AB6AXuCJUFPw8Sw50RAALnMbrvyQ-oGdvn7ZYybB3myBDEh_DcamGSSuxcQD369yG6pi4eUF3G-ghX3EBRsqzMIx0B1oMmxteyHckrU4rJS6DIonWCEIyhED-EWQXJpY1m2BMyYpNQDD6HPKuVRgu61p78YBtJvz1ymrF9oAp-c1hL1SYAEpg3MW3A2y4k5HNrN6FqQDUprEXSUdtRms4qFDSq86rAHMyrl9h4IRQXAAIFkEyysJWy7MC9w71_hSWDp_ZqQVoZMGcco5bsmD",
-                title = "Roland Garros R16",
-                subtitle = "NADAL VS. ZVEREV • 04:12:44"
-            )
-        )
+        // Recent Projects title
+        val recentTitle = Label("Existing Projects").apply { styleClass.add("section-title") }
+
+        // List with pagination
+        listBox = VBox(8.0)
+        paginationBar = HBox(8.0)
+        refreshList()
 
         // Footer activity bar
         val footer = buildFooterBar()
 
-        container.children.addAll(header, recentTitle, grid, footer)
-        VBox.setVgrow(grid, Priority.ALWAYS)
+        container.children.addAll(header, currentTitle, currentBox, recentTitle, listBox, paginationBar, footer)
+        VBox.setVgrow(listBox, Priority.ALWAYS)
         return container
     }
 

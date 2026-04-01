@@ -1,6 +1,6 @@
 # v0.1.0 — Step 0: New/Open Project — Task Breakdown
 
-- [ ] 0.1 — Projects tab shell (UI scaffolding)
+- [x] 0.1 — Projects tab shell (UI scaffolding)
   - Description: Implement the Projects tab per `design/projects.html` with primary actions (New Project, Open Project) and a Recent Projects list area.
   - Acceptance Criteria:
     - The Projects tab is reachable and visually matches the draft (layout, primary actions, list placeholder).
@@ -12,7 +12,7 @@
     - Provide basic focus visuals and keyboard activation (Enter/Space) via default button handling.
     - Keep styling in a single CSS (or theme) file so later adjustments don’t touch logic.
 
-- [ ] 0.2 — Define project manifest schema (v1)
+- [x] 0.2 — Define project manifest schema (v1)
   - Description: Define the minimal JSON structure for a `*.trproj` file (project manifest) including project `id`, `name`, `createdAt`, `lastOpenedAt`, `version`, and optional `sourceVideo` path placeholder.
   - Acceptance Criteria:
     - `docs/solution-outline.md` (or code comments) documents the JSON keys and example.
@@ -24,22 +24,25 @@
     - File name convention: `project.trproj` in the project root folder.
     - Document the schema and an example manifest in `docs/solution-outline.md`.
 
-- [ ] 0.3 — New Project flow (choose folder + name)
-  - Description: Implement a guided flow to choose or create a project folder and enter a project name. Create the folder if needed and write an initial `project.trproj` manifest.
+- [x] 0.3 — New Project flow (pick video, auto-create project under Documents)
+  - Description: The project file should not be explicitly visible to the user. Creating a project starts by picking a source video file. The app then creates a project under the hood in the app’s folder inside the user’s Documents directory, using the video file name as both the project name and the project manifest file name. If a project with that name already exists, append an incrementing number suffix to the end of the name.
   - Acceptance Criteria:
-    - User can browse to/select a folder and input a project name; invalid names are rejected with a clear message.
-    - If the folder doesn’t exist, user can create it from the dialog.
-    - A `project.trproj` file is created containing the manifest with the chosen name and generated `id`.
-    - After creation, the project is opened in the app context and navigates to Step 1 (Select Source Video).
+    - User picks a video file via a file chooser (filter common video formats; remember last directory).
+    - The app creates a project directory under the default root (e.g., `%USERPROFILE%/Documents/TennisRecord/Projects`).
+    - The project name equals the selected video’s base file name (without extension). The manifest file name equals `<projectName>.trproj`.
+    - If a project with the same name already exists under the default root, a numeric suffix like ` (2)`, ` (3)`, etc., is appended until a free name is found.
+    - A manifest is created and saved with generated `id`, timestamps, `version: 1`, and `sourceVideo` set to the chosen file path.
+    - After creation, the project opens and the app navigates to Step 2 (Trim), since the source video is already known.
   - Implementation Guide:
-    - Show a folder chooser dialog (default to user documents or last used path) and an input for project name.
-    - Validate name: non-empty, no reserved characters for Windows paths, max length 64; show inline error.
-    - On confirm: create folder if missing; generate `id` (UUID v4); fill manifest defaults and write `project.trproj`.
-    - Initialize app project context (paths, manifest) and push to a central `ProjectStore`.
-    - Update MRU list with the new project path and timestamp.
-    - Navigate to Step 1 view when done.
+    - Show a file chooser limited to video types (MP4/MOV/MKV/AVI, etc.). Default to the user’s Videos/Documents or last used path.
+    - Determine the default projects root: `%USERPROFILE%/Documents/TennisRecord/Projects` (create if missing).
+    - Derive `projectName` from the selected file name (without extension). Resolve collisions by appending ` (n)`.
+    - Create the project folder `<projectsRoot>/<projectName>` and write the manifest as `<projectName>.trproj` inside it.
+    - Manifest fields: `id = UUID v4`, `name = projectName`, `createdAt = now (ISO-8601 UTC)`, `lastOpenedAt = now`, `version = 1`, `sourceVideo = absolute path`.
+    - Initialize app project context and push to a central `ProjectStore`; the Recents list will reflect the new project after rescanning manifests (no separate MRU store).
+    - Navigate to Step 2 when done.
 
-- [ ] 0.4 — Open Existing Project flow (*.trproj picker)
+- [x] 0.4 — Open Existing Project flow (*.trproj picker)
   - Description: Implement an Open dialog filtered to `*.trproj` files that validates and loads the manifest into the app.
   - Acceptance Criteria:
     - File chooser filters to `*.trproj` and remembers the last directory.
@@ -49,21 +52,22 @@
     - Show file chooser with filter `*.trproj`; remember last directory in user settings.
     - Read manifest via `ManifestIO.read`; validate required fields and `version`.
     - If valid: set `lastOpenedAt = now`, persist manifest to disk, then load `ProjectStore`.
-    - Update MRU entry (move to top with new timestamp), then navigate to Step 1 or Step 2 depending on `sourceVideo` presence.
+    - After saving `lastOpenedAt`, refresh the Recents list by rescanning manifests, then navigate to Step 1 or Step 2 depending on `sourceVideo` presence.
     - On failure: show error dialog with options to view file, retry, or learn more.
 
 - [ ] 0.5 — Recent Projects list (MRU)
-  - Description: Persist a Most-Recently-Used list (path, name, lastOpenedAt) and render it in the Projects tab with click-to-open and remove-from-list.
+  - Description: Build the Most-Recently-Used list at app launch by scanning the Projects directory and reading each project's manifest (path, name, lastOpenedAt). Render it in the Projects tab with click-to-open and remove-from-list. Above the list, display the currently open project; if none is open, show "no open project".
   - Acceptance Criteria:
-    - Up to 10 projects are shown, sorted by `lastOpenedAt` desc.
-    - Clicking an item opens the project; a context action removes an entry without deleting files.
-    - MRU persists across restarts (stored in user config dir).
+    - Projects are shown in a paginated list of 12 items per page, sorted by `lastOpenedAt` desc (shows all projects via pagination).
+    - The area above the list displays the currently open project (name/path). If no project is open, it displays "no open project".
+    - Clicking an item opens the project.
+    - Recents are derived from manifests on disk at app launch and can be refreshed without storing a separate MRU file.
   - Implementation Guide:
-    - Persist MRU JSON in user config dir: `%APPDATA%/TennisRecord/mru.json` on Windows (or platform app data dir).
-    - Structure: array of `{ path, name, lastOpenedAt }`; keep only existing paths when loading.
-    - Provide API: `MruStore.load/save/updateOnOpen/remove(path)`.
-    - Render list in `ProjectsTab`; clicking an item calls the same open flow with the stored path.
-    - Add context menu or small "×" button to remove without touching files.
+    - On startup, scan the default projects root (e.g., `%USERPROFILE%/Documents/TennisRecord/Projects`) for project folders and read `<projectName>.trproj` manifests.
+    - Keep only entries with valid manifests; derive `{ path, name, lastOpenedAt }` from each manifest and sort by `lastOpenedAt` desc.
+    - Provide API: `RecentsProvider.scan()/refresh()/removeFromView(path)`; updating `lastOpenedAt` in a manifest naturally affects ordering on the next scan.
+    - Render list in `ProjectsTab` with pagination controls (Prev/Next) at 12 items per page; clicking an item calls the same open flow with the stored path.
+    - Add a small header above the list that shows the current project name (or "no open project").
 
 - [ ] 0.6 — Project lifecycle and switching
   - Description: Handle loading/unloading of a project context, with a prompt to save if there are unsaved changes when switching projects or exiting.
@@ -99,13 +103,13 @@
     - Guard all file I/O with try/catch and surface friendly messages.
 
 - [ ] 0.9 — Telemetry-free logging for project I/O
-  - Description: Add basic info/error logs around project creation/opening and MRU updates. No telemetry or external calls.
+  - Description: Add basic info/error logs around project creation/opening and recents scanning/refresh. No telemetry or external calls.
   - Acceptance Criteria:
     - Logs include timestamps and file paths involved.
     - Errors include stack traces and user-readable summaries.
   - Implementation Guide:
     - Add a simple logger facade (SLF4J + simple backend, or Kotlin logging) initialized at app start.
-    - Log at INFO: project create/open paths, MRU updates; at WARN/ERROR: validation failures and exceptions.
+    - Log at INFO: project create/open paths and recents scan/refresh results; at WARN/ERROR: validation failures and exceptions.
     - Include correlation IDs per session (UUID) to group related messages in future.
 
 - [ ] 0.10 — Navigation wiring from Projects tab
