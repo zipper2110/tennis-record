@@ -6,8 +6,12 @@ import javafx.geometry.Pos
 import javafx.scene.Node
 import javafx.scene.control.Button
 import javafx.scene.control.Label
-import javafx.scene.control.ListView
 import javafx.scene.control.Slider
+import javafx.scene.control.TableCell
+import javafx.scene.control.TableColumn
+import javafx.scene.control.TableView
+import javafx.scene.control.TableRow
+import javafx.beans.property.SimpleStringProperty
 import javafx.scene.input.KeyCode
 import javafx.scene.input.MouseEvent
 import javafx.scene.layout.*
@@ -59,7 +63,20 @@ class MarkupTab(private val dispatcher: MarkupDispatcher) {
     private val pointsCountLabel = Label("0 MARKED").apply {
         style = "-fx-background-color: #a1fe00; -fx-text-fill: #2b4900; -fx-padding: 2 6 2 6; -fx-font-weight: bold; -fx-background-radius: 2;"
     }
-    private val pointsList = ListView<String>().apply { placeholder = Label("No points yet") }
+    // Points list rendered as card-like rows (closer to HTML mock)
+    private data class Row(
+        val order: Int,
+        val id: String,
+        val startMs: Int,
+        val endMs: Int?,
+        val label: String?,
+        val isPending: Boolean = false,
+    )
+    private val pointsList = javafx.scene.control.ListView<Row>().apply {
+        placeholder = Label("No points yet").apply { style = "-fx-text-fill: #777;" }
+        isFocusTraversable = true
+        style = "-fx-background-color: #1f1f1f; -fx-control-inner-background: #1f1f1f; -fx-control-inner-background-alt: #1f1f1f; -fx-background-insets: 0; -fx-padding: 8;"
+    }
 
     private val viewInternal: Node by lazy { buildView() }
     val view: Node get() = viewInternal
@@ -202,6 +219,105 @@ class MarkupTab(private val dispatcher: MarkupDispatcher) {
         }
         root.right = right
 
+        // List cells: card-like to resemble the mock (title/duration and start/end row)
+        pointsList.setCellFactory {
+            object : javafx.scene.control.ListCell<Row>() {
+                private val title = Label().apply { style = "-fx-font-size: 10px; -fx-font-weight: bold; -fx-text-fill: #adaaaa; -fx-text-transform: uppercase; -fx-letter-spacing: 1px;" }
+                private val duration = Label().apply { style = "-fx-font-size: 10px; -fx-text-fill: #adaaaa; -fx-font-family: monospace;" }
+                private val goBtn = Button("◎").apply {
+                    style = "-fx-background-color: #2a2a2a; -fx-text-fill: #adaaaa; -fx-padding: 2 6 2 6;"
+                    setOnAction {
+                        val r = item ?: return@setOnAction
+                        seekTo(r.startMs.toLong())
+                        root.requestFocus()
+                    }
+                }
+                private val deleteBtn = Button("✕").apply {
+                    style = "-fx-background-color: #2a2a2a; -fx-text-fill: #ff7351; -fx-padding: 2 6 2 6;"
+                    tooltip = javafx.scene.control.Tooltip("Delete this point")
+                    setOnAction {
+                        val r = item ?: return@setOnAction
+                        if (r.isPending) return@setOnAction
+                        if (DialogUtils.confirm("Delete point", content = "Delete ${'$'}{r.id}?")) {
+                            dispatcher.deletePoint(r.id)
+                            refreshPointsUI()
+                        }
+                    }
+                }
+                private val headerSpacer = Region().apply { HBox.setHgrow(this, Priority.ALWAYS) }
+                private val header = HBox(6.0, title, headerSpacer, duration, goBtn, deleteBtn).apply {
+                    alignment = Pos.CENTER_LEFT
+                }
+                private val startLbl = Label().apply { style = "-fx-font-size: 11px; -fx-font-family: monospace; -fx-text-fill: white;" }
+                private val endLbl = Label().apply { style = "-fx-font-size: 11px; -fx-font-family: monospace; -fx-text-fill: white;" }
+                private val timesRow = HBox(6.0, startLbl, Region(), endLbl).apply {
+                    (children[1] as Region).also { HBox.setHgrow(it, Priority.ALWAYS) }
+                }
+                private val box = VBox(4.0, header, timesRow).apply {
+                    padding = Insets(8.0)
+                    style = "-fx-background-color: rgba(0,0,0,0.35); -fx-background-radius: 3;"
+                }
+                init {
+                    // Make the cell background transparent so the sidebar dark theme shows through
+                    style = "-fx-background-color: transparent;"
+                    padding = Insets(4.0)
+                    addEventFilter(MouseEvent.MOUSE_CLICKED) { ev ->
+                        val r = item ?: return@addEventFilter
+                        if (ev.clickCount == 2) {
+                            val cur = getPlayheadMs()
+                            val startL = r.startMs.toLong()
+                            val endL = r.endMs?.toLong()
+                            val target = if (endL != null && kotlin.math.abs(cur - startL) < 50L) endL else startL
+                            seekTo(target)
+                        } else if (ev.clickCount == 1) {
+                            seekTo(r.startMs.toLong())
+                            root.requestFocus()
+                        }
+                    }
+                }
+                private fun applySelectionStyles(selected: Boolean) {
+                    if (selected) {
+                        box.style = "-fx-background-color: #2c2c2c; -fx-background-insets: 0 0 0 4; -fx-background-radius: 3; -fx-border-color: #a1fe00; -fx-border-width: 0 0 0 4;"
+                        title.style = "-fx-font-size: 10px; -fx-font-weight: bold; -fx-text-fill: #a1fe00; -fx-text-transform: uppercase; -fx-letter-spacing: 1px;"
+                        startLbl.style = "-fx-font-size: 11px; -fx-font-family: monospace; -fx-text-fill: white;"
+                        endLbl.style = startLbl.style
+                    } else {
+                        box.style = "-fx-background-color: rgba(0,0,0,0.25); -fx-background-radius: 3;"
+                        title.style = "-fx-font-size: 10px; -fx-font-weight: bold; -fx-text-fill: #adaaaa; -fx-text-transform: uppercase; -fx-letter-spacing: 1px;"
+                        startLbl.style = "-fx-font-size: 11px; -fx-font-family: monospace; -fx-text-fill: #adaaaa;"
+                        endLbl.style = startLbl.style
+                    }
+                }
+                override fun updateItem(row: Row?, empty: Boolean) {
+                    super.updateItem(row, empty)
+                    if (empty || row == null) {
+                        graphic = null
+                        text = null
+                    } else {
+                        val baseTitle = row.label?.takeIf { it.isNotBlank() } ?: "Point ${row.order}"
+                        title.text = if (row.isPending) "Pending $baseTitle" else baseTitle
+                        if (row.endMs != null) {
+                            val durSec = ((row.endMs - row.startMs).coerceAtLeast(0) / 1000.0)
+                            duration.text = String.format("%ds", durSec.toInt())
+                        } else {
+                            duration.text = "—"
+                        }
+                        startLbl.text = formatMs(row.startMs.toLong())
+                        endLbl.text = row.endMs?.let { formatMs(it.toLong()) } ?: "—"
+                        // Hide delete button for pending row
+                        deleteBtn.isVisible = !row.isPending
+                        deleteBtn.isManaged = !row.isPending
+                        applySelectionStyles(isSelected)
+                        graphic = box
+                    }
+                }
+                override fun updateSelected(selected: Boolean) {
+                    super.updateSelected(selected)
+                    applySelectionStyles(selected)
+                }
+            }
+        }
+
         // Center: Viewer + transport
         val viewer = StackPane(mediaView).apply {
             padding = Insets(8.0)
@@ -279,7 +395,31 @@ class MarkupTab(private val dispatcher: MarkupDispatcher) {
                     jumpBy(delta)
                     e.consume()
                 }
+                KeyCode.DELETE -> {
+                    val sel = pointsList.selectionModel.selectedItem
+                    if (sel != null && !sel.isPending) {
+                        if (DialogUtils.confirm("Delete point", content = "Delete ${sel.id}?")) {
+                            dispatcher.deletePoint(sel.id)
+                            refreshPointsUI()
+                        }
+                        e.consume()
+                    }
+                }
                 else -> {}
+            }
+        }
+
+        // Also handle Delete when the points list has focus
+        pointsList.addEventFilter(javafx.scene.input.KeyEvent.KEY_PRESSED) { ke ->
+            if (ke.code == KeyCode.DELETE) {
+                val sel = pointsList.selectionModel.selectedItem
+                if (sel != null) {
+                    if (DialogUtils.confirm("Delete point", content = "Delete ${sel.id}?")) {
+                        dispatcher.deletePoint(sel.id)
+                        refreshPointsUI()
+                    }
+                    ke.consume()
+                }
             }
         }
 
@@ -287,18 +427,36 @@ class MarkupTab(private val dispatcher: MarkupDispatcher) {
     }
 
     private fun refreshPointsUI() {
-        val items = mutableListOf<String>()
         val completed = dispatcher.getCompletedPoints().sortedBy { it.startMs }
-        val pending = dispatcher.getPendingStart()
-        if (pending != null) {
-            items.add("• Pending — Start ${formatMs(pending.toLong())} — End —")
+        val baseRows = completed.mapIndexed { idx, p ->
+            Row(
+                order = idx + 1,
+                id = p.id,
+                startMs = p.startMs,
+                endMs = p.endMs,
+                label = p.label,
+            )
+        }.toMutableList()
+        val pendingStart = dispatcher.getPendingStart()
+        val selectRow: Row? = if (pendingStart != null) {
+            val pendingRow = Row(
+                order = baseRows.size + 1,
+                id = "(pending)",
+                startMs = pendingStart,
+                endMs = null,
+                label = null,
+                isPending = true,
+            )
+            baseRows.add(pendingRow)
+            pendingRow
+        } else {
+            baseRows.lastOrNull()
         }
-        items.addAll(completed.mapIndexed { idx, p ->
-            val idx1 = idx + 1
-            val dur = p.endMs - p.startMs
-            "#${idx1.toString().padStart(2, '0')}  ${formatMs(p.startMs.toLong())}  →  ${formatMs(p.endMs.toLong())}  (" + (dur/1000.0).let { String.format("%.3fs", it) } + ")"
-        })
-        pointsList.items.setAll(items)
+        pointsList.items.setAll(baseRows)
+        if (selectRow != null) {
+            pointsList.selectionModel.select(selectRow)
+            pointsList.scrollTo(selectRow)
+        }
         pointsCountLabel.text = "${completed.size} MARKED"
     }
 

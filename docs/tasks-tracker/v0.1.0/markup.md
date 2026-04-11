@@ -93,7 +93,7 @@ General findings & scope notes (review)
     - No reverse playback; Arrow/Shift+Arrow perform fixed seeks.
     - J/K/L are intentionally unused; Space replaces K for Play/Pause.
 
-- [ ] 2.6 — Points list UI (auto-populated; view, select, jump, edit, delete)
+- [x] 2.6 — Points list UI (auto-populated; view, select, jump, edit, delete)
   - Description: Show a list/table of created points (auto-populated when Start+End are set) with ability to select, jump, edit, and delete. Include an explicit “Go to marked point” action as shown in design/markup.html.
   - Acceptance Criteria:
     - Columns: # (order), Start, End, Duration, Label.
@@ -196,3 +196,21 @@ General findings & scope notes (review)
     - For single-source scope, render a single full-width span in VIDEO labeled with the file name from manifest.
     - MARKS spans should be click‑to‑seek and show a tooltip with Start–End and duration (optional, nice‑to‑have).
     - Keep the playhead visually above both tracks, matching the mock’s vertical line.
+
+
+- [ ] 2.14 — Inline editing for points (split from 2.6)
+  - Description: Enable inline editing of Start/End (and Label) directly in the Marked points list. Edits must validate and persist. This work was split out of 2.6 to ship view/select/jump/delete first.
+  - Acceptance Criteria:
+    - Users can edit Start and End times inline for any completed point; pending row is not editable.
+    - Users can edit the Label inline.
+    - On commit, validation rules (see 2.7) are applied: 0 <= start < end, duration >= 200 ms, and no overlaps with other points.
+    - On invalid edit, an inline error is shown and the edit is not committed until fixed; cancel/blur reverts to last valid value.
+    - After a Start change, the list re-sorts by startMs and selection/scroll position are preserved sensibly.
+  - Implementation Guide:
+    - Provide text fields or time spinners in-row for Start/End with hh:mm:ss.mmm parsing helpers (reuse 2.9 when available).
+    - Apply nearest 10 ms rounding behavior consistent with 2.4.
+    - Use a view-model/edit buffer to allow validation before commit; only write to dispatcher/state on successful validation.
+    - Emit events for autosave integration (2.8) after successful commits.
+  - Review notes:
+    - Ensure keyboard focus/Space playback shortcut rules (2.5) remain intact while editing.
+    - Consider lightweight visual cues on rows that moved due to resort after edit.

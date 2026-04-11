@@ -48,6 +48,16 @@ class MarkupDispatcher {
 
     fun getPendingStart(): Int? = pendingStartMs
 
+    /** Delete a point by id. Returns true if removed. */
+    fun deletePoint(id: String): Boolean {
+        val idx = points.indexOfFirst { it.id == id }
+        if (idx >= 0) {
+            points.removeAt(idx)
+            return true
+        }
+        return false
+    }
+
     fun clearAll() {
         points.clear()
         pendingStartMs = null
