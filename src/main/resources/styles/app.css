@@ -129,7 +129,7 @@
 .footer-bar {
     -fx-background-color: #131313; /* surface-container-low */
     -fx-background-radius: 12 12 0 0;
-    -fx-padding: 16;
+    -fx-padding: 10;
 }
 .pulse-dot { -fx-background-color: #a1fe00; -fx-background-radius: 5px; }
 .footer-active-text { -fx-text-fill: #adaaaa; -fx-font-size: 11px; -fx-font-weight: 800; -fx-text-transform: uppercase; }

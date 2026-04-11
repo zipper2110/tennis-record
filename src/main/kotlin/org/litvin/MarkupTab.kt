@@ -460,31 +460,133 @@ class MarkupTab(private val dispatcher: MarkupDispatcher) {
             padding = Insets(8.0)
             (children[1] as Region).also { HBox.setHgrow(it, Priority.ALWAYS) }
             (children[3] as Region).also { HBox.setHgrow(it, Priority.ALWAYS) }
+        }
+
+        // Scrubbing bar under the controls — custom UI to match mock (thin rounded track + fill + hover thumb)
+        // Keep the existing seekSlider for logic and bindings, but hide it from layout.
+        seekSlider.isVisible = false
+        seekSlider.isManaged = false
+
+        // Custom scrubber nodes
+        val scrubberTrack = Pane().apply {
+            minHeight = 6.0
+            prefHeight = 6.0
+            maxHeight = 6.0
+            style = "-fx-background-color: #0b0b0b; -fx-background-radius: 9999; -fx-border-color: rgba(255,255,255,0.06); -fx-border-width: 1; -fx-border-radius: 9999;"
+        }
+        val scrubberCanvas = javafx.scene.canvas.Canvas().apply {
+            isMouseTransparent = true
+        }
+        val scrubberThumb = Region().apply {
+            prefWidth = 10.0
+            prefHeight = 10.0
+            style = "-fx-background-color: white; -fx-background-radius: 9999; -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.35), 6, 0.5, 0, 1);"
+            opacity = 0.0 // visible on hover only
+        }
+        // Place canvas (for green fill) and thumb inside the track
+        scrubberTrack.children.addAll(scrubberCanvas, scrubberThumb)
+
+        // Center the scrubber and bind width similar to previous slider
+        val scrubberRow = HBox(scrubberTrack).apply { alignment = Pos.CENTER }
+        scrubberTrack.minWidth = 0.0
+        scrubberTrack.maxWidthProperty().bind(viewer.widthProperty().subtract(16.0)) // account for viewer padding (8px left/right)
+        scrubberRow.maxWidthProperty().bind(viewer.widthProperty())
+
+        // Helper to update fill and thumb positions based on slider value
+        fun updateScrubberVisuals() {
+            val max = seekSlider.max.coerceAtLeast(1.0)
+            val value = seekSlider.value.coerceIn(0.0, max)
+            val w = scrubberTrack.width.coerceAtLeast(0.0)
+            val h = scrubberTrack.height.coerceAtLeast(0.0)
+            val ratio = if (max > 0) value / max else 0.0
+            val fillW = (w * ratio).coerceIn(0.0, w)
+
+            // Resize and paint the canvas with a bright green rounded fill for the elapsed portion
+            if (scrubberCanvas.width != w) scrubberCanvas.width = w
+            if (scrubberCanvas.height != h) scrubberCanvas.height = h
+            val gc = scrubberCanvas.graphicsContext2D
+            gc.clearRect(0.0, 0.0, w, h)
+            gc.fill = javafx.scene.paint.Color.web("#a1fe00")
+            val arc = h // full pill
+            if (fillW > 0.0 && h > 0.0) {
+                gc.fillRoundRect(0.0, 0.0, fillW, h, arc, arc)
+            }
+
+            // Position the thumb at the end of the fill
+            val thumbX = (fillW - scrubberThumb.prefWidth / 2).coerceIn(-scrubberThumb.prefWidth / 2, w - scrubberThumb.prefWidth / 2)
+            val thumbY = (h - scrubberThumb.prefHeight) / 2
+            scrubberThumb.relocate(thumbX, thumbY)
+        }
+
+        // Update visuals when value/max/size changes
+        seekSlider.valueProperty().addListener { _, _, _ -> updateScrubberVisuals() }
+        seekSlider.maxProperty().addListener { _, _, _ -> updateScrubberVisuals() }
+        scrubberTrack.widthProperty().addListener { _, _, _ -> updateScrubberVisuals() }
+        scrubberTrack.heightProperty().addListener { _, _, _ -> updateScrubberVisuals() }
+
+        // Hover shows the thumb
+        scrubberTrack.hoverProperty().addListener { _, _, isHover ->
+            scrubberThumb.opacity = if (isHover) 1.0 else 0.0
+        }
+
+        // Input handling: map mouse to value
+        fun positionToValue(x: Double): Double {
+            val w = scrubberTrack.width
+            if (w <= 0) return 0.0
+            val clamped = x.coerceIn(0.0, w)
+            val ratio = clamped / w
+            return ratio * seekSlider.max
+        }
+        scrubberTrack.addEventFilter(MouseEvent.MOUSE_PRESSED) { ev ->
+            if (seekSlider.isDisable) return@addEventFilter
+            isUserSeeking = true
+            seekSlider.value = positionToValue(ev.x)
+            updateScrubberVisuals()
+            ev.consume()
+        }
+        scrubberTrack.addEventFilter(MouseEvent.MOUSE_DRAGGED) { ev ->
+            if (seekSlider.isDisable) return@addEventFilter
+            isUserSeeking = true
+            seekSlider.value = positionToValue(ev.x)
+            updateScrubberVisuals()
+            ev.consume()
+        }
+        scrubberTrack.addEventFilter(MouseEvent.MOUSE_RELEASED) { ev ->
+            if (seekSlider.isDisable) return@addEventFilter
+            isUserSeeking = false
+            mediaPlayer?.seek(Duration.millis(seekSlider.value))
+            updateScrubberVisuals()
+            ev.consume()
+        }
+
+        // Dim when disabled
+        seekSlider.disabledProperty().addListener { _, _, disabled ->
+            scrubberTrack.opacity = if (disabled) 0.4 else 1.0
+        }
+
+        // Keep width roughly aligned with rendered video content
+        fun updateScrubberWidth() {
+            val videoW = mediaView.boundsInParent.width
+            val viewerW = viewer.width - 16.0
+            val target = kotlin.math.max(0.0, kotlin.math.min(videoW, viewerW))
+            if (target > 0) scrubberTrack.prefWidth = target
+        }
+        mediaView.boundsInParentProperty().addListener { _, _, _ -> updateScrubberWidth() }
+        viewer.widthProperty().addListener { _, _, _ -> updateScrubberWidth() }
+
+        // Initialize visuals/width now
+        updateScrubberWidth()
+        updateScrubberVisuals()
+
+        // Bottom panel that contains playback controls and slider, with 10px padding
+        val bottomPanel = VBox(8.0, topControls, scrubberRow).apply {
+            padding = Insets(10.0)
             style = "-fx-background-color: #1a1a1a; -fx-border-color: #2d2d2d; -fx-border-width: 1 0 0 0;"
         }
 
-        // Scrubbing slider under the controls
-        // Make slider match the actual rendered video width (preserveRatio may letterbox),
-        // so we center the slider and bind its prefWidth to MediaView's real bounds.
-        val sliderRow = HBox(seekSlider).apply { alignment = Pos.CENTER }
-        // Constrain slider to never exceed the viewer width
-        seekSlider.minWidth = 0.0
-        seekSlider.maxWidthProperty().bind(viewer.widthProperty().subtract(16.0)) // account for viewer padding (8px left/right)
-        sliderRow.maxWidthProperty().bind(viewer.widthProperty())
-        // Update slider width whenever MediaView's bounds change
-        fun updateSliderWidth() {
-            val videoW = mediaView.boundsInParent.width
-            val viewerW = viewer.width - 16.0 // approximate inner width (viewer has 8px padding on each side)
-            val target = kotlin.math.max(0.0, kotlin.math.min(videoW, viewerW))
-            if (target > 0) seekSlider.prefWidth = target
-        }
-        mediaView.boundsInParentProperty().addListener { _, _, _ -> updateSliderWidth() }
-        viewer.widthProperty().addListener { _, _, _ -> updateSliderWidth() }
-        // Initialize width once now
-        updateSliderWidth()
-        val centerBox = VBox(viewer, topControls, sliderRow)
+        val centerBox = VBox(viewer, bottomPanel, seekSlider) // include hidden slider for logic
         VBox.setVgrow(viewer, Priority.ALWAYS)
-        VBox.setVgrow(sliderRow, Priority.NEVER)
+        VBox.setVgrow(bottomPanel, Priority.NEVER)
         root.center = centerBox
 
         // Keyboard: Space toggles play/pause; C/V mark start/end; Arrows seek (Shift = 10s, plain = 1s)
