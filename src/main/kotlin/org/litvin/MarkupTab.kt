@@ -228,7 +228,7 @@ class MarkupTab(private val dispatcher: MarkupDispatcher) {
         }
         lastUiMs = ms
         // Update time label only when text would change
-        timeLabel.text = formatMs(ms)
+        timeLabel.text = Timecode.format(ms)
         // Update slider position if user is not dragging and change is meaningful
         if (!isUserSeeking) {
             val cur = seekSlider.value
@@ -266,10 +266,15 @@ class MarkupTab(private val dispatcher: MarkupDispatcher) {
             children.add(Region().apply { HBox.setHgrow(this, Priority.ALWAYS) })
             children.add(pointsCountLabel)
         }
-        val right = VBox(pointsHeader, pointsList).apply {
+        val totalsLabel = Label("Total: 0 points — 00:00:00.000").apply {
+            style = "-fx-text-fill: #adaaaa; -fx-font-size: 11px; -fx-padding: 6;"
+        }
+        val right = VBox(pointsHeader, pointsList, totalsLabel).apply {
             prefWidth = 280.0
             style = "-fx-background-color: #1f1f1f; -fx-border-color: #2d2d2d; -fx-border-width: 0 0 0 1;"
         }
+        // store totalsLabel reference for updates
+        right.properties["totalsLabel"] = totalsLabel
         root.right = right
 
         // List cells: card-like to resemble the mock (title/duration and start/end row)
@@ -355,8 +360,8 @@ class MarkupTab(private val dispatcher: MarkupDispatcher) {
                         } else {
                             duration.text = "—"
                         }
-                        startLbl.text = formatMs(row.startMs.toLong())
-                        endLbl.text = row.endMs?.let { formatMs(it.toLong()) } ?: "—"
+                        startLbl.text = Timecode.format(row.startMs.toLong())
+                        endLbl.text = row.endMs?.let { Timecode.format(it.toLong()) } ?: "—"
                         // Hide delete button for pending row
                         deleteBtn.isVisible = !row.isPending
                         deleteBtn.isManaged = !row.isPending
@@ -548,15 +553,10 @@ class MarkupTab(private val dispatcher: MarkupDispatcher) {
             pointsList.scrollTo(selectRow)
         }
         pointsCountLabel.text = "${completed.size} MARKED"
-    }
-
-    private fun formatMs(totalMs: Long): String {
-        val ms = (totalMs % 1000).toInt()
-        val totalSeconds = totalMs / 1000
-        val s = (totalSeconds % 60).toInt()
-        val totalMinutes = totalSeconds / 60
-        val m = (totalMinutes % 60).toInt()
-        val h = (totalMinutes / 60).toInt()
-        return String.format("%02d:%02d:%02d.%03d", h, m, s, ms)
+        // Update totals label if present
+        val rightPane = root.right as? VBox
+        val totalsLabel = rightPane?.properties?.get("totalsLabel") as? Label
+        val totalMs = Timecode.totalDuration(completed)
+        totalsLabel?.text = "Total: ${completed.size} point" + (if (completed.size == 1) "" else "s") + " — ${Timecode.format(totalMs)}"
     }
 }

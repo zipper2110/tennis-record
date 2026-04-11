@@ -29,12 +29,10 @@ class MarkupDispatcher {
         return m
     }
 
-    /** Rounds milliseconds to nearest 10 ms to stabilize timestamps. */
-    private fun round10(ms: Long): Int = (((ms + 5) / 10) * 10).toInt()
 
     /** Called when user presses C or clicks Point Start. */
     fun onPointStart(timeMs: Long) {
-        val t = round10(timeMs)
+        val t = Timecode.roundTo10ms(timeMs)
         // Block placing a Start inside an existing interval [start, end)
         val insideExisting = points.any { p -> t >= p.startMs && t < p.endMs }
         if (insideExisting) {
@@ -63,7 +61,7 @@ class MarkupDispatcher {
             notifyUser("Set a Start first (press C) before setting End")
             return
         }
-        val e = round10(timeMs)
+        val e = Timecode.roundTo10ms(timeMs)
         val duration = e - s
         if (e <= s || duration < 200) {
             // Invalid; keep pending and show hint
