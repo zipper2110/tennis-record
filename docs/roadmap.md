@@ -31,7 +31,7 @@ Workflow
 - [ ] Step 3: Render tab — export video without gaps with presets: Fast, Balanced, Quality
 
 ### Step 0 — New/Open Project: Task Breakdown
-See detailed tasks with descriptions and acceptance criteria in: [v0.1.0/step-0.md](v0.1.0/step-0.md)
+See detailed tasks with descriptions and acceptance criteria in: [v0.1.0/step-0.md](tasks-tracker/v0.1.0/projects.md)
 
 Core
 - [ ] Open a video file and play/pause/seek (VLCJ preview)

@@ -1,4 +1,4 @@
-# v0.1.0 — Step 0: New/Open Project — Task Breakdown
+# v0.1.0 — Projects features: New/Open Project — Tasks
 
 - [x] 0.1 — Projects tab shell (UI scaffolding)
   - Description: Implement the Projects tab per `design/projects.html` with primary actions (New Project, Open Project) and a Recent Projects list area.
