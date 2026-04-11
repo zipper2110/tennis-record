@@ -138,7 +138,7 @@ General findings & scope notes (review)
     - Save target: aligns with 2.3 preference for `edl.json`; if embedded, ensure manifest autosave doesn’t race with EDL saves.
     - Persistent save status indicator (e.g., "Saving…/Saved/Error") should be present in the UI instead of transient notifications, but is out of scope for v0.1.0.
 
-- [ ] 2.9 — Time formatting helpers and total duration summary
+- [x] 2.9 — Time formatting helpers and total duration summary
   - Description: Provide consistent time display and a running summary of total “kept” time across points.
   - Acceptance Criteria:
     - Shared utilities to format ms to `hh:mm:ss.mmm` and parse if needed.
@@ -149,7 +149,7 @@ General findings & scope notes (review)
     - Ensure consistent rounding rules with 2.4 (nearest 10 ms). Avoid drift between display and storage.
     - Consider a helper to compute total kept duration efficiently whenever the list changes.
 
-- [ ] 2.10 — Basic persistence and validation tests
+- [x] 2.10 — Basic persistence and validation tests
   - Description: Add unit tests for EDL read/write and validation rules.
   - Acceptance Criteria:
     - Round-trip JSON for `EdlV1` with a few points.
