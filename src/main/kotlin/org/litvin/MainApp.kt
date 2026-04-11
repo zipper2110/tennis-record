@@ -29,6 +29,8 @@ class MainApp : Application() {
                 ProjectsDispatcher.Route.Step2Trim -> {
                     root.center = markupTab.view
                     primaryStage.title = "Tennis Record — Markup"
+                    // Ensure the viewer loads the project's video when entering Markup
+                    (markupTab as MarkupTab).onEnter()
                 }
             }
         }
