@@ -54,6 +54,13 @@ class MarkupTab(private val dispatcher: MarkupDispatcher) {
             }
         }
     }
+
+    // Points UI
+    private val pointsCountLabel = Label("0 MARKED").apply {
+        style = "-fx-background-color: #a1fe00; -fx-text-fill: #2b4900; -fx-padding: 2 6 2 6; -fx-font-weight: bold; -fx-background-radius: 2;"
+    }
+    private val pointsList = ListView<String>().apply { placeholder = Label("No points yet") }
+
     private val viewInternal: Node by lazy { buildView() }
     val view: Node get() = viewInternal
 
@@ -187,11 +194,8 @@ class MarkupTab(private val dispatcher: MarkupDispatcher) {
             alignment = Pos.CENTER_LEFT
             children.add(Label("Marked points").apply { style = "-fx-font-weight: bold; -fx-text-fill: #ddd;" })
             children.add(Region().apply { HBox.setHgrow(this, Priority.ALWAYS) })
-            children.add(Label("0 MARKED").apply {
-                style = "-fx-background-color: #a1fe00; -fx-text-fill: #2b4900; -fx-padding: 2 6 2 6; -fx-font-weight: bold; -fx-background-radius: 2;"
-            })
+            children.add(pointsCountLabel)
         }
-        val pointsList = ListView<String>().apply { placeholder = Label("No points yet") }
         val right = VBox(pointsHeader, pointsList).apply {
             prefWidth = 280.0
             style = "-fx-background-color: #1f1f1f; -fx-border-color: #2d2d2d; -fx-border-width: 0 0 0 1;"
@@ -208,8 +212,18 @@ class MarkupTab(private val dispatcher: MarkupDispatcher) {
         mediaView.isPreserveRatio = true
 
         // Controls row under viewer
-        val pointStart = Button("Point Start [I]").apply { setOnAction { dispatcher.onPointStartClicked() } }
-        val pointEnd = Button("Point End [O]").apply { setOnAction { dispatcher.onPointEndClicked() } }
+        val pointStart = Button("Point Start [I]").apply {
+            setOnAction {
+                dispatcher.onPointStart(getPlayheadMs())
+                refreshPointsUI()
+            }
+        }
+        val pointEnd = Button("Point End [O]").apply {
+            setOnAction {
+                dispatcher.onPointEnd(getPlayheadMs())
+                refreshPointsUI()
+            }
+        }
         val leftGroup = HBox(8.0, pointStart, pointEnd)
 
         val jumpBack = Button("⟲ 10s").apply { setOnAction { jumpBy(-10_000) } }
@@ -234,15 +248,44 @@ class MarkupTab(private val dispatcher: MarkupDispatcher) {
         VBox.setVgrow(seekSlider, Priority.NEVER)
         root.center = centerBox
 
-        // Keyboard: Space toggles play/pause if root focused
+        // Keyboard: Space toggles play/pause; I/O mark start/end if focused
         root.setOnKeyPressed { e ->
-            if (e.code == KeyCode.SPACE) {
-                togglePlayPause()
-                e.consume()
+            when (e.code) {
+                KeyCode.SPACE -> {
+                    togglePlayPause()
+                    e.consume()
+                }
+                KeyCode.I -> {
+                    dispatcher.onPointStart(getPlayheadMs())
+                    refreshPointsUI()
+                    e.consume()
+                }
+                KeyCode.O -> {
+                    dispatcher.onPointEnd(getPlayheadMs())
+                    refreshPointsUI()
+                    e.consume()
+                }
+                else -> {}
             }
         }
 
         return root
+    }
+
+    private fun refreshPointsUI() {
+        val items = mutableListOf<String>()
+        val completed = dispatcher.getCompletedPoints().sortedBy { it.startMs }
+        val pending = dispatcher.getPendingStart()
+        if (pending != null) {
+            items.add("• Pending — Start ${formatMs(pending.toLong())} — End —")
+        }
+        items.addAll(completed.mapIndexed { idx, p ->
+            val idx1 = idx + 1
+            val dur = p.endMs - p.startMs
+            "#${idx1.toString().padStart(2, '0')}  ${formatMs(p.startMs.toLong())}  →  ${formatMs(p.endMs.toLong())}  (" + (dur/1000.0).let { String.format("%.3fs", it) } + ")"
+        })
+        pointsList.items.setAll(items)
+        pointsCountLabel.text = "${completed.size} MARKED"
     }
 
     private fun formatMs(totalMs: Long): String {

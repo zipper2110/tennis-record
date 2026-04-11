@@ -36,7 +36,7 @@ General findings & scope notes (review)
   - Review notes:
     - Confirm that the Points list includes a visible count badge as in the mock (non-functional label is OK in v0.1.0).
 
-- [ ] 2.2 — Video preview: open/play/pause/seek
+- [x] 2.2 — Video preview: open/play/pause/seek
   - Description: Provide basic playback functionality against the project’s `sourceVideo`.
   - Acceptance Criteria:
     - If a project has `sourceVideo`, the viewer loads it when entering Markup.
@@ -48,7 +48,7 @@ General findings & scope notes (review)
   - Review notes:
     - Mock displays frame-like timecode; tasks specify milliseconds. Decision: show ms for v0.1.0. Q: Should we also show frames if FPS is known? (defer if not trivial).
 
-- [ ] 2.3 — Point data model and storage (EDL v1 – points only)
+- [x] 2.3 — Point data model and storage (EDL v1 – points only)
   - Description: Define an initial EDL (edit decision list) structure for points representing “keep” intervals within the single video.
   - Acceptance Criteria:
     - Data model fields: `id`, `startMs`, `endMs`, optional `label`, optional `notes`.
