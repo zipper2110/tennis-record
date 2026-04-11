@@ -114,13 +114,16 @@ General findings & scope notes (review)
   - Description: Prevent invalid intervals; no snapping in v0.1.0.
   - Acceptance Criteria:
     - A point must satisfy `0 <= startMs < endMs`; duration >= 200 ms.
-    - No overlaps between points after creation/edit; adjacent points allowed.
+    - Start placement is not allowed if the proposed Start lies inside an existing point interval [startMs, endMs); adjacency at boundaries is allowed.
+    - No overlaps between points after creation/edit; adjacent points allowed via the half‑open model [start, end).
+    - When a validation blocks an action (e.g., End without Start, invalid duration, overlap, Start inside an existing interval), a user‑visible notification is shown (toast‑style in v0.1.0).
   - Implementation Guide:
-    - On auto-create/edit, if overlap detected, show inline error and block commit or offer auto-fix (trim to nearest non-overlapping boundary).
+    - On auto-create/edit, if overlap or other validation is detected, block commit; show an inline error on the row when applicable and also surface a user‑visible notification (toast). Auto‑fix (trim to nearest non‑overlapping boundary) can be offered but is optional for v0.1.0.
   - Review notes:
     - Overlap definition uses half-open intervals [start, end); this aligns with 2.12 activation rule (start ≤ t < end). Confirm this is the intended model.
     - No snapping in v0.1.0 (explicitly disabled).
     - Minimum duration (200 ms) is OK for v0.1.0; consider making it a constant for easy tuning.
+    - Transient toast notifications are acceptable for v0.1.0; a persistent status area can be considered later.
 
 - [ ] 2.8 — Autosave points and project integration
   - Description: Persist changes shortly after edits and integrate with current project context.

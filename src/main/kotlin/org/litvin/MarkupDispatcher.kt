@@ -12,14 +12,44 @@ class MarkupDispatcher {
 
     private val points = mutableListOf<PointV1>()
     private var pendingStartMs: Int? = null
+    private var userMessage: String? = null
+
+    private fun notifyUser(msg: String) {
+        userMessage = msg
+        // Also log to console for dev visibility
+        println("[MARKUP][HINT] $msg")
+    }
+
+    fun consumeUserMessage(): String? {
+        val m = userMessage
+        userMessage = null
+        return m
+    }
 
     /** Rounds milliseconds to nearest 10 ms to stabilize timestamps. */
     private fun round10(ms: Long): Int = (((ms + 5) / 10) * 10).toInt()
 
     /** Called when user presses C or clicks Point Start. */
     fun onPointStart(timeMs: Long) {
-        pendingStartMs = round10(timeMs)
+        val t = round10(timeMs)
+        // Block placing a Start inside an existing interval [start, end)
+        val insideExisting = points.any { p -> t >= p.startMs && t < p.endMs }
+        if (insideExisting) {
+            notifyUser("Cannot place Start at ${t} ms: it's inside an existing point interval")
+            return
+        }
+        pendingStartMs = t
         println("[MARKUP] Pending Start set at $pendingStartMs ms")
+    }
+
+    /** Half-open overlap check against existing points: [s, e) intersects [p.start, p.end) */
+    private fun overlapsExisting(newStart: Int, newEnd: Int): Boolean {
+        return points.any { p ->
+            val ps = p.startMs
+            val pe = p.endMs
+            // Overlap if starts before existing end and ends after existing start
+            newStart < pe && ps < newEnd
+        }
     }
 
     /** Called when user presses V or clicks Point End. */
@@ -27,14 +57,19 @@ class MarkupDispatcher {
         val s = pendingStartMs
         if (s == null) {
             // No-op per spec (gentle hint)
-            println("[MARKUP] Hint: Press C to set a Start before setting End")
+            notifyUser("Set a Start first (press C) before setting End")
             return
         }
         val e = round10(timeMs)
         val duration = e - s
         if (e <= s || duration < 200) {
-            // Invalid; keep pending and show inline-ish hint in logs for now
-            println("[MARKUP] Invalid point (start=$s, end=$e). Need end>start and duration>=200ms")
+            // Invalid; keep pending and show hint
+            notifyUser("Invalid point: End must be > Start and duration ≥ 200 ms")
+            return
+        }
+        // Validation 2.7: reject overlaps with existing points; adjacent allowed via half-open rule
+        if (overlapsExisting(s, e)) {
+            notifyUser("Overlap blocked for [$s, $e). Adjust boundaries to avoid overlaps.")
             return
         }
         val id = "PT_${points.size + 1}"

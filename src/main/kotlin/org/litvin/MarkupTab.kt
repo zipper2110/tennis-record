@@ -1,6 +1,7 @@
 package org.litvin
 
 import javafx.animation.AnimationTimer
+import javafx.animation.PauseTransition
 import javafx.geometry.Insets
 import javafx.geometry.Pos
 import javafx.scene.Node
@@ -15,6 +16,7 @@ import javafx.beans.property.SimpleStringProperty
 import javafx.scene.input.KeyCode
 import javafx.scene.input.MouseEvent
 import javafx.scene.layout.*
+import javafx.stage.Popup
 import javafx.scene.media.Media
 import javafx.scene.media.MediaPlayer
 import javafx.scene.media.MediaView
@@ -29,6 +31,36 @@ import java.io.File
  * - Exposes getPlayheadMs() and seekTo(ms)
  */
 class MarkupTab(private val dispatcher: MarkupDispatcher) {
+    private var toastPopup: Popup? = null
+
+    private fun showToast(message: String) {
+        val owner = root.scene?.window ?: return
+        // Reuse popup if visible
+        toastPopup?.hide()
+        val box = HBox().apply {
+            style = "-fx-background-color: rgba(0,0,0,0.85); -fx-padding: 8 12; -fx-background-radius: 6; -fx-border-radius: 6; -fx-border-color: rgba(255,255,255,0.15); -fx-border-width: 1;"
+            children.add(Label(message).apply { style = "-fx-text-fill: white; -fx-font-size: 12px;" })
+        }
+        val popup = Popup().apply {
+            isAutoFix = true
+            isAutoHide = true
+            content.clear()
+            content.add(box)
+        }
+        toastPopup = popup
+        val x = owner.x + owner.width / 2 - 150
+        val y = owner.y + owner.height - 100
+        popup.show(owner, x, y)
+        PauseTransition(Duration.millis(2200.0)).apply {
+            setOnFinished { popup.hide() }
+            play()
+        }
+    }
+
+    private fun maybeShowDispatcherMessage() {
+        val msg = dispatcher.consumeUserMessage()
+        if (msg != null) showToast(msg)
+    }
 
     private val root = BorderPane()
     private val mediaView = MediaView().apply {
@@ -332,12 +364,14 @@ class MarkupTab(private val dispatcher: MarkupDispatcher) {
             setOnAction {
                 dispatcher.onPointStart(getPlayheadMs())
                 refreshPointsUI()
+                maybeShowDispatcherMessage()
             }
         }
         val pointEnd = Button("Point End [V]").apply {
             setOnAction {
                 dispatcher.onPointEnd(getPlayheadMs())
                 refreshPointsUI()
+                maybeShowDispatcherMessage()
             }
         }
         val leftGroup = HBox(8.0, pointStart, pointEnd)
@@ -375,6 +409,7 @@ class MarkupTab(private val dispatcher: MarkupDispatcher) {
                     if (!e.isShortcutDown && !e.isAltDown && !e.isShiftDown) {
                         dispatcher.onPointStart(getPlayheadMs())
                         refreshPointsUI()
+                        maybeShowDispatcherMessage()
                         e.consume()
                     }
                 }
@@ -382,6 +417,7 @@ class MarkupTab(private val dispatcher: MarkupDispatcher) {
                     if (!e.isShortcutDown && !e.isAltDown && !e.isShiftDown) {
                         dispatcher.onPointEnd(getPlayheadMs())
                         refreshPointsUI()
+                        maybeShowDispatcherMessage()
                         e.consume()
                     }
                 }
