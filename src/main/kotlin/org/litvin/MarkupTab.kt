@@ -69,6 +69,7 @@ class MarkupTab(private val dispatcher: MarkupDispatcher) {
     }
     private var mediaPlayer: MediaPlayer? = null
     private val timeLabel = Label("00:00:00.000")
+    private var playIconLabel: Label? = null
     private val seekSlider = Slider(0.0, 1.0, 0.0).apply {
         isDisable = true
         isFocusTraversable = false
@@ -174,6 +175,7 @@ class MarkupTab(private val dispatcher: MarkupDispatcher) {
                                 seekSlider.isDisable = true
                             }
                             updateTimeUI()
+                            updatePlayButtonIcon()
                         }
             player.statusProperty().addListener { _, _, new ->
                 if (new == MediaPlayer.Status.PLAYING) {
@@ -183,6 +185,8 @@ class MarkupTab(private val dispatcher: MarkupDispatcher) {
                     // Ensure UI shows the final time when paused/stopped
                     updateTimeUI()
                 }
+                // Update play/pause icon according to new status
+                updatePlayButtonIcon()
             }
             // While paused or during seeks, reflect time changes without a continuous timer
             player.currentTimeProperty().addListener { _, _, _ ->
@@ -204,6 +208,8 @@ class MarkupTab(private val dispatcher: MarkupDispatcher) {
             MediaPlayer.Status.PAUSED, MediaPlayer.Status.STOPPED, MediaPlayer.Status.READY, MediaPlayer.Status.HALTED, MediaPlayer.Status.UNKNOWN -> p.play()
             else -> p.play()
         }
+        // Update icon immediately for snappy UI; listener will also adjust once status changes
+        updatePlayButtonIcon()
         dispatcher.onPlayPauseClicked()
     }
 
@@ -236,6 +242,13 @@ class MarkupTab(private val dispatcher: MarkupDispatcher) {
                 seekSlider.value = ms.toDouble()
             }
         }
+    }
+
+    private fun updatePlayButtonIcon() {
+        val icon = playIconLabel ?: return
+        val status = mediaPlayer?.status
+        // Use proper Unicode icons: ▶ (U+25B6) for play, ⏸ (U+23F8) for pause
+        icon.text = if (status == MediaPlayer.Status.PLAYING) "\u23F8" else "\u25B6"
     }
 
     private fun setupSeekSliderHandlers() {
@@ -387,6 +400,7 @@ class MarkupTab(private val dispatcher: MarkupDispatcher) {
 
         // Controls row under viewer
         val pointStart = Button("Point Start [C]").apply {
+            styleClass.add("markup-action-btn")
             setOnAction {
                 dispatcher.onPointStart(getPlayheadMs())
                 refreshPointsUI()
@@ -394,6 +408,7 @@ class MarkupTab(private val dispatcher: MarkupDispatcher) {
             }
         }
         val pointEnd = Button("Point End [V]").apply {
+            styleClass.add("markup-action-btn")
             setOnAction {
                 dispatcher.onPointEnd(getPlayheadMs())
                 refreshPointsUI()
@@ -402,12 +417,43 @@ class MarkupTab(private val dispatcher: MarkupDispatcher) {
         }
         val leftGroup = HBox(8.0, pointStart, pointEnd)
 
-        val jumpBack = Button("⟲ 10s").apply { setOnAction { jumpBy(-10_000) } }
-        val playPause = Button("Play / Pause").apply { setOnAction { togglePlayPause() } }
-        val jumpFwd = Button("10s ⟲").apply { setOnAction { jumpBy(10_000) } }
-        val transport = HBox(12.0, jumpBack, playPause, jumpFwd).apply { alignment = Pos.CENTER }
+        val jumpBack = Button().apply {
+            styleClass.add("markup-transport-btn")
+            // icon + text stacked horizontally so we can size them independently
+            val icon = Label("⟲").apply { styleClass.add("transport-icon") }
+            val text = Label("10s")
+            graphic = HBox(6.0, icon, text).apply { alignment = Pos.CENTER }
+            setOnAction { jumpBy(-10_000) }
+        }
+        val playPause = Button().apply {
+            styleClass.add("markup-play-btn")
+            // square with rounded corners
+            prefWidth = 64.0
+            prefHeight = 64.0
+            minWidth = 64.0
+            minHeight = 64.0
+            maxWidth = 64.0
+            maxHeight = 64.0
+            // stack icon over caption
+            val icon = Label("\u25B6").apply { styleClass.add("play-icon") } // ▶
+            playIconLabel = icon
+            val caption = Label("SPACE").apply {
+                styleClass.add("play-caption")
+                translateY = -10.0 /* move caption 10px higher to tighten the gap */
+            }
+            graphic = VBox(0.0, icon, caption).apply { alignment = Pos.CENTER }
+            setOnAction { togglePlayPause() }
+        }
+        val jumpFwd = Button().apply {
+            styleClass.add("markup-transport-btn")
+            val icon = Label("↻").apply { styleClass.add("transport-icon") }
+            val text = Label("10s")
+            graphic = HBox(6.0, icon, text).apply { alignment = Pos.CENTER }
+            setOnAction { jumpBy(10_000) }
+        }
+        val transport = HBox(16.0, jumpBack, playPause, jumpFwd).apply { alignment = Pos.CENTER }
 
-        timeLabel.style = "-fx-font-weight: bold; -fx-text-fill: white;"
+        timeLabel.styleClass.add("markup-timecode")
         val rightGroup = HBox(timeLabel).apply { alignment = Pos.CENTER_RIGHT }
 
         val topControls = HBox(16.0, leftGroup, Region(), transport, Region(), rightGroup).apply {
@@ -418,10 +464,27 @@ class MarkupTab(private val dispatcher: MarkupDispatcher) {
         }
 
         // Scrubbing slider under the controls
-        seekSlider.maxWidth = Double.MAX_VALUE
-        val centerBox = VBox(viewer, topControls, seekSlider)
+        // Make slider match the actual rendered video width (preserveRatio may letterbox),
+        // so we center the slider and bind its prefWidth to MediaView's real bounds.
+        val sliderRow = HBox(seekSlider).apply { alignment = Pos.CENTER }
+        // Constrain slider to never exceed the viewer width
+        seekSlider.minWidth = 0.0
+        seekSlider.maxWidthProperty().bind(viewer.widthProperty().subtract(16.0)) // account for viewer padding (8px left/right)
+        sliderRow.maxWidthProperty().bind(viewer.widthProperty())
+        // Update slider width whenever MediaView's bounds change
+        fun updateSliderWidth() {
+            val videoW = mediaView.boundsInParent.width
+            val viewerW = viewer.width - 16.0 // approximate inner width (viewer has 8px padding on each side)
+            val target = kotlin.math.max(0.0, kotlin.math.min(videoW, viewerW))
+            if (target > 0) seekSlider.prefWidth = target
+        }
+        mediaView.boundsInParentProperty().addListener { _, _, _ -> updateSliderWidth() }
+        viewer.widthProperty().addListener { _, _, _ -> updateSliderWidth() }
+        // Initialize width once now
+        updateSliderWidth()
+        val centerBox = VBox(viewer, topControls, sliderRow)
         VBox.setVgrow(viewer, Priority.ALWAYS)
-        VBox.setVgrow(seekSlider, Priority.NEVER)
+        VBox.setVgrow(sliderRow, Priority.NEVER)
         root.center = centerBox
 
         // Keyboard: Space toggles play/pause; C/V mark start/end; Arrows seek (Shift = 10s, plain = 1s)
