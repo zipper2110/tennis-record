@@ -14,6 +14,9 @@ class MarkupDispatcher {
     private var pendingStartMs: Int? = null
     private var userMessage: String? = null
 
+    /** Callback invoked whenever completed points collection changes (create/delete/replace/clear). */
+    var onPointsChanged: (() -> Unit)? = null
+
     private fun notifyUser(msg: String) {
         userMessage = msg
         // Also log to console for dev visibility
@@ -77,9 +80,16 @@ class MarkupDispatcher {
         // Clear pending after successful creation
         pendingStartMs = null
         println("[MARKUP] Point created: $id [$s, $e]")
+        onPointsChanged?.invoke()
     }
 
     fun getCompletedPoints(): List<PointV1> = points.toList()
+
+    fun setPoints(newPoints: List<PointV1>) {
+        points.clear()
+        points.addAll(newPoints.sortedBy { it.startMs })
+        onPointsChanged?.invoke()
+    }
 
     fun getPendingStart(): Int? = pendingStartMs
 
@@ -88,6 +98,7 @@ class MarkupDispatcher {
         val idx = points.indexOfFirst { it.id == id }
         if (idx >= 0) {
             points.removeAt(idx)
+            onPointsChanged?.invoke()
             return true
         }
         return false
@@ -96,6 +107,7 @@ class MarkupDispatcher {
     fun clearAll() {
         points.clear()
         pendingStartMs = null
+        onPointsChanged?.invoke()
     }
 
     // Transport telemetry (optional logging)

@@ -113,21 +113,42 @@ class MarkupTab(private val dispatcher: MarkupDispatcher) {
     private val viewInternal: Node by lazy { buildView() }
     val view: Node get() = viewInternal
 
+    // Autosave debounce (300 ms)
+    private val autosaveDebounce = PauseTransition(Duration.millis(300.0)).apply {
+        setOnFinished { performSaveEdl() }
+    }
+
     init {
         setupSeekSliderHandlers()
+        setupWindowCloseFlush()
+        // Subscribe to points changes for autosave and UI refresh
+        dispatcher.onPointsChanged = {
+            // schedule save with debounce
+            autosaveDebounce.stop()
+            autosaveDebounce.playFromStart()
+            // Also refresh UI count/list ordering
+            refreshPointsUI()
+        }
     }
 
     fun onEnter() {
-        // Attempt to load current project's source video
+        // Attempt to load current project's source video and EDL
         try {
             val manifestPath = ProjectsDispatcher.currentProjectPath ?: return
             val manifest = ManifestIO.read(manifestPath)
-            val src = manifest.sourceVideo?.takeIf { it.isNotBlank() } ?: return
-            loadMedia(File(src))
+            val src = manifest.sourceVideo?.takeIf { it.isNotBlank() }
+            if (src != null) {
+                loadMedia(File(src))
+            }
+            // Load existing points from edl.json for this project
+            val projectDir = EdlIO.projectDirFromManifest(manifestPath)
+            val edl = EdlIO.readForProjectDir(projectDir)
+            dispatcher.setPoints(edl.points)
+            refreshPointsUI()
             // Focus to enable Spacebar
             view.requestFocus()
-        } catch (_: Throwable) {
-            // ignore for now; keep placeholder if load fails
+        } catch (t: Throwable) {
+            System.err.println("[MARKUP] Failed to initialize Markup tab: ${t.message}")
         }
     }
 
@@ -405,6 +426,13 @@ class MarkupTab(private val dispatcher: MarkupDispatcher) {
                     togglePlayPause()
                     e.consume()
                 }
+                KeyCode.S -> {
+                    if (e.isShortcutDown) { // Ctrl+S on Windows/Linux, Cmd+S on macOS
+                        autosaveDebounce.stop()
+                        performSaveEdl()
+                        e.consume()
+                    }
+                }
                 KeyCode.C -> {
                     if (!e.isShortcutDown && !e.isAltDown && !e.isShiftDown) {
                         dispatcher.onPointStart(getPlayheadMs())
@@ -460,6 +488,32 @@ class MarkupTab(private val dispatcher: MarkupDispatcher) {
         }
 
         return root
+    }
+
+    private fun performSaveEdl() {
+        try {
+            val manifestPath = ProjectsDispatcher.currentProjectPath ?: return
+            val projectDir = EdlIO.projectDirFromManifest(manifestPath)
+            val points = dispatcher.getCompletedPoints().sortedBy { it.startMs }
+            EdlIO.writeForProjectDir(projectDir, EdlV1(points = points, version = 1))
+            println("[MARKUP][AUTOSAVE] edl.json saved (${points.size} points)")
+        } catch (t: Throwable) {
+            System.err.println("[MARKUP][AUTOSAVE][ERROR] ${t.message}")
+        }
+    }
+
+    private fun setupWindowCloseFlush() {
+        // Ensure pending autosave is flushed when the window closes
+        root.sceneProperty().addListener { _, _, newScene ->
+            newScene?.windowProperty()?.addListener { _, _, newWin ->
+                (newWin as? javafx.stage.Stage)?.setOnCloseRequest {
+                    try {
+                        autosaveDebounce.stop()
+                        performSaveEdl()
+                    } catch (_: Throwable) {}
+                }
+            }
+        }
     }
 
     private fun refreshPointsUI() {

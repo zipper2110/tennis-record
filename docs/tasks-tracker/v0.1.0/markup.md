@@ -110,7 +110,7 @@ General findings & scope notes (review)
     - Sorting after edit: if Start changes, resort and maintain selection/scroll position.
     - Delete flow: a lightweight confirm dialog is sufficient for v0.1.0; no undo/redo yet (out of scope).
 
-- [ ] 2.7 — Validation rules
+- [x] 2.7 — Validation rules
   - Description: Prevent invalid intervals; no snapping in v0.1.0.
   - Acceptance Criteria:
     - A point must satisfy `0 <= startMs < endMs`; duration >= 200 ms.
@@ -125,7 +125,7 @@ General findings & scope notes (review)
     - Minimum duration (200 ms) is OK for v0.1.0; consider making it a constant for easy tuning.
     - Transient toast notifications are acceptable for v0.1.0; a persistent status area can be considered later.
 
-- [ ] 2.8 — Autosave points and project integration
+- [x] 2.8 — Autosave points and project integration
   - Description: Persist changes shortly after edits and integrate with current project context.
   - Acceptance Criteria:
     - Changes autosave within ~300 ms with debounce; manual Save All also available.
