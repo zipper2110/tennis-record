@@ -16,18 +16,18 @@ class MarkupDispatcher {
     /** Rounds milliseconds to nearest 10 ms to stabilize timestamps. */
     private fun round10(ms: Long): Int = (((ms + 5) / 10) * 10).toInt()
 
-    /** Called when user presses I or clicks Point Start. */
+    /** Called when user presses C or clicks Point Start. */
     fun onPointStart(timeMs: Long) {
         pendingStartMs = round10(timeMs)
         println("[MARKUP] Pending Start set at $pendingStartMs ms")
     }
 
-    /** Called when user presses O or clicks Point End. */
+    /** Called when user presses V or clicks Point End. */
     fun onPointEnd(timeMs: Long) {
         val s = pendingStartMs
         if (s == null) {
             // No-op per spec (gentle hint)
-            println("[MARKUP] Hint: Press I to set a Start before setting End")
+            println("[MARKUP] Hint: Press C to set a Start before setting End")
             return
         }
         val e = round10(timeMs)

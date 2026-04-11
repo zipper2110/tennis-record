@@ -16,10 +16,10 @@ User workflow (center of this spec)
 - The timeline at the bottom shows two separate tracks: VIDEO (source media spans) and MARKS (point intervals), with a visible playhead.
 
 General findings & scope notes (review)
-- Consistency with mock: design/markup.html shows two primary controls labeled “Point Start [I]” and “Point End [O]”, a points list with a count badge, transport controls, a timecode, and a dual‑track footer (VIDEO, MARKS). Tasks map well to these elements.
+- Consistency with mock: design/markup.html shows two primary controls labeled “Point Start [C]” and “Point End [V]”, a points list with a count badge, transport controls, a timecode, and a dual‑track footer (VIDEO, MARKS). Tasks map well to these elements.
 - Time display: the mock shows a frame‑like timecode (00:14:22:04). For v0.1.0 we’ll use milliseconds as specified in tasks (hh:mm:ss.mmm). This is acceptable and avoids frame‑rate dependency; a frame‑accurate display can be considered later.
 - Single source video: the VIDEO track in the mock shows multiple clips as examples. Our scope is a single selected source video (Projects 0.3/0.4), so the VIDEO track will render one continuous span labeled with the file name.
-- No reverse playback: We standardize on 1s seeks on J/L (−1000 ms / +1000 ms) per 2.5.
+- No reverse playback: We standardize on 1s seeks on Left/Right Arrow (−1000 ms / +1000 ms) and 10s seeks on Shift + Left/Right Arrow (−10_000 ms / +10_000 ms) per 2.5.
 - Keyboard focus: Spacebar play/pause depends on focus. Ensure the Markup tab captures Space when appropriate without breaking text field editing.
 - Performance: Viewer time updates at ~10Hz (2.12) and time display at ≤100ms (2.2) are consistent. Prefer a single ticker feeding both to avoid duplicate timers.
 - Overlaps policy: Adjacent points that touch at boundaries are allowed; overlaps are rejected (2.7). Boundary tie‑break rules are defined under 2.12.
@@ -61,11 +61,11 @@ General findings & scope notes (review)
   - Review notes:
     - Decision needed: prefer a separate `edl.json` to keep manifest lean; embedding under manifest is acceptable short-term. Suggest `edl.json` for clarity.
 
-- [ ] 2.4 — Auto-create point from Start/End
-  - Description: Allow the user to set Point Start (I) and Point End (O) from the live playhead. When both bounds are valid, create a point automatically and reset pending markers. Placing Point Start creates a new list entry immediately and selects it as the active point; placing Point End completes the currently active point.
+- [x] 2.4 — Auto-create point from Start/End
+  - Description: Allow the user to set Point Start (C) and Point End (V) from the live playhead. When both bounds are valid, create a point automatically and reset pending markers. Placing Point Start creates a new list entry immediately and selects it as the active point; placing Point End completes the currently active point.
   - Acceptance Criteria:
-    - Pressing I sets a pending Start from current playhead and creates a new point row in the list, marked as “no end yet”, and selects it.
-    - Pressing O fills End for the currently active/selected point. If no active pending point exists, pressing O has no effect (or shows a gentle hint) and does not create a new point.
+    - Pressing C sets a pending Start from current playhead and creates a new point row in the list, marked as “no end yet”, and selects it.
+    - Pressing V fills End for the currently active/selected point. If no active pending point exists, pressing V has no effect (or shows a gentle hint) and does not create a new point.
     - When both are set and valid, the point is created instantly; UI clears pending start/end indicators.
     - Visual indicators show pending Start/End times while incomplete; active row styling matches design/markup.html.
   - Implementation Guide:
@@ -73,23 +73,25 @@ General findings & scope notes (review)
     - Ensure “active point” state is unique (only one can be pending at a time). Selecting another row cancels pending end.
     - Round to the nearest 10 ms (configurable) to stabilize times from the player.
   - Review notes:
-    - If I is pressed again while a point is pending (no End yet), replace the Start time on the same pending row (do NOT create another row). [Confirmed]
-    - If O is pressed before any I, no point is created; show a subtle hint near controls. [Confirmed]
-    - After a point is completed (has End), no new pending row is created automatically; the next pending row is created only when the user presses I, and it becomes selected. [Confirmed]
+    - If C is pressed again while a point is pending (no End yet), replace the Start time on the same pending row (do NOT create another row). [Confirmed]
+    - If V is pressed before any C, no point is created; show a subtle hint near controls. [Confirmed]
+    - After a point is completed (has End), no new pending row is created automatically; the next pending row is created only when the user presses C, and it becomes selected. [Confirmed]
     - Creation must obey 2.7 validation: if the pending interval would overlap, block finalization and show inline error on the row.
 
-- [ ] 2.5 — Keyboard shortcuts and nudge
+- [x] 2.5 — Keyboard shortcuts and nudge
   - Description: Provide efficient keyboard operations to mark points and fine-tune boundaries.
   - Acceptance Criteria:
-    - Space: Play/Pause; J: seek −1000 ms; K: Pause; L: seek +1000 ms.
-    - I: set Point Start; O: set Point End; Delete: Delete selected point.
-    - Left/Right Arrow: nudge playhead by ±100 ms; Ctrl/Cmd + Arrow: ±1000 ms; Shift + Arrow: ±20 ms.
+    - Space: Play/Pause.
+    - C: set Point Start; V: set Point End; Delete: Delete selected point.
+    - Left/Right Arrow: seek ±1000 ms (±1s).
+    - Shift + Left/Right Arrow: seek ±10_000 ms (±10s).
+    - No bindings for J/K/L in this version.
   - Implementation Guide:
     - Centralize input handling in the Markup tab. Make increments configurable constants.
   - Review notes:
-    - On Windows, use Ctrl; on macOS, use Cmd; ensure cross‑platform mapping.
     - When focus is in a text field (e.g., Label), do not hijack typing. Space/arrow keys should respect focus; provide a global focus area to capture playback controls otherwise.
-    - Standardize J/L as fixed seeks: J = −1000 ms (back 1s), L = +1000 ms (forward 1s). K = Pause. No reverse playback.
+    - No reverse playback; Arrow/Shift+Arrow perform fixed seeks.
+    - J/K/L are intentionally unused; Space replaces K for Play/Pause.
 
 - [ ] 2.6 — Points list UI (auto-populated; view, select, jump, edit, delete)
   - Description: Show a list/table of created points (auto-populated when Start+End are set) with ability to select, jump, edit, and delete. Include an explicit “Go to marked point” action as shown in design/markup.html.

@@ -212,13 +212,13 @@ class MarkupTab(private val dispatcher: MarkupDispatcher) {
         mediaView.isPreserveRatio = true
 
         // Controls row under viewer
-        val pointStart = Button("Point Start [I]").apply {
+        val pointStart = Button("Point Start [C]").apply {
             setOnAction {
                 dispatcher.onPointStart(getPlayheadMs())
                 refreshPointsUI()
             }
         }
-        val pointEnd = Button("Point End [O]").apply {
+        val pointEnd = Button("Point End [V]").apply {
             setOnAction {
                 dispatcher.onPointEnd(getPlayheadMs())
                 refreshPointsUI()
@@ -248,21 +248,35 @@ class MarkupTab(private val dispatcher: MarkupDispatcher) {
         VBox.setVgrow(seekSlider, Priority.NEVER)
         root.center = centerBox
 
-        // Keyboard: Space toggles play/pause; I/O mark start/end if focused
+        // Keyboard: Space toggles play/pause; C/V mark start/end; Arrows seek (Shift = 10s, plain = 1s)
         root.setOnKeyPressed { e ->
             when (e.code) {
                 KeyCode.SPACE -> {
                     togglePlayPause()
                     e.consume()
                 }
-                KeyCode.I -> {
-                    dispatcher.onPointStart(getPlayheadMs())
-                    refreshPointsUI()
+                KeyCode.C -> {
+                    if (!e.isShortcutDown && !e.isAltDown && !e.isShiftDown) {
+                        dispatcher.onPointStart(getPlayheadMs())
+                        refreshPointsUI()
+                        e.consume()
+                    }
+                }
+                KeyCode.V -> {
+                    if (!e.isShortcutDown && !e.isAltDown && !e.isShiftDown) {
+                        dispatcher.onPointEnd(getPlayheadMs())
+                        refreshPointsUI()
+                        e.consume()
+                    }
+                }
+                KeyCode.LEFT -> {
+                    val delta = if (e.isShiftDown) -10_000L else -1_000L
+                    jumpBy(delta)
                     e.consume()
                 }
-                KeyCode.O -> {
-                    dispatcher.onPointEnd(getPlayheadMs())
-                    refreshPointsUI()
+                KeyCode.RIGHT -> {
+                    val delta = if (e.isShiftDown) 10_000L else 1_000L
+                    jumpBy(delta)
                     e.consume()
                 }
                 else -> {}
