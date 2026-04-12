@@ -13,7 +13,7 @@ User workflow (center of this spec)
 - Seek to the start of the next point and repeat until all desired points are marked.
 - At any time, clicking "Go to marked point" on a row should jump playback to that point's start time.
 - While playing or seeking, whichever point contains the current time (start ≤ t < end) should become active/selected automatically.
-- The timeline at the bottom shows two separate tracks: VIDEO (source media spans) and MARKS (point intervals), with a visible playhead.
+- The timeline at the bottom shows two separate tracks: VIDEO (source media spans) and MARKS (point intervals).
 
 General findings & scope notes (review)
 - Consistency with mock: design/markup.html shows two primary controls labeled “Point Start [C]” and “Point End [V]”, a points list with a count badge, transport controls, a timecode, and a dual‑track footer (VIDEO, MARKS). Tasks map well to these elements.
@@ -185,20 +185,17 @@ General findings & scope notes (review)
     - Source of truth for activation is the sorted points list; pending (Start‑only) row should be considered active only if the playhead ≥ Start and no completed point matches.
     - Debounce suggestion: 50–100 ms to reduce flicker but keep responsiveness.
 
-- [ ] 2.13 — Timeline marks bar with two tracks (per design/markup.html)
-  - Description: Render a compact timeline footer showing two distinct tracks: VIDEO (source media spans) and MARKS (point intervals), plus the playhead.
+- [x] 2.13 — Timeline marks bar with two tracks (per design/markup.html)
+  - Description: Render a compact timeline footer showing two distinct tracks: VIDEO (source media spans) and MARKS (point intervals).
   - Acceptance Criteria:
-    - A footer timeline shows: a ruler, a VIDEO track row, a MARKS track row, and a vertical playhead.
+    - A footer timeline shows: a ruler, a VIDEO track row, and a MARKS track row.
     - Each point is visualized as a span on the MARKS track; clicking a span seeks to its start.
-    - The playhead moves in real time during playback and when seeking.
-    - Visual style approximates design/markup.html; exact pixels not required for v0.1.0.
   - Implementation Guide:
-    - Compute pixel-per-millisecond scaling based on visible duration/zoom; keep 1–2 zoom levels for MVP.
-    - Use lightweight canvas/Pane with absolute-positioned children for spans; reuse time formatting helpers from 2.9.
+    - Compute pixel-per-millisecond scaling based on the total duration of the source video; no zoom levels in v0.1.0 (zoom is out of scope).
+    - Use a lightweight canvas/Pane with absolute-positioned children for spans; reuse time formatting helpers from 2.9.
   - Review notes:
     - For single-source scope, render a single full-width span in VIDEO labeled with the file name from manifest.
     - MARKS spans should be click‑to‑seek.
-    - Keep the playhead visually above both tracks, matching the mock’s vertical line.
 
 
 - [ ] 2.14 — Inline editing for points (split from 2.6)
@@ -233,3 +230,19 @@ General findings & scope notes (review)
   - Review notes:
     - Verify consistent spacing, padding, and background with Projects.
     - Ensure no regression to Markup controls’ sizing due to added sidebar; media viewer should resize accordingly.
+
+
+- [ ] 2.16 — Timeline playhead indicator (split from 2.13)
+  - Description: Add a vertical playhead indicator to the timeline footer that reflects the current viewer time.
+  - Acceptance Criteria:
+    - A thin vertical line (playhead) is visible above the timeline tracks, positioned according to the current time within the total video duration.
+    - The playhead position updates smoothly during playback and jumps immediately when seeking.
+    - Toggling Play/Pause in the viewer reflects in the playhead movement/stop respectively.
+    - No timeline scrubbing by dragging the playhead in v0.1.0.
+  - Implementation Guide:
+    - Subscribe to viewer time updates (~10 Hz or on seek complete) and convert time to X coordinate using the same scaling as 2.13 (total-duration-to-pixels).
+    - Use a lightweight node (e.g., a 1–2 px wide Pane/Line) layered above the VIDEO and MARKS tracks.
+    - Recompute layout on container resize; avoid jitter by debouncing to ~50–100 ms.
+  - Review notes:
+    - Ensure z-order keeps the playhead visually above both tracks and ruler.
+    - Zoom levels and scrubbing are out of scope for v0.1.0.

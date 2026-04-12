@@ -31,6 +31,16 @@ import java.io.File
  * - Exposes getPlayheadMs() and seekTo(ms)
  */
 class MarkupTab(private val dispatcher: MarkupDispatcher) {
+    // Timeline (2.13)
+    private var viewerPane: StackPane? = null
+    private var timelineArea: StackPane? = null
+    private var videoTrackPane: StackPane? = null
+    private var marksTrackPane: Pane? = null
+    private var playheadLine: Region? = null
+    private var zoomLabel: Label? = null
+    private var timelineZoomIndex: Int = 0
+    private val timelineZoomLevels = doubleArrayOf(1.0, 2.0)
+    private var currentVideoFileName: String? = null
     // Request host to route back to Select Source flow when video is missing/unavailable
     var onRequestSelectSource: (() -> Unit)? = null
     private var toastPopup: Popup? = null
@@ -181,11 +191,16 @@ class MarkupTab(private val dispatcher: MarkupDispatcher) {
     }
 
     private fun loadMedia(file: File) {
+        currentVideoFileName = file.name
+            currentVideoFileName = file.name
         try {
             mediaPlayer?.dispose()
             val media = Media(file.toURI().toString())
             val player = MediaPlayer(media)
             player.setOnReady {
+                            // timeline rebuild when media metadata is ready
+                            rebuildTimeline()
+                            updatePlayheadInTimeline()
                             // Initialize seek slider and time display when media metadata is ready
                             val durMs = player.totalDuration.toMillis()
                             if (durMs.isFinite() && durMs > 0) {
@@ -265,6 +280,8 @@ class MarkupTab(private val dispatcher: MarkupDispatcher) {
         }
         // Auto-activate point based on current time (2.12)
         updateActiveSelectionFromTime(ms)
+        // Update timeline playhead (2.13)
+        updatePlayheadInTimeline()
     }
 
     private fun updatePlayButtonIcon() {
@@ -500,6 +517,13 @@ class MarkupTab(private val dispatcher: MarkupDispatcher) {
             maxHeight = 6.0
             style = "-fx-background-color: #0b0b0b; -fx-background-radius: 9999; -fx-border-color: rgba(255,255,255,0.06); -fx-border-width: 1; -fx-border-radius: 9999;"
         }
+        // Clip the scrubber painting strictly to the track bounds to avoid any overlay over the footer timeline
+        run {
+            val clip = javafx.scene.shape.Rectangle()
+            clip.widthProperty().bind(scrubberTrack.widthProperty())
+            clip.heightProperty().bind(scrubberTrack.heightProperty())
+            scrubberTrack.clip = clip
+        }
         val scrubberCanvas = javafx.scene.canvas.Canvas().apply {
             isMouseTransparent = true
         }
@@ -614,6 +638,88 @@ class MarkupTab(private val dispatcher: MarkupDispatcher) {
         VBox.setVgrow(viewer, Priority.ALWAYS)
         VBox.setVgrow(bottomPanel, Priority.NEVER)
         root.center = centerBox
+
+        // Footer timeline (2.13)
+        // Header with zoom controls
+        val zoomOutBtn = Button("-").apply {
+            style = "-fx-background-color: #2a2a2a; -fx-text-fill: #adaaaa; -fx-padding: 2 6 2 6;"
+            setOnAction {
+                timelineZoomIndex = (timelineZoomIndex - 1).coerceAtLeast(0)
+                rebuildTimeline()
+            }
+        }
+        val zoomInBtn = Button("+").apply {
+            style = "-fx-background-color: #2a2a2a; -fx-text-fill: #adaaaa; -fx-padding: 2 6 2 6;"
+            setOnAction {
+                timelineZoomIndex = (timelineZoomIndex + 1).coerceAtMost(timelineZoomLevels.size - 1)
+                rebuildTimeline()
+            }
+        }
+        zoomLabel = Label("ZOOM 100% ").apply { style = "-fx-font-size: 10px; -fx-text-fill: #adaaaa; -fx-font-family: monospace;" }
+        val headerLeft = HBox(6.0, zoomLabel, zoomOutBtn, zoomInBtn).apply { alignment = Pos.CENTER_LEFT }
+        val headerRight = HBox(Label(ProjectsDispatcher.currentProjectPath?.let { File(it).parentFile?.name ?: "" } ?: "" ).apply {
+            style = "-fx-font-size: 10px; -fx-text-fill: #adaaaa; -fx-font-family: monospace;"
+        }).apply { alignment = Pos.CENTER_RIGHT }
+        val tlHeader = HBox(Region(), headerLeft, Region(), headerRight).apply {
+            padding = Insets(6.0, 10.0, 6.0, 10.0)
+            style = "-fx-background-color: #141414; -fx-border-color: #2d2d2d; -fx-border-width: 1 0 0 0;"
+            (children[0] as Region).also { HBox.setHgrow(it, Priority.ALWAYS) }
+            (children[2] as Region).also { HBox.setHgrow(it, Priority.ALWAYS) }
+        }
+        // Tracks area
+        videoTrackPane = StackPane().apply { 
+            style = "-fx-background-color: transparent;"
+            minWidth = 0.0
+        }
+        marksTrackPane = Pane().apply { 
+            style = "-fx-background-color: transparent;"
+            minWidth = 0.0
+        }
+        val labelsCol = VBox(
+            Label("VIDEO").apply { style = "-fx-text-fill: #adaaaa; -fx-font-size: 9px; -fx-font-weight: bold;" },
+            Label("MARKS").apply { style = "-fx-text-fill: #adaaaa; -fx-font-size: 9px; -fx-font-weight: bold;" }
+        ).apply {
+            minWidth = 60.0; prefWidth = 60.0; maxWidth = 60.0
+            padding = Insets(4.0, 6.0, 4.0, 6.0)
+            style = "-fx-background-color: #1f1f1f; -fx-border-color: #2d2d2d; -fx-border-width: 0 1 0 0;"
+            spacing = 12.0
+        }
+        val tracksCol = VBox().apply {
+            spacing = 6.0
+            padding = Insets(4.0)
+            children.add(Pane().apply { // ruler simple ticks
+                prefHeight = 18.0
+                style = "-fx-background-color: transparent; -fx-border-color: rgba(255,255,255,0.08); -fx-border-width: 0 0 1 0;"
+                properties["type"] = "ruler"
+            })
+            // Rows for tracks; ensure inner panes grow to fill width
+            children.add(HBox(videoTrackPane).apply {
+                HBox.setHgrow(videoTrackPane, Priority.ALWAYS)
+                maxWidth = Double.MAX_VALUE
+            })
+            children.add(HBox(marksTrackPane).apply {
+                HBox.setHgrow(marksTrackPane, Priority.ALWAYS)
+                maxWidth = Double.MAX_VALUE
+            })
+        }
+        timelineArea = StackPane().apply {
+            style = "-fx-background-color: #0e0e0e;"
+            children.add(HBox(labelsCol, tracksCol).apply { HBox.setHgrow(tracksCol, Priority.ALWAYS) })
+        }
+        // Playhead removed per request — no vertical indicator rendered in the timeline
+        playheadLine = null
+        // Bind width of tracks to centerBox width
+        timelineArea!!.maxWidthProperty().bind(root.widthProperty())
+        timelineArea!!.widthProperty().addListener { _, _, _ -> rebuildTimeline() }
+        marksTrackPane!!.widthProperty().addListener { _, _, _ -> rebuildTimeline() }
+        // Rebuild when media duration (seekSlider.max) becomes known/changes
+        seekSlider.maxProperty().addListener { _, _, _ -> rebuildTimeline() }
+        // Place footer in root.bottom
+        val footer = VBox(tlHeader, timelineArea).apply { style = "-fx-background-color: #0e0e0e;" }
+        root.bottom = footer
+        // Initial build
+        rebuildTimeline()
+        updatePlayheadInTimeline()
 
         // Keyboard: Space toggles play/pause; C/V mark start/end; Arrows seek (Shift = 10s, plain = 1s)
         root.setOnKeyPressed { e ->
@@ -810,5 +916,90 @@ class MarkupTab(private val dispatcher: MarkupDispatcher) {
         val totalsLabel = rightPane?.properties?.get("totalsLabel") as? Label
         val totalMs = Timecode.totalDuration(completed)
         totalsLabel?.text = "Total: ${completed.size} point" + (if (completed.size == 1) "" else "s") + " — ${Timecode.format(totalMs)}"
+        // Rebuild timeline marks to reflect changes
+        rebuildTimeline()
+    }
+
+    // --- Timeline (2.13) helpers ---
+    private fun timelinePxPerMs(): Double {
+        val dur = seekSlider.max
+        val trackW = marksTrackPane?.width ?: 0.0
+        if (dur <= 0.0 || trackW <= 0.0) return 0.0
+        val zoom = timelineZoomLevels.getOrElse(timelineZoomIndex) { 1.0 }
+        return (trackW / dur) * zoom
+    }
+
+    private fun rebuildTimeline() {
+        val track = marksTrackPane ?: return
+        val videoPane = videoTrackPane ?: return
+        val area = timelineArea ?: return
+        // Update zoom label
+        val zoom = timelineZoomLevels.getOrElse(timelineZoomIndex) { 1.0 }
+        val pct = (zoom * 100).toInt()
+        zoomLabel?.text = "ZOOM ${pct}%"
+
+        // VIDEO track: single full-width span
+        videoPane.children.clear()
+        val videoSpan = StackPane().apply {
+            minHeight = 24.0; prefHeight = 24.0; maxHeight = 24.0
+            style = "-fx-background-color: rgba(220,236,98,0.25); -fx-border-color: rgba(161,254,0,0.5); -fx-border-width: 1 0 1 2; -fx-background-radius: 2;"
+        }
+        val videoLabel = Label(currentVideoFileName ?: "").apply {
+            style = "-fx-text-fill: white; -fx-font-size: 10px; -fx-font-weight: bold;"
+        }
+        videoSpan.children.add(videoLabel)
+        // Bind width to the VIDEO track row width (not MARKS)
+        videoSpan.maxWidthProperty().bind(videoPane.widthProperty())
+        videoSpan.prefWidthProperty().bind(videoPane.widthProperty())
+        videoPane.children.add(videoSpan)
+
+        // MARKS track: one span per completed point
+        val pxPerMs = timelinePxPerMs()
+        if (pxPerMs <= 0.0) {
+            // Scale not ready yet; keep existing marks and try again on next rebuild
+            updatePlayheadInTimeline()
+            return
+        }
+        track.children.clear()
+        val points = dispatcher.getCompletedPoints().sortedBy { it.startMs }
+        for (p in points) {
+            val x = p.startMs * pxPerMs
+            val w = (p.endMs - p.startMs) * pxPerMs
+            if (w <= 0.5) continue
+            val span = StackPane().apply {
+                layoutX = x
+                minHeight = 18.0; prefHeight = 18.0; maxHeight = 18.0
+                prefWidth = w
+                style = "-fx-background-color: rgba(161,254,0,0.2); -fx-border-color: #a1fe00; -fx-border-width: 0 1 0 1; -fx-background-radius: 2;"
+                children.add(Label(p.id).apply { style = "-fx-text-fill: #a1fe00; -fx-font-size: 9px; -fx-font-weight: bold;" })
+                setOnMouseClicked { seekTo(p.startMs.toLong()) }
+            }
+            track.children.add(span)
+        }
+
+        // Ensure playhead height spans the area
+        val ph = playheadLine
+        if (ph != null) {
+            ph.isManaged = false
+            if (!ph.prefHeightProperty().isBound) {
+                ph.prefHeightProperty().bind(area.heightProperty())
+            }
+        }
+        updatePlayheadInTimeline()
+        // Keep playhead above any newly added mark nodes
+        playheadLine?.toFront()
+     }
+ 
+     private fun updatePlayheadInTimeline() {
+        val area = timelineArea ?: return
+        val labelsWidth = 60.0 // fixed width defined in buildView for labels column
+        val pxPerMs = timelinePxPerMs()
+        if (pxPerMs <= 0) return
+        val t = getPlayheadMs().toDouble()
+        val x = labelsWidth + 4.0 + t * pxPerMs
+        val ph = playheadLine ?: return
+        ph.isManaged = false
+        ph.layoutX = x
+        ph.layoutY = 0.0
     }
 }
