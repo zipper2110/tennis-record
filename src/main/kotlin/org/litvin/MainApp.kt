@@ -4,12 +4,19 @@ import javafx.application.Application
 import javafx.scene.Scene
 import javafx.scene.layout.BorderPane
 import javafx.stage.Stage
+import javafx.stage.FileChooser
+import java.io.File
 
 class MainApp : Application() {
     override fun start(primaryStage: Stage) {
         val dispatcher = ProjectsDispatcher()
         val projectsTab = ProjectsTab(dispatcher)
         val markupTab = MarkupTab(MarkupDispatcher())
+
+        // Allow Markup to request re-selection of source video
+        markupTab.onRequestSelectSource = {
+            dispatcher.onNavigate?.invoke(ProjectsDispatcher.Route.Step1SelectSource)
+        }
 
         val root = BorderPane().apply {
             center = projectsTab.view
@@ -22,9 +29,37 @@ class MainApp : Application() {
                     primaryStage.title = "Tennis Record — Projects"
                 }
                 ProjectsDispatcher.Route.Step1SelectSource -> {
-                    // For now, keep showing Projects tab; selecting source not implemented yet
+                    // Implement Select Source step: pick video and update manifest, then go to Markup
                     root.center = projectsTab.view
                     primaryStage.title = "Tennis Record — Projects"
+                    val manifestPath = ProjectsDispatcher.currentProjectPath
+                    if (manifestPath != null) {
+                        try {
+                            val chooser = FileChooser().apply {
+                                title = "Select Source Video"
+                                extensionFilters.addAll(
+                                    FileChooser.ExtensionFilter("Video Files", "*.mp4", "*.mov", "*.mkv", "*.avi", "*.m4v", "*.wmv"),
+                                    FileChooser.ExtensionFilter("All Files", "*.*")
+                                )
+                                val initial = File(manifestPath).parentFile
+                                if (initial.exists()) initialDirectory = initial
+                            }
+                            val selected = chooser.showOpenDialog(primaryStage)
+                            if (selected != null) {
+                                // Update manifest with selected video and navigate to Trim
+                                val mf = ManifestIO.read(manifestPath)
+                                val updated = mf.copy(sourceVideo = selected.absolutePath, lastOpenedAt = ManifestIO.nowIsoUtc())
+                                ManifestIO.write(manifestPath, updated)
+                                dispatcher.onNavigate?.invoke(ProjectsDispatcher.Route.Step2Trim)
+                            } else {
+                                // Stay on Projects view if user cancels
+                                println("[INFO] Select Source canceled by user")
+                            }
+                        } catch (t: Throwable) {
+                            System.err.println("[ERROR] Select Source failed: ${t.message}")
+                            t.printStackTrace()
+                        }
+                    }
                 }
                 ProjectsDispatcher.Route.Step2Trim -> {
                     root.center = markupTab.view

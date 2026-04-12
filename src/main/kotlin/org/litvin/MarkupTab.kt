@@ -31,6 +31,8 @@ import java.io.File
  * - Exposes getPlayheadMs() and seekTo(ms)
  */
 class MarkupTab(private val dispatcher: MarkupDispatcher) {
+    // Request host to route back to Select Source flow when video is missing/unavailable
+    var onRequestSelectSource: (() -> Unit)? = null
     private var toastPopup: Popup? = null
 
     private fun showToast(message: String) {
@@ -111,6 +113,9 @@ class MarkupTab(private val dispatcher: MarkupDispatcher) {
         style = "-fx-background-color: #1f1f1f; -fx-control-inner-background: #1f1f1f; -fx-control-inner-background-alt: #1f1f1f; -fx-background-insets: 0; -fx-padding: 8;"
     }
 
+    // Track last auto-activated selection to avoid thrash
+    private var lastActivatedId: String? = null
+
     private val viewInternal: Node by lazy { buildView() }
     val view: Node get() = viewInternal
 
@@ -129,6 +134,8 @@ class MarkupTab(private val dispatcher: MarkupDispatcher) {
             autosaveDebounce.playFromStart()
             // Also refresh UI count/list ordering
             refreshPointsUI()
+            // After points change, sync active selection with current time
+            updateActiveSelectionFromTime(getPlayheadMs())
         }
     }
 
@@ -139,7 +146,21 @@ class MarkupTab(private val dispatcher: MarkupDispatcher) {
             val manifest = ManifestIO.read(manifestPath)
             val src = manifest.sourceVideo?.takeIf { it.isNotBlank() }
             if (src != null) {
-                loadMedia(File(src))
+                val f = File(src)
+                if (f.exists()) {
+                    loadMedia(f)
+                } else {
+                    // File path no longer valid — notify and route to Select Source
+                    DialogUtils.error(
+                        title = "Source video not found",
+                        header = "The selected source video cannot be opened.",
+                        content = "File not found: $src\nPlease re-select the source video."
+                    )
+                    onRequestSelectSource?.invoke()
+                }
+            } else {
+                // No source video set — go to Select Source
+                onRequestSelectSource?.invoke()
             }
             // Load existing points from edl.json for this project
             val projectDir = EdlIO.projectDirFromManifest(manifestPath)
@@ -242,6 +263,8 @@ class MarkupTab(private val dispatcher: MarkupDispatcher) {
                 seekSlider.value = ms.toDouble()
             }
         }
+        // Auto-activate point based on current time (2.12)
+        updateActiveSelectionFromTime(ms)
     }
 
     private fun updatePlayButtonIcon() {
@@ -258,6 +281,8 @@ class MarkupTab(private val dispatcher: MarkupDispatcher) {
             if (!changing) {
                 // Drag ended; perform seek
                 mediaPlayer?.seek(Duration.millis(seekSlider.value))
+                // After seek completes (approx), update active selection once
+                updateActiveSelectionFromTime(seekSlider.value.toLong())
             }
         }
         // Clicking on the slider (without drag)
@@ -267,6 +292,7 @@ class MarkupTab(private val dispatcher: MarkupDispatcher) {
         seekSlider.addEventHandler(MouseEvent.MOUSE_RELEASED) {
             isUserSeeking = false
             mediaPlayer?.seek(Duration.millis(seekSlider.value))
+            updateActiveSelectionFromTime(seekSlider.value.toLong())
         }
     }
 
@@ -658,6 +684,67 @@ class MarkupTab(private val dispatcher: MarkupDispatcher) {
         }
 
         return root
+    }
+
+    // Determine which row should be active for time t based on [start, end) half-open intervals.
+    private fun findActiveRowForTime(t: Long): Row? {
+        // Build a snapshot of completed rows (exclude pending) sorted by startMs
+        val items = pointsList.items
+        if (items.isEmpty()) return null
+        val completed = items.filter { !it.isPending }
+        if (completed.isEmpty()) return null
+        // Binary search by startMs
+        var lo = 0
+        var hi = completed.size - 1
+        var idx = -1
+        while (lo <= hi) {
+            val mid = (lo + hi) ushr 1
+            val r = completed[mid]
+            when {
+                t < r.startMs -> hi = mid - 1
+                t >= (r.endMs ?: Int.MAX_VALUE) -> lo = mid + 1
+                else -> { idx = mid; break }
+            }
+        }
+        if (idx >= 0) return completed[idx]
+        // Edge case: exactly at end of one and next starts at same time -> select next
+        // After the while, lo is the first index with startMs > t, hi is <= t.
+        if (lo in completed.indices) {
+            val next = completed[lo]
+            val prev = if (hi in completed.indices) completed[hi] else null
+            if (prev != null && t == (prev.endMs ?: Int.MAX_VALUE).toLong() && next.startMs == prev.endMs) {
+                return next
+            }
+        }
+        return null
+    }
+
+    // Update points list selection according to current time and pending rules.
+    private fun updateActiveSelectionFromTime(t: Long) {
+        // Debounce: only change when identity actually changes
+        val match = findActiveRowForTime(t)
+        val pendingStart = dispatcher.getPendingStart()
+        val target: Row? = match ?: run {
+            // If no completed match, consider pending row active if t >= pending start
+            if (pendingStart != null) {
+                val pendingRow = pointsList.items.lastOrNull()?.takeIf { it.isPending }
+                if (pendingRow != null && t >= pendingRow.startMs) pendingRow else null
+            } else null
+        }
+        val selected = pointsList.selectionModel.selectedItem
+        val targetId = target?.id
+        val selectedId = selected?.id
+        if (targetId != selectedId) {
+            if (target != null) {
+                pointsList.selectionModel.select(target)
+                pointsList.scrollTo(target)
+                lastActivatedId = targetId
+            } else {
+                // Clear selection if nothing matches
+                pointsList.selectionModel.clearSelection()
+                lastActivatedId = null
+            }
+        }
     }
 
     private fun performSaveEdl() {

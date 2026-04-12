@@ -159,7 +159,7 @@ General findings & scope notes (review)
   - Review notes:
     - Include tests for boundary activation logic assumptions (half-open intervals) to keep 2.12 behavior consistent with validation.
 
-- [ ] 2.11 — Navigation wiring to Markup tab
+- [x] 2.11 — Navigation wiring to Markup tab
   - Description: Ensure app can navigate to Markup after New/Open project when `sourceVideo` is present.
   - Acceptance Criteria:
     - From Projects flows, opening/creating a project with `sourceVideo` lands on Markup.
@@ -171,7 +171,7 @@ General findings & scope notes (review)
     - When `sourceVideo` becomes unavailable (moved/missing), handle gracefully: show error and route back to Select Source.
 
 
-- [ ] 2.12 — Auto-activate point on playback/seek
+- [x] 2.12 — Auto-activate point on playback/seek
   - Description: Keep the currently relevant point active/selected while the user plays back or seeks the video.
   - Acceptance Criteria:
     - When the playhead time t satisfies startMs ≤ t < endMs for a point, that point becomes the active/selected row.
@@ -197,7 +197,7 @@ General findings & scope notes (review)
     - Use lightweight canvas/Pane with absolute-positioned children for spans; reuse time formatting helpers from 2.9.
   - Review notes:
     - For single-source scope, render a single full-width span in VIDEO labeled with the file name from manifest.
-    - MARKS spans should be click‑to‑seek and show a tooltip with Start–End and duration (optional, nice‑to‑have).
+    - MARKS spans should be click‑to‑seek.
     - Keep the playhead visually above both tracks, matching the mock’s vertical line.
 
 
@@ -217,3 +217,19 @@ General findings & scope notes (review)
   - Review notes:
     - Ensure keyboard focus/Space playback shortcut rules (2.5) remain intact while editing.
     - Consider lightweight visual cues on rows that moved due to resort after edit.
+
+
+- [ ] 2.15 — Left navigation sidebar present on Markup
+  - Description: Ensure the Markup tab/page includes the same left navigation sidebar as the Projects page, maintaining consistent app-wide navigation and branding.
+  - Acceptance Criteria:
+    - A left navigation sidebar is visible on the Markup screen with the same layout, styling, and width (~80 px) as on Projects.
+    - The "Markup" item is shown as the active/selected entry; "Projects" appears inactive.
+    - Sidebar items do not need to navigate in v0.1.0 (clicks may be no-ops), but visual hover/active states should match Projects.
+    - The main Markup content is laid out to the right of the sidebar without overlap; resizing keeps proportions sensible.
+  - Implementation Guide:
+    - Reuse the existing sidebar from Projects (extract a small helper/component if convenient) and include it in Markup’s root layout.
+    - Apply the same CSS classes already used by Projects’ sidebar to ensure identical visuals.
+    - Keep keyboard focus behavior: the Markup content area should still capture Space/arrow keys for playback when appropriate.
+  - Review notes:
+    - Verify consistent spacing, padding, and background with Projects.
+    - Ensure no regression to Markup controls’ sizing due to added sidebar; media viewer should resize accordingly.
