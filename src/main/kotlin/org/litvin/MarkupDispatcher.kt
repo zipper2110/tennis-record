@@ -29,6 +29,37 @@ class MarkupDispatcher {
         return m
     }
 
+    /** Update an existing point by id with validation (2.14/2.7). Returns true on success. */
+    fun updatePoint(id: String, newStartMsRaw: Long, newEndMsRaw: Long, newLabel: String?): Boolean {
+        val idx = points.indexOfFirst { it.id == id }
+        if (idx < 0) {
+            notifyUser("Point not found: $id")
+            return false
+        }
+        val s = Timecode.roundTo10ms(newStartMsRaw)
+        val e = Timecode.roundTo10ms(newEndMsRaw)
+        if (s < 0 || e < 0 || e <= s || (e - s) < 200) {
+            notifyUser("Invalid edit: ensure 0 ≤ start < end and duration ≥ 200 ms")
+            return false
+        }
+        // Overlap check against all other points (half-open [s,e))
+        val overlaps = points.withIndex().any { (i, p) ->
+            if (i == idx) return@any false
+            s < p.endMs && p.startMs < e
+        }
+        if (overlaps) {
+            notifyUser("Edit blocked: overlaps with another point. Adjust boundaries.")
+            return false
+        }
+        val old = points[idx]
+        val updated = old.copy(startMs = s, endMs = e, label = newLabel)
+        points[idx] = updated
+        // Keep list sorted by startMs
+        points.sortBy { it.startMs }
+        onPointsChanged?.invoke()
+        return true
+    }
+
 
     /** Called when user presses C or clicks Point Start. */
     fun onPointStart(timeMs: Long) {

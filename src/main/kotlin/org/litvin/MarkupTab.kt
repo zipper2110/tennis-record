@@ -121,6 +121,7 @@ class MarkupTab(private val dispatcher: MarkupDispatcher) {
         placeholder = Label("No points yet").apply { style = "-fx-text-fill: #777;" }
         isFocusTraversable = true
         style = "-fx-background-color: #1f1f1f; -fx-control-inner-background: #1f1f1f; -fx-control-inner-background-alt: #1f1f1f; -fx-background-insets: 0; -fx-padding: 8;"
+        maxHeight = Double.MAX_VALUE
     }
 
     // Track last auto-activated selection to avoid thrash
@@ -329,6 +330,8 @@ class MarkupTab(private val dispatcher: MarkupDispatcher) {
             prefWidth = 280.0
             style = "-fx-background-color: #1f1f1f; -fx-border-color: #2d2d2d; -fx-border-width: 0 0 0 1;"
         }
+        // Let the points list take remaining vertical space and only scroll when content exceeds it
+        VBox.setVgrow(pointsList, Priority.ALWAYS)
         // store totalsLabel reference for updates
         right.properties["totalsLabel"] = totalsLabel
         root.right = right
@@ -359,7 +362,11 @@ class MarkupTab(private val dispatcher: MarkupDispatcher) {
                     }
                 }
                 private val headerSpacer = Region().apply { HBox.setHgrow(this, Priority.ALWAYS) }
-                private val header = HBox(6.0, title, headerSpacer, duration, goBtn, deleteBtn).apply {
+                private val editBtn = Button("✎").apply {
+                    style = "-fx-background-color: #2a2a2a; -fx-text-fill: #adaaaa; -fx-padding: 2 6 2 6;"
+                    tooltip = javafx.scene.control.Tooltip("Edit")
+                }
+                private val header = HBox(6.0, title, headerSpacer, duration, goBtn, editBtn, deleteBtn).apply {
                     alignment = Pos.CENTER_LEFT
                 }
                 private val startLbl = Label().apply { style = "-fx-font-size: 11px; -fx-font-family: monospace; -fx-text-fill: white;" }
@@ -367,7 +374,37 @@ class MarkupTab(private val dispatcher: MarkupDispatcher) {
                 private val timesRow = HBox(6.0, startLbl, Region(), endLbl).apply {
                     (children[1] as Region).also { HBox.setHgrow(it, Priority.ALWAYS) }
                 }
-                private val box = VBox(4.0, header, timesRow).apply {
+
+                // --- Inline edit UI (2.14) ---
+                private var editMode = false
+                private val startField = javafx.scene.control.TextField().apply { 
+                    promptText = "Start (hh:mm:ss.mmm)"
+                    prefColumnCount = 10
+                    maxWidth = Double.MAX_VALUE
+                }
+                private val endField = javafx.scene.control.TextField().apply { 
+                    promptText = "End (hh:mm:ss.mmm)"
+                    prefColumnCount = 10
+                    maxWidth = Double.MAX_VALUE
+                }
+                private val errorLabel = Label("").apply { 
+                    style = "-fx-text-fill: #ff7351; -fx-font-size: 10px;"
+                    isWrapText = true
+                    maxWidth = Double.MAX_VALUE
+                }
+                private val saveBtn = Button("Save").apply { style = "-fx-background-color: #3a3a3a; -fx-text-fill: #a1fe00; -fx-padding: 2 8;" }
+                private val cancelBtn = Button("Cancel").apply { style = "-fx-background-color: #3a3a3a; -fx-text-fill: #adaaaa; -fx-padding: 2 8;" }
+                private val editRow = VBox(6.0,
+                    HBox(6.0, Label("Start:"), startField).apply { HBox.setHgrow(startField, Priority.ALWAYS) },
+                    HBox(6.0, Label("End:"), endField).apply { HBox.setHgrow(endField, Priority.ALWAYS) },
+                    HBox(6.0, errorLabel, Region(), saveBtn, cancelBtn).apply { 
+                        (children[1] as Region).also { HBox.setHgrow(it, Priority.ALWAYS) }
+                        HBox.setHgrow(errorLabel, Priority.ALWAYS)
+                    }
+                ).apply { isFillWidth = true }
+
+                private val contentBox = VBox(6.0, timesRow).apply { isFillWidth = true }
+                private val box = VBox(4.0, header, contentBox).apply {
                     padding = Insets(8.0)
                     style = "-fx-background-color: rgba(0,0,0,0.35); -fx-background-radius: 3;"
                 }
@@ -377,6 +414,7 @@ class MarkupTab(private val dispatcher: MarkupDispatcher) {
                     padding = Insets(4.0)
                     addEventFilter(MouseEvent.MOUSE_CLICKED) { ev ->
                         val r = item ?: return@addEventFilter
+                        if (editMode) return@addEventFilter
                         if (ev.clickCount == 2) {
                             val cur = getPlayheadMs()
                             val startL = r.startMs.toLong()
@@ -386,6 +424,65 @@ class MarkupTab(private val dispatcher: MarkupDispatcher) {
                         } else if (ev.clickCount == 1) {
                             seekTo(r.startMs.toLong())
                             root.requestFocus()
+                        }
+                    }
+
+                    fun enterEdit() {
+                        val r = item ?: return
+                        if (r.isPending) return
+                        editMode = true
+                        errorLabel.text = ""
+                        startField.text = Timecode.format(r.startMs.toLong())
+                        val endText = r.endMs?.let { Timecode.format(it.toLong()) } ?: ""
+                        endField.text = endText
+                        contentBox.children.setAll(editRow)
+                        // Focus first field
+                        startField.requestFocus()
+                    }
+                    fun exitEdit() {
+                        editMode = false
+                        errorLabel.text = ""
+                        contentBox.children.setAll(timesRow)
+                    }
+                    fun trySave() {
+                        val r = item ?: return
+                        val id = r.id
+                        try {
+                            val sMs = Timecode.parse(startField.text)
+                            val eMs = Timecode.parse(endField.text)
+                            val ok = dispatcher.updatePoint(id, sMs, eMs, r.label)
+                            if (ok) {
+                                // Refresh UI and keep selection on the same id
+                                val curId = id
+                                refreshPointsUI()
+                                val items = pointsList.items
+                                val match = items.firstOrNull { it.id == curId }
+                                if (match != null) {
+                                    pointsList.selectionModel.select(match)
+                                    pointsList.scrollTo(match)
+                                }
+                                autosaveDebounce.playFromStart()
+                                maybeShowDispatcherMessage()
+                                exitEdit()
+                            } else {
+                                // Dispatcher set a message; also show inline
+                                val msg = dispatcher.consumeUserMessage() ?: "Invalid edit"
+                                errorLabel.text = msg
+                                showToast(msg)
+                            }
+                        } catch (t: Throwable) {
+                            errorLabel.text = t.message ?: "Invalid time format"
+                        }
+                    }
+
+                    editBtn.setOnAction { enterEdit() }
+                    saveBtn.setOnAction { trySave() }
+                    cancelBtn.setOnAction { exitEdit() }
+
+                    // Revert on focus lost from the edit controls (lightweight cancel)
+                    editRow.focusedProperty().addListener { _, _, hasFocus ->
+                        if (!hasFocus && editMode) {
+                            exitEdit()
                         }
                     }
                 }
@@ -421,6 +518,18 @@ class MarkupTab(private val dispatcher: MarkupDispatcher) {
                         // Hide delete button for pending row
                         deleteBtn.isVisible = !row.isPending
                         deleteBtn.isManaged = !row.isPending
+                        // Edit button available only for completed rows
+                        editBtn.isVisible = !row.isPending
+                        editBtn.isManaged = !row.isPending
+                        // Swap content based on edit mode
+                        if (editMode) {
+                            // Keep fields in sync in case updateItem was called while editing
+                            startField.text = Timecode.format(row.startMs.toLong())
+                            endField.text = row.endMs?.let { Timecode.format(it.toLong()) } ?: ""
+                            contentBox.children.setAll(editRow)
+                        } else {
+                            contentBox.children.setAll(timesRow)
+                        }
                         applySelectionStyles(isSelected)
                         graphic = box
                     }

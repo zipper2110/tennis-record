@@ -198,9 +198,10 @@ General findings & scope notes (review)
     - MARKS spans should be click‑to‑seek.
 
 
-- [ ] 2.14 — Inline editing for points (split from 2.6)
+- [x] 2.14 — Inline editing for points (split from 2.6)
   - Description: Enable inline editing of Start/End (and Label) directly in the Marked points list. Edits must validate and persist. This work was split out of 2.6 to ship view/select/jump/delete first.
   - Acceptance Criteria:
+    - An explicit "Edit" button is present on each marked point row/card, positioned between "Go to marked point" and "Delete"; clicking it enters inline edit mode for that row.
     - Users can edit Start and End times inline for any completed point; pending row is not editable.
     - Users can edit the Label inline.
     - On commit, validation rules (see 2.7) are applied: 0 <= start < end, duration >= 200 ms, and no overlaps with other points.
