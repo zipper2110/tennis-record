@@ -17,6 +17,10 @@ class MainApp : Application() {
         markupTab.onRequestSelectSource = {
             dispatcher.onNavigate?.invoke(ProjectsDispatcher.Route.Step1SelectSource)
         }
+        // Allow Markup to navigate back to Projects when user clicks the sidebar item
+        markupTab.onRequestNavigateProjects = {
+            dispatcher.onNavigate?.invoke(ProjectsDispatcher.Route.PROJECTS)
+        }
 
         val root = BorderPane().apply {
             center = projectsTab.view

@@ -43,6 +43,8 @@ class MarkupTab(private val dispatcher: MarkupDispatcher) {
     private var currentVideoFileName: String? = null
     // Request host to route back to Select Source flow when video is missing/unavailable
     var onRequestSelectSource: (() -> Unit)? = null
+    // Request host to navigate back to Projects when user clicks Projects in sidebar
+    var onRequestNavigateProjects: (() -> Unit)? = null
     private var toastPopup: Popup? = null
 
     private fun showToast(message: String) {
@@ -315,7 +317,47 @@ class MarkupTab(private val dispatcher: MarkupDispatcher) {
     }
 
     private fun buildView(): Node {
-        // Right sidebar: Points list
+        // Build left navigation sidebar (reuse Projects visuals, mark Markup active)
+        fun buildSidebar(): Node {
+            val brandIcon = Label("⬢").apply { styleClass.add("brand-icon") }
+            val version = Label("v1.0.4").apply { styleClass.add("brand-version") }
+            val brandBox = VBox(4.0, brandIcon, version).apply { alignment = Pos.CENTER }
+            fun navItem(text: String, active: Boolean = false, onClick: (() -> Unit)? = null): Node = VBox(4.0).apply {
+                val icon = Label("●").apply { styleClass.add(if (active) "nav-icon-active" else "nav-icon") }
+                val label = Label(text).apply { styleClass.add(if (active) "nav-label-active" else "nav-label") }
+                children.addAll(icon, label)
+                alignment = Pos.CENTER
+                styleClass.add("nav-item")
+                isFocusTraversable = false
+                if (onClick != null) {
+                    setOnMouseClicked { onClick.invoke() }
+                }
+            }
+            val nav = VBox(16.0,
+                navItem("Projects", active = false) { onRequestNavigateProjects?.invoke() },
+                navItem("Markup", active = true),
+                navItem("Adjust"),
+                navItem("Scoring"),
+                navItem("Export")
+            ).apply { alignment = Pos.TOP_CENTER }
+            val settingsBtn = Button("⚙").apply {
+                styleClass.add("settings-btn")
+                isFocusTraversable = false
+            }
+            val settingsBox = VBox(settingsBtn).apply { alignment = Pos.CENTER }
+            return VBox().apply {
+                prefWidth = 80.0; minWidth = 80.0; maxWidth = 80.0
+                spacing = 24.0
+                padding = Insets(16.0, 0.0, 16.0, 0.0)
+                styleClass.add("sidebar")
+                children.addAll(VBox(10.0, brandBox, nav).apply { alignment = Pos.TOP_CENTER; VBox.setVgrow(nav, Priority.ALWAYS) }, settingsBox)
+            }
+        }
+
+        // Attach left navigation
+        root.left = buildSidebar()
+
+        // Right sidebar: Points list (Markup panel side)
         val pointsHeader = HBox(8.0).apply {
             padding = Insets(8.0)
             alignment = Pos.CENTER_LEFT
@@ -823,9 +865,11 @@ class MarkupTab(private val dispatcher: MarkupDispatcher) {
         marksTrackPane!!.widthProperty().addListener { _, _, _ -> rebuildTimeline() }
         // Rebuild when media duration (seekSlider.max) becomes known/changes
         seekSlider.maxProperty().addListener { _, _, _ -> rebuildTimeline() }
-        // Place footer in root.bottom
+        // Place footer under the center content (not in BorderPane.bottom) so the left sidebar spans full height
         val footer = VBox(tlHeader, timelineArea).apply { style = "-fx-background-color: #0e0e0e;" }
-        root.bottom = footer
+        if (centerBox.children.contains(footer).not()) {
+            centerBox.children.add(footer)
+        }
         // Initial build
         rebuildTimeline()
         updatePlayheadInTimeline()

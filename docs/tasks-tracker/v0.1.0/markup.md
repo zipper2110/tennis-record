@@ -217,7 +217,7 @@ General findings & scope notes (review)
     - Consider lightweight visual cues on rows that moved due to resort after edit.
 
 
-- [ ] 2.15 — Left navigation sidebar present on Markup
+- [x] 2.15 — Left navigation sidebar present on Markup
   - Description: Ensure the Markup tab/page includes the same left navigation sidebar as the Projects page, maintaining consistent app-wide navigation and branding.
   - Acceptance Criteria:
     - A left navigation sidebar is visible on the Markup screen with the same layout, styling, and width (~80 px) as on Projects.
@@ -233,17 +233,3 @@ General findings & scope notes (review)
     - Ensure no regression to Markup controls’ sizing due to added sidebar; media viewer should resize accordingly.
 
 
-- [ ] 2.16 — Timeline playhead indicator (split from 2.13)
-  - Description: Add a vertical playhead indicator to the timeline footer that reflects the current viewer time.
-  - Acceptance Criteria:
-    - A thin vertical line (playhead) is visible above the timeline tracks, positioned according to the current time within the total video duration.
-    - The playhead position updates smoothly during playback and jumps immediately when seeking.
-    - Toggling Play/Pause in the viewer reflects in the playhead movement/stop respectively.
-    - No timeline scrubbing by dragging the playhead in v0.1.0.
-  - Implementation Guide:
-    - Subscribe to viewer time updates (~10 Hz or on seek complete) and convert time to X coordinate using the same scaling as 2.13 (total-duration-to-pixels).
-    - Use a lightweight node (e.g., a 1–2 px wide Pane/Line) layered above the VIDEO and MARKS tracks.
-    - Recompute layout on container resize; avoid jitter by debouncing to ~50–100 ms.
-  - Review notes:
-    - Ensure z-order keeps the playhead visually above both tracks and ruler.
-    - Zoom levels and scrubbing are out of scope for v0.1.0.
