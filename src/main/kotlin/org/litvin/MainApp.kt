@@ -21,10 +21,20 @@ class MainApp : Application() {
         markupTab.onRequestNavigateProjects = {
             dispatcher.onNavigate?.invoke(ProjectsDispatcher.Route.PROJECTS)
         }
+        // Allow Markup to navigate to Export
+        markupTab.onRequestNavigateExport = {
+            dispatcher.onNavigate?.invoke(ProjectsDispatcher.Route.EXPORT)
+        }
+
+        val exportTab = ExportTab()
 
         val root = BorderPane().apply {
             center = projectsTab.view
         }
+
+        // Wire ExportTab navigation callbacks
+        exportTab.onRequestNavigateProjects = { dispatcher.onNavigate?.invoke(ProjectsDispatcher.Route.PROJECTS) }
+        exportTab.onRequestNavigateMarkup = { dispatcher.onNavigate?.invoke(ProjectsDispatcher.Route.Step2Trim) }
 
         dispatcher.onNavigate = { route ->
             when (route) {
@@ -70,6 +80,11 @@ class MainApp : Application() {
                     primaryStage.title = "Tennis Record — Markup"
                     // Ensure the viewer loads the project's video when entering Markup
                     (markupTab as MarkupTab).onEnter()
+                }
+                ProjectsDispatcher.Route.EXPORT -> {
+                    root.center = exportTab.view
+                    primaryStage.title = "Tennis Record — Export"
+                    try { (exportTab as ExportTab).onEnter() } catch (_: Throwable) {}
                 }
             }
         }

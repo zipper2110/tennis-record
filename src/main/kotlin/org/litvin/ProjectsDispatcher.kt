@@ -8,7 +8,7 @@ import java.io.File
  * In later steps, these will open dialogs and navigate to flows.
  */
 class ProjectsDispatcher {
-    enum class Route { PROJECTS, Step1SelectSource, Step2Trim }
+    enum class Route { PROJECTS, Step1SelectSource, Step2Trim, EXPORT }
 
     // Navigation callback: MainApp sets this to swap views
     var onNavigate: ((Route) -> Unit)? = null

@@ -45,6 +45,8 @@ class MarkupTab(private val dispatcher: MarkupDispatcher) {
     var onRequestSelectSource: (() -> Unit)? = null
     // Request host to navigate back to Projects when user clicks Projects in sidebar
     var onRequestNavigateProjects: (() -> Unit)? = null
+    // Request host to navigate to Export when user clicks Export in sidebar
+    var onRequestNavigateExport: (() -> Unit)? = null
     private var toastPopup: Popup? = null
 
     private fun showToast(message: String) {
@@ -338,7 +340,7 @@ class MarkupTab(private val dispatcher: MarkupDispatcher) {
                 navItem("Markup", active = true),
                 navItem("Adjust"),
                 navItem("Scoring"),
-                navItem("Export")
+                navItem("Export") { onRequestNavigateExport?.invoke() }
             ).apply { alignment = Pos.TOP_CENTER }
             val settingsBtn = Button("⚙").apply {
                 styleClass.add("settings-btn")

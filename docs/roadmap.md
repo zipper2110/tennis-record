@@ -49,6 +49,7 @@ Project I/O
 - [ ] Save/load project (*.trproj) with autosave
 
 Export
+See detailed tasks with descriptions and acceptance criteria in: [v0.1.0/export.md](tasks-tracker/v0.1.0/export.md)
 - [ ] Build FFmpeg command(s) from EDL (no overlay in MVP)
 - [ ] Implement trim + concat strategy (re-encode borders)
 - [ ] Allow selecting output file name and location in the filesystem

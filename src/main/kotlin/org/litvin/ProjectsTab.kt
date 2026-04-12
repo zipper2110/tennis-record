@@ -167,10 +167,24 @@ class ProjectsTab(private val dispatcher: ProjectsDispatcher) {
 
         val nav = VBox(16.0,
             navItem("Projects", active = true),
-            navItem("Markup"),
+            VBox(4.0).apply {
+                val icon = Label("●").apply { styleClass.add("nav-icon") }
+                val label = Label("Markup").apply { styleClass.add("nav-label") }
+                children.addAll(icon, label)
+                alignment = Pos.CENTER
+                styleClass.add("nav-item")
+                setOnMouseClicked { dispatcher.onNavigate?.invoke(ProjectsDispatcher.Route.Step2Trim) }
+            },
             navItem("Adjust"),
             navItem("Scoring"),
-            navItem("Export")
+            VBox(4.0).apply {
+                val icon = Label("●").apply { styleClass.add("nav-icon") }
+                val label = Label("Export").apply { styleClass.add("nav-label") }
+                children.addAll(icon, label)
+                alignment = Pos.CENTER
+                styleClass.add("nav-item")
+                setOnMouseClicked { dispatcher.onNavigate?.invoke(ProjectsDispatcher.Route.EXPORT) }
+            }
         ).apply { alignment = Pos.TOP_CENTER }
 
         val settingsBtn = Button("⚙").apply {
