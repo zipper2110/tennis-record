@@ -5,6 +5,12 @@ import javafx.geometry.Pos
 import javafx.scene.Node
 import javafx.scene.control.*
 import javafx.scene.layout.*
+import javafx.stage.FileChooser
+import java.io.File
+import java.util.UUID
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+import java.util.prefs.Preferences
 
 /**
  * Export tab shell (Task 3.1) + Task 3.2 (Presets loading and binding):
@@ -31,6 +37,10 @@ class ExportTab {
     private var edlInfoLabel: Label? = null
     private var encoderBox: ComboBox<String>? = null
     private var encoderSummaryLabel: Label? = null
+
+    // Right panel containers (Task 3.6 — show job immediately under Active)
+    private var activeListBox: VBox? = null
+    private var completedListBox: VBox? = null
 
     private fun buildSidebar(): Node {
         val brandIcon = Label("⬢").apply { styleClass.add("brand-icon") }
@@ -150,10 +160,9 @@ class ExportTab {
 
         val initBtn = Button("Initialize Render").apply {
             styleClass.add("cta-primary")
-            isDisable = true // enabled in later tasks when prerequisites are met
+            isDisable = false // Enabled for Task 3.6; TODO: tighter validation in Task 3.15
             setOnAction {
-                // Placeholder: will open Save As in task 3.6
-                println("[EXPORT] Initialize Render clicked (stub)")
+                handleInitializeRender()
             }
         }
 
@@ -259,9 +268,16 @@ class ExportTab {
     private fun buildRightPanel(): Node {
         val active = section("Active Processing")
         val completed = section("Completed Renders")
-        // Placeholder cards/labels
-        (active.children[1] as VBox).children.add(Label("No active renders").apply { style = "-fx-text-fill: #777;" })
-        (completed.children[1] as VBox).children.add(Label("No completed renders yet").apply { style = "-fx-text-fill: #777;" })
+        val activeBox = (active.children[1] as VBox)
+        val completedBox = (completed.children[1] as VBox)
+        // Placeholders
+        val activePlaceholder = Label("No active renders").apply { style = "-fx-text-fill: #777;" }
+        val completedPlaceholder = Label("No completed renders yet").apply { style = "-fx-text-fill: #777;" }
+        activeBox.children.add(activePlaceholder)
+        completedBox.children.add(completedPlaceholder)
+        // Store refs
+        activeListBox = activeBox
+        completedListBox = completedBox
         return VBox(12.0, active, completed).apply {
             padding = Insets(12.0)
         }
@@ -347,6 +363,108 @@ class ExportTab {
     fun isIdleTrimEnabled(): Boolean = idleTrimCheck?.isSelected ?: true
     fun edlKeepIntervals(): List<PointV1> = edlValidated
     fun selectedEncoderLabel(): String = encoderBox?.selectionModel?.selectedItem ?: "H.264 (libx264)"
+
+    // --- Task 3.6: Initialize Render → Save As dialog and enqueue UI card ---
+    private fun handleInitializeRender() {
+        try {
+            val prefs = Preferences.userNodeForPackage(ExportTab::class.java)
+            val lastDirPref = prefs.get("export.lastDir", null)
+
+            // Build suggested file name based on current project manifest if available
+            val manifestPath = ProjectsDispatcher.currentProjectPath
+            val suggestedName = try {
+                if (!manifestPath.isNullOrBlank()) {
+                    val mf = ManifestIO.read(manifestPath)
+                    val base = mf.name.ifBlank { "export" }
+                    "${base}_export.mp4"
+                } else {
+                    val ts = DateTimeFormatter.ofPattern("yyyyMMdd_HHmm").format(LocalDateTime.now())
+                    "export_${ts}.mp4"
+                }
+            } catch (_: Throwable) {
+                val ts = DateTimeFormatter.ofPattern("yyyyMMdd_HHmm").format(LocalDateTime.now())
+                "export_${ts}.mp4"
+            }
+
+            val chooser = FileChooser().apply {
+                title = "Save Render As"
+                extensionFilters.addAll(
+                    FileChooser.ExtensionFilter("MP4 Video", "*.mp4"),
+                    FileChooser.ExtensionFilter("All Files", "*.*")
+                )
+                initialFileName = suggestedName
+
+                // Determine initial directory preference
+                val initialDir = when {
+                    !lastDirPref.isNullOrBlank() && File(lastDirPref).exists() -> File(lastDirPref)
+                    !manifestPath.isNullOrBlank() -> File(manifestPath).parentFile
+                    else -> {
+                        val userHome = System.getProperty("user.home") ?: "."
+                        val videos = File(userHome, "Videos")
+                        val docs = File(userHome, "Documents")
+                        when {
+                            videos.exists() -> videos
+                            docs.exists() -> docs
+                            else -> File(userHome)
+                        }
+                    }
+                }
+                if (initialDir.exists()) initialDirectory = initialDir
+            }
+
+            val window = root.scene?.window
+            val selected = chooser.showSaveDialog(window) ?: return
+
+            // Ensure .mp4 extension if user omitted
+            var outFile = selected
+            if (!outFile.name.contains('.')) {
+                outFile = File(outFile.parentFile, outFile.name + ".mp4")
+            }
+            if (!outFile.name.lowercase().endsWith(".mp4")) {
+                outFile = File(outFile.parentFile, outFile.name.substringBeforeLast('.') + ".mp4")
+            }
+
+            if (outFile.exists()) {
+                val ok = DialogUtils.confirm(
+                    title = "Overwrite existing file?",
+                    header = outFile.name,
+                    content = "The file already exists. Do you want to replace it?"
+                )
+                if (!ok) return
+            }
+
+            // Remember last save directory in app prefs
+            prefs.put("export.lastDir", outFile.parentFile.absolutePath)
+
+            // Enqueue a render job (MVP Task 3.6: UI only)
+            addActiveJobCard(outFile.name)
+            println("[EXPORT] Enqueued render (UI only for 3.6): ${outFile.absolutePath}")
+        } catch (t: Throwable) {
+            System.err.println("[ERROR] Initialize Render failed: ${t.message}")
+            t.printStackTrace()
+            DialogUtils.error("Initialize Render failed", content = t.message)
+        }
+    }
+
+    private fun addActiveJobCard(fileName: String) {
+        val box = activeListBox ?: return
+        // Remove placeholder if present (first child is Label)
+        if (box.children.size == 1 && box.children[0] is Label) {
+            box.children.clear()
+        }
+        val jobId = UUID.randomUUID().toString().substring(0, 8).uppercase()
+        val title = Label(fileName).apply { style = "-fx-text-fill: #ddd; -fx-font-weight: bold;" }
+        val idLbl = Label("ID: ${jobId}").apply { style = "-fx-text-fill: #9aa; -fx-font-size: 11; -fx-font-family: 'Consolas', 'Courier New', monospace;" }
+        val header = HBox(8.0, VBox(2.0, title, idLbl), Label("0%"))
+        val progress = ProgressBar(0.0).apply {
+            prefWidth = 280.0
+        }
+        val eta = Label("ETA: --:--    0 / ?").apply { style = "-fx-text-fill: #888; -fx-font-size: 11; -fx-font-family: 'Consolas', 'Courier New', monospace;" }
+        val card = VBox(6.0, header, progress, eta).apply {
+            style = "-fx-background-color: #222; -fx-padding: 10; -fx-border-color: #a1fe00; -fx-border-width: 0 0 0 2;"
+        }
+        box.children.add(0, card)
+    }
 
     val view: Node get() = viewInternal
 }

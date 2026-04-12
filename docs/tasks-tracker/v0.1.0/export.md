@@ -56,12 +56,12 @@ General findings & scope notes (review)
   - Implementation Guide:
     - Read EDL from project. Ensure validation (sorted, half-open intervals) is honored. Re-encode borders as per roadmap.
 
-- [ ] 3.5 — Encoder engine selector (MVP scope)
+- [x] 3.5 — Encoder engine selector (MVP scope)
   - Description: Encoder options listed; only software H.264 path is available in v0.1.0. Hardware options are displayed but disabled.
   - Acceptance Criteria:
     - UI clearly indicates availability. Selected encoder stored in job config and shown in summaries.
 
-- [ ] 3.6 — Initialize Render → Save As dialog
+- [x] 3.6 — Initialize Render → Save As dialog
   - Description: On click, show file save dialog with suggested filename and last-used folder. On confirm, enqueue a render job.
   - Acceptance Criteria:
     - User can pick folder and name. Reject overwrite unless confirmed. Job appears under Active Processing immediately.
