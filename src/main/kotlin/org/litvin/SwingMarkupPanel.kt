@@ -37,9 +37,13 @@ class SwingMarkupPanel : JPanel(BorderLayout()) {
     private var projectDir: String? = null
 
     // UI controls
-    private val btnPlayPause = JButton("Play")
+    private lateinit var btnPlayPause: JButton
     private val btnStart = JButton("Point Start [C]")
     private val btnEnd = JButton("Point End [V]")
+    private val btnSeekBack10 = JButton()
+    private val btnSeekBack1 = JButton()
+    private val btnSeekFwd1 = JButton()
+    private val btnSeekFwd10 = JButton()
     private val timeLabel = JLabel("00:00:00.000")
     private val countBadge = JLabel("0 MARKED")
 
@@ -199,25 +203,90 @@ class SwingMarkupPanel : JPanel(BorderLayout()) {
         background = Color(0x16, 0x16, 0x16)
         border = BorderFactory.createEmptyBorder(8, 8, 8, 8)
 
-        // Top: Transport and point controls
-        val top = JPanel()
-        top.layout = BoxLayout(top, BoxLayout.X_AXIS)
-        top.isOpaque = false
-        btnPlayPause.addActionListener { togglePlayPause() }
+        // Bottom area: transport/mark controls above the timeline
+        // Build central square Play button
+        btnPlayPause = UiStyles.squarePrimaryButton(UiStyles.playIcon(28)) { togglePlayPause() }
+        // Seek buttons
+        fun styleSeek(b: JButton) {
+            UiStyles.styleSecondary(b)
+            b.iconTextGap = 6
+            b.preferredSize = Dimension(100, 44)
+            b.minimumSize = Dimension(100, 40)
+        }
+        fun styleSeekLarge(b: JButton) {
+            UiStyles.styleSecondary(b)
+            b.iconTextGap = 6
+            b.preferredSize = Dimension(150, 44)
+            b.minimumSize = Dimension(120, 40)
+        }
+        styleSeekLarge(btnSeekBack10); styleSeek(btnSeekBack1); styleSeek(btnSeekFwd1); styleSeekLarge(btnSeekFwd10)
+        btnSeekBack10.icon = UiStyles.seekIcon(false, 18); btnSeekBack10.text = "-10s [shift+←]"
+        btnSeekBack1.icon = UiStyles.seekIcon(false, 18); btnSeekBack1.text = "-1s [←]"
+        btnSeekFwd1.icon = UiStyles.seekIcon(true, 18); btnSeekFwd1.text = "+1s [→]"
+        btnSeekFwd10.icon = UiStyles.seekIcon(true, 18); btnSeekFwd10.text = "+10s [shift+→]"
+        btnSeekBack10.toolTipText = "Shift+Left"
+        btnSeekBack1.toolTipText = "Left"
+        btnSeekFwd1.toolTipText = "Right"
+        btnSeekFwd10.toolTipText = "Shift+Right"
+        btnSeekBack10.horizontalTextPosition = SwingConstants.RIGHT
+        btnSeekBack1.horizontalTextPosition = SwingConstants.RIGHT
+        btnSeekFwd1.horizontalTextPosition = SwingConstants.LEFT
+        btnSeekFwd10.horizontalTextPosition = SwingConstants.LEFT
+        btnSeekBack10.addActionListener { player.seek(max(0, player.currentTimeMs() - 10_000)); EventQueue.invokeLater { refreshUiAtCurrentTime(); player.component.requestFocusInWindow() } }
+        btnSeekBack1.addActionListener { player.seek(max(0, player.currentTimeMs() - 1_000)); EventQueue.invokeLater { refreshUiAtCurrentTime(); player.component.requestFocusInWindow() } }
+        btnSeekFwd1.addActionListener { player.seek(player.currentTimeMs() + 1_000); EventQueue.invokeLater { refreshUiAtCurrentTime(); player.component.requestFocusInWindow() } }
+        btnSeekFwd10.addActionListener { player.seek(player.currentTimeMs() + 10_000); EventQueue.invokeLater { refreshUiAtCurrentTime(); player.component.requestFocusInWindow() } }
+
+        // Point buttons styled and placed on the left
+        listOf(btnStart, btnEnd).forEach { UiStyles.styleSecondary(it) }
         btnStart.addActionListener { onStartAtPlayhead() }
         btnEnd.addActionListener { onEndAtPlayhead() }
-        listOf(btnPlayPause, btnStart, btnEnd).forEach {
-            top.add(it); top.add(Box.createHorizontalStrut(8))
-        }
-        top.add(Box.createHorizontalStrut(12))
-        top.add(JLabel("Time:"))
-        top.add(Box.createHorizontalStrut(4))
-        top.add(timeLabel)
-        add(top, BorderLayout.NORTH)
+
+        val controls = JPanel()
+        controls.layout = BoxLayout(controls, BoxLayout.X_AXIS)
+        controls.isOpaque = false
+        // Left group: Start/End
+        controls.add(btnStart); controls.add(Box.createHorizontalStrut(8)); controls.add(btnEnd)
+        controls.add(Box.createHorizontalGlue())
+        // Middle group: seeks + play square button
+        controls.add(btnSeekBack10); controls.add(Box.createHorizontalStrut(6))
+        controls.add(btnSeekBack1); controls.add(Box.createHorizontalStrut(12))
+        controls.add(btnPlayPause); controls.add(Box.createHorizontalStrut(12))
+        controls.add(btnSeekFwd1); controls.add(Box.createHorizontalStrut(6))
+        controls.add(btnSeekFwd10)
+        controls.add(Box.createHorizontalGlue())
+        // Right group: time label
+        val timePanel = JPanel()
+        timePanel.isOpaque = false
+        val lblTime = JLabel("Time:")
+        lblTime.foreground = UiStyles.FG_SECONDARY
+        timeLabel.foreground = UiStyles.FG_PRIMARY
+        timeLabel.preferredSize = Dimension(100, 24)
+        timePanel.add(lblTime)
+        timePanel.add(Box.createHorizontalStrut(6))
+        timePanel.add(timeLabel)
+        controls.add(timePanel)
+
+        val bottom = JPanel(BorderLayout())
+        bottom.isOpaque = false
+        // Opaque dark controls bar container
+        val controlsBar = JPanel(BorderLayout())
+        controlsBar.isOpaque = true
+        controlsBar.background = UiStyles.SURFACE_HIGH
+        controlsBar.border = BorderFactory.createCompoundBorder(
+            BorderFactory.createMatteBorder(1, 0, 0, 0, UiStyles.CARD_BORDER),
+            BorderFactory.createEmptyBorder(8, 12, 8, 12)
+        )
+        controlsBar.add(controls, BorderLayout.CENTER)
+        bottom.add(controlsBar, BorderLayout.NORTH)
 
         // Center: video and points list side-by-side
         val center = JSplitPane(JSplitPane.HORIZONTAL_SPLIT)
-        center.leftComponent = player.component
+        val leftColumn = JPanel(BorderLayout())
+        leftColumn.isOpaque = false
+        leftColumn.add(player.component, BorderLayout.CENTER)
+        leftColumn.add(bottom, BorderLayout.SOUTH)
+        center.leftComponent = leftColumn
 
         val rightPanel = JPanel(BorderLayout())
         // Header with count badge on the right
@@ -297,6 +366,7 @@ class SwingMarkupPanel : JPanel(BorderLayout()) {
         rightPanel.add(JScrollPane(pointsTable), BorderLayout.CENTER)
         center.rightComponent = rightPanel
         center.resizeWeight = 0.7
+        // Add bottom controls and center split
         add(center, BorderLayout.CENTER)
         // Timeline spans full width at the bottom
         add(timeline, BorderLayout.SOUTH)
@@ -334,8 +404,8 @@ class SwingMarkupPanel : JPanel(BorderLayout()) {
 
         // Player callbacks → update UI and repaint timeline on EDT
         player.onTimeChanged = { t -> EventQueue.invokeLater { updateTimeUI(t) ; timeline.repaint() ; autoActivatePoint(t) } }
-        player.onReady = { EventQueue.invokeLater { updateTimeUI(player.currentTimeMs()) ; timeline.repaint() ; updatePlayPauseText() } }
-        player.onStatusChanged = { _ -> EventQueue.invokeLater { updatePlayPauseText() ; refreshUiAtCurrentTime() } }
+        player.onReady = { EventQueue.invokeLater { updateTimeUI(player.currentTimeMs()) ; timeline.repaint() ; updatePlayPauseButton() } }
+        player.onStatusChanged = { _ -> EventQueue.invokeLater { updatePlayPauseButton() ; refreshUiAtCurrentTime() } }
 
         // Dispatcher callback to refresh UI
         dispatcher.onPointsChanged = {
@@ -429,11 +499,13 @@ class SwingMarkupPanel : JPanel(BorderLayout()) {
         }
     }
 
-    private fun updatePlayPauseText() {
-        btnPlayPause.text = when (player.status()) {
-            PlayerStatus.PLAYING -> "Pause"
-            else -> "Play"
-        }
+    private fun updatePlayPauseButton() {
+        try {
+            val playing = player.status() == PlayerStatus.PLAYING
+            btnPlayPause.icon = if (playing) UiStyles.pauseIcon(28) else UiStyles.playIcon(28)
+            btnPlayPause.toolTipText = if (playing) "SPACE — Pause" else "SPACE — Play"
+            btnPlayPause.repaint()
+        } catch (_: Throwable) { }
     }
 
     private fun updateTimeUI(ms: Long) {
@@ -448,10 +520,9 @@ class SwingMarkupPanel : JPanel(BorderLayout()) {
     }
 
     private fun togglePlayPause() {
-        when (player.status()) {
-            PlayerStatus.PLAYING -> player.pause()
-            else -> player.play()
-        }
+        val wasPlaying = player.status() == PlayerStatus.PLAYING
+        if (wasPlaying) player.pause() else player.play()
+        updatePlayPauseButton()
     }
 
     private fun onStartAtPlayhead() {
@@ -562,44 +633,40 @@ class SwingMarkupPanel : JPanel(BorderLayout()) {
         try { player.dispose() } catch (_: Throwable) {}
     }
 
-    // Renderer for the Action column: shows a small "Go" button
-    private inner class ActionButtonRenderer : JButton(), TableCellRenderer {
+    // Renderer for the Action column: shows a small primary "Go" button
+    private inner class ActionButtonRenderer : TableCellRenderer {
+        private val button: JButton = UiStyles.primarySmallButton("Go") {}
         init {
-            isOpaque = true
-            text = "Go"
-            toolTipText = "Go to marked point"
-            margin = Insets(2, 6, 2, 6)
+            button.toolTipText = "Go to marked point"
         }
         override fun getTableCellRendererComponent(table: JTable?, value: Any?, isSelected: Boolean, hasFocus: Boolean, row: Int, column: Int): Component {
             try {
-                isEnabled = !(dispatcher.getPendingStart() != null && row == 0)
-            } catch (_: Throwable) { isEnabled = true }
-            return this
+                button.isEnabled = !(dispatcher.getPendingStart() != null && row == 0)
+            } catch (_: Throwable) { button.isEnabled = true }
+            return button
         }
     }
 
     // Editor for the Action column: actual click handling
     private inner class ActionButtonEditor : AbstractCellEditor(), TableCellEditor {
-        private val button = JButton("Go").apply {
-            margin = Insets(2, 6, 2, 6)
-            toolTipText = "Go to marked point"
-            addActionListener {
-                try {
-                    val row = currentRow
-                    if (row >= 0) {
-                        // Ignore pending row
-                        if (dispatcher.getPendingStart() != null && row == 0) {
-                            cancelCellEditing(); return@addActionListener
-                        }
-                        val p = pointsModel.get(row)
-                        player.seek(p.startMs.toLong())
-                        EventQueue.invokeLater { refreshUiAtCurrentTime(); player.component.requestFocusInWindow() }
-                    }
-                } catch (_: Throwable) { }
-                stopCellEditing()
-            }
-        }
         private var currentRow: Int = -1
+        private val button: JButton = UiStyles.primarySmallButton("Go") {
+            try {
+                val row = currentRow
+                if (row >= 0) {
+                    // Ignore pending row
+                    if (dispatcher.getPendingStart() != null && row == 0) {
+                        cancelCellEditing(); return@primarySmallButton
+                    }
+                    val p = pointsModel.get(row)
+                    player.seek(p.startMs.toLong())
+                    EventQueue.invokeLater { refreshUiAtCurrentTime(); player.component.requestFocusInWindow() }
+                }
+            } catch (_: Throwable) { }
+            stopCellEditing()
+        }.apply {
+            toolTipText = "Go to marked point"
+        }
         override fun getTableCellEditorComponent(table: JTable?, value: Any?, isSelected: Boolean, row: Int, column: Int): Component {
             currentRow = row
             button.isEnabled = !(dispatcher.getPendingStart() != null && row == 0)

@@ -27,7 +27,7 @@ class SwingExportPanel : JPanel(BorderLayout()) {
     private val encoderCombo = JComboBox<EncoderItem>()
     private val encoderHintLabel = JLabel("")
     private val recheckButton = JButton("Re-check")
-    private val initButton = JButton("Initialize Render…")
+    private val initButton = UiStyles.primaryButton("Initialize Render") { onInitializeRender() }
 
     // Right side — Active + Completed
     private val activePanel = JPanel(BorderLayout())
@@ -44,13 +44,12 @@ class SwingExportPanel : JPanel(BorderLayout()) {
     private val completedListModel = DefaultListModel<String>()
     private val completedList = JList(completedListModel)
 
-    // Theming (mirror SwingProjectsPanel palette)
-    private val DARK_BG = java.awt.Color(0x16, 0x16, 0x16)
-    private val CARD_BG = java.awt.Color(0x22, 0x22, 0x22)
-    private val CARD_BORDER = java.awt.Color(0x33, 0x33, 0x33)
-    private val FG_PRIMARY = java.awt.Color(0xE6, 0xE6, 0xE6)
-    private val FG_SECONDARY = java.awt.Color(0xAA, 0xAA, 0xAA)
-    private val ACCENT_GREEN = java.awt.Color(0xA1, 0xFE, 0x00)
+    // Theming — reuse UiStyles palette
+    private val DARK_BG = UiStyles.DARK_BG
+    private val CARD_BG = UiStyles.CARD_BG
+    private val CARD_BORDER = UiStyles.CARD_BORDER
+    private val FG_PRIMARY = UiStyles.FG_PRIMARY
+    private val FG_SECONDARY = UiStyles.FG_SECONDARY
 
     // Helper text labels (from JavaFX ExportTab)
     private val qualityLabel = JLabel("")
@@ -158,20 +157,12 @@ class SwingExportPanel : JPanel(BorderLayout()) {
             setWrapped(encoderSummaryLabel, "Selected: ${label.substringBefore(" — ")} · $availability")
         }
         left.add(Box.createRigidArea(Dimension(0, 4)))
+        UiStyles.styleSecondary(recheckButton)
         left.add(recheckButton)
         left.add(Box.createVerticalGlue())
 
         // Primary action (neon green)
         initButton.alignmentX = 0f
-        initButton.text = "Initialize Render"
-        initButton.background = ACCENT_GREEN
-        initButton.foreground = Color(0x2B,0x49,0x00)
-        initButton.isOpaque = true
-        initButton.border = BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(ACCENT_GREEN.darker()),
-            EmptyBorder(8,12,8,12)
-        )
-        initButton.addActionListener { onInitializeRender() }
         left.add(Box.createRigidArea(Dimension(0, 12)))
         left.add(initButton)
 
@@ -188,8 +179,10 @@ class SwingExportPanel : JPanel(BorderLayout()) {
         stats.add(progressLabel, BorderLayout.WEST)
         val rightButtons = JPanel(FlowLayout(FlowLayout.RIGHT, 8, 0))
         rightButtons.background = CARD_BG
+        UiStyles.styleSecondary(detailsButton)
         detailsButton.isEnabled = false
         rightButtons.add(detailsButton)
+        UiStyles.styleSecondary(cancelButton)
         cancelButton.isEnabled = false
         rightButtons.add(cancelButton)
         stats.add(rightButtons, BorderLayout.EAST)

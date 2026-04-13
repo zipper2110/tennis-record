@@ -44,6 +44,8 @@ class SwingVideoTestPanel : JPanel(BorderLayout()), ChangeListener {
         toolbar.layout = BoxLayout(toolbar, BoxLayout.X_AXIS)
         toolbar.border = BorderFactory.createEmptyBorder(6, 6, 6, 6)
 
+        // Apply unified style to toolbar buttons
+        listOf(btnOpen, btnPlay, btnPause, btnStop).forEach { UiStyles.styleSecondary(it) }
         listOf(btnOpen, btnPlay, btnPause, btnStop).forEach { b ->
             toolbar.add(b)
             toolbar.add(Box.createRigidArea(Dimension(8, 0)))

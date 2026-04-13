@@ -1,12 +1,10 @@
 package org.litvin
 
-import java.awt.BorderLayout
-import java.awt.CardLayout
-import java.awt.Dimension
-import java.awt.EventQueue
-import java.awt.Font
-import javax.swing.*
+import com.formdev.flatlaf.FlatLightLaf
+import java.awt.*
 import java.util.prefs.Preferences
+import javax.swing.*
+
 
 /**
  * Phase 0.1 — Minimal Swing entry point with JFrame and CardLayout navigation.
@@ -17,14 +15,77 @@ object SwingMainApp {
     private const val CARD_PROJECTS = "projects"
     private const val CARD_MARKUP = "markup"
     private const val CARD_EXPORT = "export"
-    private const val CARD_VIDEOTEST = "videotest"
 
     @JvmStatic
     fun main(args: Array<String>) {
-        // Basic HiDPI properties (have effect on some JDKs/platforms)
-        System.setProperty("sun.java2d.uiScale.enabled", "true")
-        System.setProperty("swing.aatext", "true")
-        System.setProperty("awt.useSystemAAFontSettings", "on")
+        SwingUtilities.invokeLater(Runnable {
+            try {
+                UIManager.setLookAndFeel(FlatLightLaf())
+                UIManager.put("defaultFont", Font("Segoe UI", Font.PLAIN, 14))
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        })
+
+        // HiDPI bootstrap — must be set BEFORE any AWT/Swing classes are initialized
+        try {
+            val javaSpec = (System.getProperty("java.specification.version") ?: "11").trim()
+            val major = javaSpec.toDoubleOrNull() ?: 11.0
+
+            // Enable Java2D UI scaling support where available
+            if (System.getProperty("sun.java2d.uiScale.enabled") == null)
+                System.setProperty("sun.java2d.uiScale.enabled", "true")
+
+            // IMPORTANT: For modern JDKs (9+) do NOT force dpiaware/uiScale — it can disable Windows scaling
+            if (major < 9) {
+                // Mark the app as DPI-aware on Windows (prevents blurry bitmap upscaling on JDK8)
+                if (System.getProperty("sun.java2d.dpiaware") == null)
+                    System.setProperty("sun.java2d.dpiaware", "true")
+
+                // On Java 8, automatic scaling is unreliable: compute scale from screen DPI and force uiScale
+                if (System.getProperty("sun.java2d.uiScale") == null) {
+                    try {
+                        val dpi = java.awt.Toolkit.getDefaultToolkit().screenResolution.toDouble()
+                        val scale = dpi / 96.0
+                        if (scale >= 1.25) {
+                            val s = String.format(java.util.Locale.US, "%.2f", scale)
+                            System.setProperty("sun.java2d.uiScale", s)
+                        }
+                    } catch (_: Throwable) { /* ignore */ }
+                }
+            }
+        } catch (_: Throwable) { /* ignore */ }
+
+        // Font anti-aliasing hints (Windows 11 optimized; harmless on modern JDKs)
+        // Allow override via system property or env var:
+        //   -Dtennisrecord.textAA={off|on|lcd|lcd-hrgb|lcd-hbgr|lcd-vrgb|lcd-vbgr}
+        //   or environment TENNISRECORD_TEXT_AA with same values.
+        try {
+            val override = System.getProperty("tennisrecord.textAA")
+                ?: System.getenv("TENNISRECORD_TEXT_AA")
+            val os = (System.getProperty("os.name") ?: "").lowercase()
+            val isWindows = os.contains("win")
+            val value = when (override?.lowercase()?.trim()) {
+                null, "", "auto" -> if (isWindows) "lcd_hrgb" else "on"
+                "off" -> "off"
+                "on" -> "on"
+                "lcd" -> "lcd"
+                "lcd-hrgb", "lcd_hrgb" -> "lcd_hrgb"
+                "lcd-hbgr", "lcd_hbgr" -> "lcd_hbgr"
+                "lcd-vrgb", "lcd_vrgb" -> "lcd_vrgb"
+                "lcd-vbgr", "lcd_vbgr" -> "lcd_vbgr"
+                else -> if (isWindows) "lcd_hrgb" else "on"
+            }
+            System.setProperty("swing.aatext", if (value == "off") "false" else "true")
+            System.setProperty("awt.useSystemAAFontSettings", value)
+            // Prefer precise glyph positioning for better kerning/metrics
+            System.setProperty("sun.java2d.fractionalmetrics", "on")
+        } catch (_: Throwable) {
+            System.setProperty("swing.aatext", "true")
+            System.setProperty("awt.useSystemAAFontSettings", "on")
+        }
+
+        UIManager.setLookAndFeel(FlatLightLaf())
 
         // Keep all UI work on the EDT
         EventQueue.invokeLater {
@@ -47,21 +108,25 @@ object SwingMainApp {
                 frame.defaultCloseOperation = JFrame.EXIT_ON_CLOSE
                 frame.layout = BorderLayout()
 
-                // Sidebar (simple vertical buttons)
-                val sidebar = JPanel()
-                sidebar.layout = BoxLayout(sidebar, BoxLayout.Y_AXIS)
-                sidebar.border = BorderFactory.createEmptyBorder(8, 8, 8, 8)
+                // Sidebar styled to match the mock
+                val sidebar = JPanel().apply {
+                    UiStyles.styleSidebarContainer(this)
+                    preferredSize = Dimension(220, 0)
+                    foreground = UiStyles.SIDEBAR_FG
+                }
 
-                val btnProjects = JButton("Projects")
-                val btnMarkup = JButton("Markup")
-                val btnExport = JButton("Export")
-                val btnVideoTest = JButton("Video test")
+                // Cards container prepared below (needs cl for actions)
 
-                listOf(btnProjects, btnMarkup, btnExport, btnVideoTest).forEach { b ->
+                // Buttons with lime icons
+                lateinit var btnProjects: UiStyles.SidebarButton
+                lateinit var btnMarkup: UiStyles.SidebarButton
+                lateinit var btnExport: UiStyles.SidebarButton
+
+                fun addItem(b: UiStyles.SidebarButton) {
                     b.alignmentX = 0f
-                    b.maximumSize = Dimension(Short.MAX_VALUE.toInt(), 32)
+                    b.maximumSize = Dimension(Int.MAX_VALUE, 44)
                     sidebar.add(b)
-                    sidebar.add(Box.createRigidArea(Dimension(0, 8)))
+                    sidebar.add(Box.createRigidArea(Dimension(0, 6)))
                 }
 
                 // Cards container
@@ -72,6 +137,7 @@ object SwingMainApp {
                 var currentManifestPath: String? = null
 
                 // Projects screen (Swing Phase 2) and Markup (Phase 3)
+                var setActive: (String) -> Unit = {}
                 val markupPanel = SwingMarkupPanel()
                 val exportPanel = SwingExportPanel()
                 val projectsPanel = SwingProjectsPanel().apply {
@@ -82,48 +148,42 @@ object SwingMainApp {
                             exportPanel.setProjectManifest(path)
                             frame.title = "Tennis Record — Markup (Swing)"
                             cl.show(cards, CARD_MARKUP)
+                            setActive(CARD_MARKUP)
                         } catch (_: Throwable) { }
                     }
-                }
-
-                // Video test screen (Phase 1 MVP with controls)
-                val videoTestPanel = try {
-                    val p = SwingVideoTestPanel()
-                    // Release native resources on close
-                    frame.addWindowListener(object: java.awt.event.WindowAdapter() {
-                        override fun windowClosing(e: java.awt.event.WindowEvent) {
-                            try { p.dispose() } catch (_: Throwable) { }
-                        }
-                    })
-                    p
-                } catch (t: Throwable) {
-                    t.printStackTrace()
-                    val fallback = JPanel(BorderLayout())
-                    fallback.add(JLabel("Video panel init error: ${'$'}{t.message}", SwingConstants.CENTER), BorderLayout.CENTER)
-                    fallback
                 }
 
                 cards.add(projectsPanel, CARD_PROJECTS)
                 cards.add(markupPanel, CARD_MARKUP)
                 cards.add(exportPanel, CARD_EXPORT)
-                cards.add(videoTestPanel, CARD_VIDEOTEST)
 
-                // Wire navigation
-                btnProjects.addActionListener {
+                // Create sidebar items with icons and actions
+                btnProjects = UiStyles.sidebarButton("Projects", UiStyles.folderIcon()) {
                     frame.title = "Tennis Record — Projects (Swing)"
                     cl.show(cards, CARD_PROJECTS)
+                    setActive(CARD_PROJECTS)
                 }
-                btnMarkup.addActionListener {
+                addItem(btnProjects)
+
+                btnMarkup = UiStyles.sidebarButton("Markup", UiStyles.slidersIcon()) {
                     frame.title = "Tennis Record — Markup (Swing)"
                     cl.show(cards, CARD_MARKUP)
+                    setActive(CARD_MARKUP)
                 }
-                btnExport.addActionListener {
+                addItem(btnMarkup)
+
+                btnExport = UiStyles.sidebarButton("Export", UiStyles.exportIcon()) {
                     frame.title = "Tennis Record — Export (Swing)"
                     cl.show(cards, CARD_EXPORT)
+                    setActive(CARD_EXPORT)
                 }
-                btnVideoTest.addActionListener {
-                    frame.title = "Tennis Record — Video test (Swing)"
-                    cl.show(cards, CARD_VIDEOTEST)
+                addItem(btnExport)
+
+                // Now that buttons exist, wire active-state updater
+                setActive = { card ->
+                    btnProjects.active = card == CARD_PROJECTS
+                    btnMarkup.active = card == CARD_MARKUP
+                    btnExport.active = card == CARD_EXPORT
                 }
 
                 // Menu bar (simple View menu for navigation too)
@@ -132,15 +192,12 @@ object SwingMainApp {
                 val miProjects = JMenuItem("Projects")
                 val miMarkup = JMenuItem("Markup")
                 val miExport = JMenuItem("Export")
-                val miVideo = JMenuItem("Video test")
                 miProjects.addActionListener { btnProjects.doClick() }
                 miMarkup.addActionListener { btnMarkup.doClick() }
                 miExport.addActionListener { btnExport.doClick() }
-                miVideo.addActionListener { btnVideoTest.doClick() }
                 viewMenu.add(miProjects)
                 viewMenu.add(miMarkup)
                 viewMenu.add(miExport)
-                viewMenu.add(miVideo)
                 menuBar.add(viewMenu)
                 frame.jMenuBar = menuBar
 
@@ -162,19 +219,19 @@ object SwingMainApp {
                     frame.setLocationRelativeTo(null)
                 }
                 // Persist window state on close + dispose resources
-                frame.addWindowListener(object: java.awt.event.WindowAdapter() {
-                    override fun windowClosing(e: java.awt.event.WindowEvent) {
-                        try {
-                            val b = frame.bounds
-                            prefs.putInt("win.x", b.x)
-                            prefs.putInt("win.y", b.y)
-                            prefs.putInt("win.w", b.width)
-                            prefs.putInt("win.h", b.height)
-                            prefs.putInt("win.state", frame.extendedState)
-                        } catch (_: Throwable) { }
-                        try { markupPanel.dispose() } catch (_: Throwable) { }
-                    }
-                })
+//                frame.addWindowListener(object: java.awt.event.WindowAdapter() {
+//                    override fun windowClosing(e: java.awt.event.WindowEvent) {
+//                        try {
+//                            val b = frame.bounds
+//                            prefs.putInt("win.x", b.x)
+//                            prefs.putInt("win.y", b.y)
+//                            prefs.putInt("win.w", b.width)
+//                            prefs.putInt("win.h", b.height)
+//                            prefs.putInt("win.state", frame.extendedState)
+//                        } catch (_: Throwable) { }
+//                        try { markupPanel.dispose() } catch (_: Throwable) { }
+//                    }
+//                })
 
                 frame.isVisible = true
 
@@ -210,24 +267,31 @@ object SwingMainApp {
 
     // Phase 0.4 — base theming and HiDPI-friendly defaults
     private fun applyBaseTheme() {
+        // Keep the previously set LAF (FlatLaf) — don't override it here.
+        // Improve font rendering and set a consistent default font across components.
         try {
-            UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName())
-        } catch (_: Throwable) { }
-        // Slightly increase default font size on HiDPI, if needed
-        try {
-            val base = UIManager.getFont("Label.font")
-            if (base != null && base.size < 13) {
-                val f = base.deriveFont(base.size2D + 1.0f)
-                val keys = UIManager.getDefaults().keys()
-                while (keys.hasMoreElements()) {
-                    val k = keys.nextElement()
-                    if (k.toString().endsWith(".font")) {
-                        UIManager.put(k, f)
-                    }
+            // Prefer modern Segoe on Windows when available
+            val families = try { java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment().availableFontFamilyNames.toSet() } catch (_: Throwable) { emptySet() }
+            val family = when {
+                families.contains("Segoe UI Variable") -> "Segoe UI Variable"
+                families.contains("Segoe UI") -> "Segoe UI"
+                else -> "Tahoma"
+            }
+            val baseSize = (UIManager.getFont("Label.font")?.size2D ?: 13f).coerceAtLeast(13f)
+            val baseFont = Font(family, Font.PLAIN, baseSize.toInt())
+
+            // Apply to all UI defaults that are fonts
+            val keys = UIManager.getDefaults().keys()
+            while (keys.hasMoreElements()) {
+                val k = keys.nextElement()
+                if (k.toString().endsWith(".font")) {
+                    UIManager.put(k, baseFont)
                 }
             }
+            UIManager.put("defaultFont", baseFont)
         } catch (_: Throwable) { }
-        // ToolTip quicker show, nicer focus colors can be adjusted later
+
+        // Make tooltips nicer
         UIManager.put("ToolTip.hideAccelerator", true)
     }
 }

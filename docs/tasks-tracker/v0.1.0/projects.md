@@ -121,3 +121,8 @@
     - Define a simple `Navigator` with routes: `Projects`, `Step1SelectSource`, `Markup`.
     - From `onNewProjectClicked` and `onOpenProject...`, call `Navigator.goTo(Step1/Step2)` after context is ready.
     - Ensure routes can be re-entered safely after project switches.
+
+
+---
+
+Update (2026-04-13): UI cleanup — removed the small toolbar with “Refresh” and “Open Manifest…” buttons from the Projects page to simplify the layout and align with the latest mock. Pagination and per-card “Open Project” remain.

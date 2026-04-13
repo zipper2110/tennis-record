@@ -95,30 +95,18 @@
             <artifactId>jackson-module-kotlin</artifactId>
             <version>2.17.2</version>
         </dependency>
-        <!-- JavaFX (controls pulls in graphics/base); choose LTS 21.0.4 for stability (legacy UI) -->
-        <dependency>
-            <groupId>org.openjfx</groupId>
-            <artifactId>javafx-controls</artifactId>
-            <version>21.0.4</version>
-        </dependency>
-        <dependency>
-            <groupId>org.openjfx</groupId>
-            <artifactId>javafx-media</artifactId>
-            <version>21.0.4</version>
-        </dependency>
         <!-- VLCJ for advanced media playback -->
         <dependency>
             <groupId>uk.co.caprica</groupId>
             <artifactId>vlcj</artifactId>
             <version>4.12.1</version>
         </dependency>
-        <!-- VLCJ JavaFX helper (legacy path) -->
-        <dependency>
-            <groupId>uk.co.caprica</groupId>
-            <artifactId>vlcj-javafx</artifactId>
-            <version>1.2.1</version>
-        </dependency>
         <!-- JNA is required by VLCJ to access native libraries (VLC) -->
+        <dependency>
+            <groupId>com.formdev</groupId>
+            <artifactId>flatlaf</artifactId>
+            <version>3.6</version>
+        </dependency>
         <dependency>
             <groupId>net.java.dev.jna</groupId>
             <artifactId>jna</artifactId>

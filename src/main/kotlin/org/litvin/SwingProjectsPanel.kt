@@ -32,6 +32,15 @@ class SwingProjectsPanel : JPanel(BorderLayout()) {
     // Existing projects list container (cards go here)
     private val listContainer = JPanel()
 
+    // Current project: state and container
+    private var currentProjectPath: String? = null
+    private val currentProjectContainer: JPanel = JPanel(BorderLayout()).apply {
+        isOpaque = false
+        alignmentX = 0f
+        minimumSize = Dimension(200, 48)
+        maximumSize = Dimension(Int.MAX_VALUE, Int.MAX_VALUE)
+    }
+
     // Pagination controls
     private val prevBtn = JButton("Prev")
     private val nextBtn = JButton("Next")
@@ -51,7 +60,7 @@ class SwingProjectsPanel : JPanel(BorderLayout()) {
         val header = JPanel(BorderLayout()).apply {
             isOpaque = false
             val titleBox = Box.createVerticalBox().apply {
-                add(headerTitle("tennis record"))
+                add(headerTitle("TENNIS RECORD"))
                 add(Box.createVerticalStrut(2))
                 add(headerSubtitle("TENNIS VIDEO ANALYTICS & EDITING SUITE"))
             }
@@ -67,26 +76,15 @@ class SwingProjectsPanel : JPanel(BorderLayout()) {
         // Current Project section
         scrollContent.add(sectionLabel("Current Project"))
         scrollContent.add(Box.createVerticalStrut(6))
-        scrollContent.add(emptyCurrentProjectCard())
+        // Container for current project card (updated dynamically)
+        scrollContent.add(currentProjectContainer)
         scrollContent.add(Box.createVerticalStrut(18))
+        renderCurrentProjectCard()
 
         // Existing Projects section
-        scrollContent.add(sectionLabel("Existing Projects"))
+        scrollContent.add(sectionLabel("Recent Match Projects"))
         scrollContent.add(Box.createVerticalStrut(8))
 
-        // Small toolbar (Refresh / Open Manifest… / Remove selected — remove is handled per-card via context button kept simple)
-        val toolbar = JPanel().apply {
-            isOpaque = false
-            layout = BoxLayout(this, BoxLayout.X_AXIS)
-            val refreshBtn = JButton("Refresh").apply { addActionListener { refreshRecents(false) } }
-            val openManifestBtn = JButton("Open Manifest…").apply { addActionListener { onOpenManifest(this@SwingProjectsPanel) } }
-            add(refreshBtn)
-            add(Box.createHorizontalStrut(8))
-            add(openManifestBtn)
-            add(Box.createHorizontalGlue())
-        }
-        scrollContent.add(toolbar)
-        scrollContent.add(Box.createVerticalStrut(8))
 
         // List container (added directly; outer scroll pane handles scrolling)
         listContainer.layout = BoxLayout(listContainer, BoxLayout.Y_AXIS)
@@ -99,6 +97,9 @@ class SwingProjectsPanel : JPanel(BorderLayout()) {
         val pagination = JPanel().apply {
             isOpaque = false
             layout = BoxLayout(this, BoxLayout.X_AXIS)
+            UiStyles.styleSecondary(prevBtn)
+            UiStyles.styleSecondary(nextBtn)
+            pageLabel.foreground = FG_SECONDARY
             prevBtn.addActionListener { goToPage((currentPage - 1).coerceAtLeast(1)) }
             nextBtn.addActionListener { goToPage((currentPage + 1).coerceAtMost(totalPages())) }
             add(prevBtn)
@@ -117,6 +118,47 @@ class SwingProjectsPanel : JPanel(BorderLayout()) {
     }
 
     // region — Rendering helpers
+
+    private fun renderCurrentProjectCard() {
+        currentProjectContainer.removeAll()
+        val card = if (currentProjectPath.isNullOrBlank()) {
+            emptyCurrentProjectCard()
+        } else {
+            buildCurrentProjectCard(currentProjectPath!!)
+        }
+        currentProjectContainer.add(card, BorderLayout.CENTER)
+        currentProjectContainer.revalidate()
+        currentProjectContainer.repaint()
+    }
+
+    private fun buildCurrentProjectCard(path: String): JComponent {
+        val card = cardPanel()
+        val inner = JPanel()
+        inner.isOpaque = false
+        inner.layout = BoxLayout(inner, BoxLayout.Y_AXIS)
+        try {
+            val mf = ManifestIO.read(path)
+            val title = JLabel(mf.name.ifBlank { File(path).nameWithoutExtension }).apply {
+                font = font.deriveFont(Font.BOLD, font.size2D + 1f)
+                foreground = FG_PRIMARY
+            }
+            val help = JLabel(path).apply { foreground = FG_SECONDARY }
+            inner.add(title)
+            inner.add(Box.createVerticalStrut(4))
+            inner.add(help)
+        } catch (_: Throwable) {
+            val title = JLabel(File(path).nameWithoutExtension).apply {
+                font = font.deriveFont(Font.BOLD, font.size2D + 1f)
+                foreground = FG_PRIMARY
+            }
+            val help = JLabel(path).apply { foreground = FG_SECONDARY }
+            inner.add(title)
+            inner.add(Box.createVerticalStrut(4))
+            inner.add(help)
+        }
+        card.add(inner, BorderLayout.CENTER)
+        return card
+    }
 
     private fun emptyCurrentProjectCard(): JComponent {
         val card = cardPanel()
@@ -156,7 +198,7 @@ class SwingProjectsPanel : JPanel(BorderLayout()) {
         isOpaque = true
         background = CARD_BG
         border = BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(CARD_BORDER, 1),
+            BorderFactory.createLineBorder(CARD_BORDER, 1, true),
             BorderFactory.createEmptyBorder(10, 12, 10, 12)
         )
         alignmentX = 0f
@@ -177,7 +219,7 @@ class SwingProjectsPanel : JPanel(BorderLayout()) {
         center.add(Box.createVerticalStrut(2))
         center.add(secondary)
 
-        val openBtn = primarySmallButton("Open") { openManifestPath(entry.path, this@SwingProjectsPanel) }
+        val openBtn = UiStyles.primarySmallButton("Open Project") { openManifestPath(entry.path, this@SwingProjectsPanel) }
 
         val right = JPanel(BorderLayout())
         right.isOpaque = false
@@ -217,13 +259,35 @@ class SwingProjectsPanel : JPanel(BorderLayout()) {
         return sp
     }
 
-    private fun primaryButton(text: String, action: () -> Unit): JButton = JButton(text).apply {
+    private fun primaryButton(text: String, action: () -> Unit): JButton = object : JButton(text) {
+        override fun paintComponent(g: Graphics) {
+            val g2 = g as Graphics2D
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+            val w = width
+            val h = height
+            val r = 12
+            val hover = model.isRollover
+            val pressed = model.isArmed && model.isPressed
+            val c1 = if (pressed) GRADIENT_START.darker() else if (hover) GRADIENT_START_HOVER else GRADIENT_START
+            val c2 = if (pressed) GRADIENT_END.darker() else if (hover) GRADIENT_END_HOVER else GRADIENT_END
+            val paint = GradientPaint(0f, 0f, c1, w.toFloat(), h.toFloat(), c2)
+            g2.paint = paint
+            g2.fillRoundRect(0, 0, w, h, r, r)
+            // draw children (icon + text)
+            super.paintComponent(g)
+        }
+    }.apply {
         addActionListener { action() }
-        background = GREEN
-        foreground = Color.BLACK
-        isOpaque = true
-        border = BorderFactory.createEmptyBorder(6, 12, 6, 12)
-        font = font.deriveFont(Font.BOLD)
+        isOpaque = false
+        isContentAreaFilled = false
+        isBorderPainted = false
+        isRolloverEnabled = true
+        border = BorderFactory.createEmptyBorder(10, 20, 10, 20)
+        cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
+        icon = PlusInCircleIcon(18, ICON_CIRCLE_DARK, ICON_PLUS_LIGHT)
+        iconTextGap = 10
+        foreground = TEXT_ON_PRIMARY
+        font = font.deriveFont(Font.BOLD, font.size2D + 1.5f)
         isFocusPainted = false
     }
 
@@ -235,6 +299,47 @@ class SwingProjectsPanel : JPanel(BorderLayout()) {
         border = BorderFactory.createEmptyBorder(4, 10, 4, 10)
         font = font.deriveFont(Font.BOLD)
         isFocusPainted = false
+    }
+
+    private fun styleSecondaryButton(btn: AbstractButton) {
+        btn.isOpaque = true
+        btn.background = SURFACE_HIGH
+        btn.foreground = FG_PRIMARY
+        btn.border = BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(CARD_BORDER, 1, true),
+            BorderFactory.createEmptyBorder(4, 10, 4, 10)
+        )
+        btn.isFocusPainted = false
+        btn.font = btn.font.deriveFont(Font.BOLD)
+    }
+
+    // Small painter for the leading plus-in-circle icon on the primary CTA
+    private class PlusInCircleIcon(
+        private val size: Int,
+        private val circleColor: Color,
+        private val plusColor: Color
+    ) : Icon {
+        override fun getIconWidth(): Int = size
+        override fun getIconHeight(): Int = size
+        override fun paintIcon(c: Component?, g: Graphics?, x: Int, y: Int) {
+            if (g == null) return
+            val g2 = g as Graphics2D
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+            val r = size
+            // Circle
+            g2.color = circleColor
+            g2.fillOval(x, y, r, r)
+            // Plus
+            g2.color = plusColor
+            val bar = (r * 0.16).toInt().coerceAtLeast(2)
+            val len = (r * 0.52).toInt()
+            val cx = x + r / 2
+            val cy = y + r / 2
+            // horizontal
+            g2.fillRoundRect(cx - len / 2, cy - bar / 2, len, bar, bar, bar)
+            // vertical
+            g2.fillRoundRect(cx - bar / 2, cy - len / 2, bar, len, bar, bar)
+        }
     }
 
     // endregion
@@ -355,7 +460,9 @@ class SwingProjectsPanel : JPanel(BorderLayout()) {
             val manifestPath = File(projectDir, "$projectName.trproj").absolutePath
             ManifestIO.write(manifestPath, manifest)
 
-            // Update recents & navigate
+            // Update current project card, recents & navigate
+            currentProjectPath = manifestPath
+            renderCurrentProjectCard()
             refreshRecents(false)
             onProjectOpened?.invoke(manifestPath)
         } catch (t: Throwable) {
@@ -394,6 +501,9 @@ class SwingProjectsPanel : JPanel(BorderLayout()) {
                 updated = updated.copy(sourceVideo = chosenVideo)
             }
             ManifestIO.write(path, updated)
+            // Update current project card, recents & navigate
+            currentProjectPath = path
+            renderCurrentProjectCard()
             refreshRecents(false)
             onProjectOpened?.invoke(path)
         } catch (t: Throwable) {
@@ -404,11 +514,24 @@ class SwingProjectsPanel : JPanel(BorderLayout()) {
     // endregion
 
     companion object Theme {
-        private val DARK_BG = Color(0x16, 0x16, 0x16)
-        private val CARD_BG = Color(0x22, 0x22, 0x22)
-        private val CARD_BORDER = Color(0x33, 0x33, 0x33)
-        private val FG_PRIMARY = Color(0xE6, 0xE6, 0xE6)
-        private val FG_SECONDARY = Color(0xAA, 0xAA, 0xAA)
-        private val GREEN = Color(0x99, 0xFF, 0x33) // placeholder neon-ish green; exact color not critical now
+        // Palette inspired by design/projects.html dark theme
+        private val DARK_BG = Color(0x0E, 0x0E, 0x0E)            // background / surface-dim
+        private val SURFACE_HIGH = Color(0x20, 0x20, 0x1F)       // surface-container-high
+        private val CARD_BG = Color(0x1A, 0x1A, 0x1A)            // surface-container
+        private val CARD_BORDER = Color(0x26, 0x26, 0x26)        // surface-variant border
+        private val FG_PRIMARY = Color(0xFF, 0xFF, 0xFF)         // on-surface
+        private val FG_SECONDARY = Color(0xAD, 0xAA, 0xAA)       // on-surface-variant
+        private val GREEN = Color(0xA1, 0xFE, 0x00)              // primary-fixed
+
+        // CTA gradient (mock: light lime to bright neon green)
+        private val GRADIENT_START = Color(0xDD, 0xFF, 0xB0)     // #ddffb0
+        private val GRADIENT_END = Color(0xA1, 0xFE, 0x00)       // #a1fe00
+        private val GRADIENT_START_HOVER = GRADIENT_START.brighter()
+        private val GRADIENT_END_HOVER = GRADIENT_END.brighter()
+
+        // CTA content colors to match mock
+        private val TEXT_ON_PRIMARY = Color(0x2B, 0x49, 0x00)    // dark olive text
+        private val ICON_CIRCLE_DARK = Color(0x3C, 0x43, 0x00)   // deep olive circle
+        private val ICON_PLUS_LIGHT = Color(0xED, 0xFF, 0xC8)    // pale lime for plus
     }
 }
