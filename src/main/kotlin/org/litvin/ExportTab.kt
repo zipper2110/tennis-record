@@ -1,13 +1,12 @@
 package org.litvin
 
 import javafx.geometry.Insets
-import javafx.geometry.Pos
 import javafx.scene.Node
 import javafx.scene.control.*
 import javafx.scene.layout.*
 import javafx.stage.FileChooser
+import javafx.application.Platform
 import java.io.File
-import java.util.UUID
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.prefs.Preferences
@@ -24,6 +23,7 @@ class ExportTab {
     // Navigation callbacks for host app (MainApp) to switch views
     var onRequestNavigateProjects: (() -> Unit)? = null
     var onRequestNavigateMarkup: (() -> Unit)? = null
+    var onRequestNavigateVideoTest: (() -> Unit)? = null
 
     private val root = BorderPane()
 
@@ -37,47 +37,30 @@ class ExportTab {
     private var edlInfoLabel: Label? = null
     private var encoderBox: ComboBox<String>? = null
     private var encoderSummaryLabel: Label? = null
+    private var presetBoxRef: ComboBox<String>? = null
+    private var resBoxRef: ComboBox<String>? = null
+    private var presetsList: List<ExportPreset> = emptyList()
 
     // Right panel containers (Task 3.6 — show job immediately under Active)
     private var activeListBox: VBox? = null
     private var completedListBox: VBox? = null
 
+    // Active card UI refs (Task 3.9)
+    private var activeCardJobId: String? = null
+    private var activeCardPercentLbl: Label? = null
+    private var activeCardEtaLbl: Label? = null
+    private var activeCardProgress: ProgressBar? = null
+    private var activeCardTitle: Label? = null
+    private var activeCardIdLbl: Label? = null
+
     private fun buildSidebar(): Node {
-        val brandIcon = Label("⬢").apply { styleClass.add("brand-icon") }
-        val version = Label("v1.0.4").apply { styleClass.add("brand-version") }
-        val brandBox = VBox(4.0, brandIcon, version).apply { alignment = Pos.CENTER }
-
-        fun navItem(text: String, active: Boolean = false, onClick: (() -> Unit)? = null): Node = VBox(4.0).apply {
-            val icon = Label("●").apply { styleClass.add(if (active) "nav-icon-active" else "nav-icon") }
-            val label = Label(text).apply { styleClass.add(if (active) "nav-label-active" else "nav-label") }
-            children.addAll(icon, label)
-            alignment = Pos.CENTER
-            styleClass.add("nav-item")
-            isFocusTraversable = false
-            if (onClick != null) setOnMouseClicked { onClick.invoke() }
-        }
-
-        val nav = VBox(16.0,
-            navItem("Projects", active = false) { onRequestNavigateProjects?.invoke() },
-            navItem("Markup", active = false) { onRequestNavigateMarkup?.invoke() },
-            navItem("Adjust"),
-            navItem("Scoring"),
-            navItem("Export", active = true)
-        ).apply { alignment = Pos.TOP_CENTER }
-
-        val settingsBtn = Button("⚙").apply {
-            styleClass.add("settings-btn")
-            isFocusTraversable = false
-        }
-        val settingsBox = VBox(settingsBtn).apply { alignment = Pos.CENTER }
-
-        return VBox().apply {
-            prefWidth = 80.0; minWidth = 80.0; maxWidth = 80.0
-            spacing = 24.0
-            padding = Insets(16.0, 0.0, 16.0, 0.0)
-            styleClass.add("sidebar")
-            children.addAll(VBox(10.0, brandBox, nav).apply { alignment = Pos.TOP_CENTER; VBox.setVgrow(nav, Priority.ALWAYS) }, settingsBox)
-        }
+        return org.litvin.markup.AppSidebar.build(
+            active = org.litvin.markup.AppSidebar.Active.EXPORT,
+            onProjects = { onRequestNavigateProjects?.invoke() },
+            onMarkup = { onRequestNavigateMarkup?.invoke() },
+            onExport = { /* already here */ },
+            onVideoTest = { onRequestNavigateVideoTest?.invoke() }
+        )
     }
 
     private fun buildLeftPanel(): Node {
@@ -85,12 +68,14 @@ class ExportTab {
 
         val presetLabel = Label("Preset").apply { style = "-fx-text-fill: #bbb;" }
         val presetBox = ComboBox<String>()
+        presetBoxRef = presetBox
 
         val resLabel = Label("Resolution").apply { style = "-fx-text-fill: #bbb;" }
         val resBox = ComboBox<String>().apply {
             items.addAll("1080p", "4K")
             selectionModel.select(0)
         }
+        resBoxRef = resBox
         val resSummary = Label("").apply { style = "-fx-text-fill: #9aa; -fx-font-size: 12;" }
         val scalePlan = Label("").apply { style = "-fx-text-fill: #8a8; -fx-font-size: 12; -fx-font-family: 'Consolas', 'Courier New', monospace;" }
         val upscalingNote = Label("If the source is lower than selected, basic upscaling will be applied (no smart scaling in v0.1.0).").apply {
@@ -112,7 +97,7 @@ class ExportTab {
         val encoder = ComboBox<String>().apply {
             items.addAll(
                 "H.264 (libx264)",
-                "H.264 (NVENC) — disabled",
+                "H.264 (NVENC)",
                 "H.264 (QSV) — disabled",
                 "H.264 (AMF) — disabled"
             )
@@ -145,15 +130,19 @@ class ExportTab {
         val encoderSummary = Label("").apply { style = "-fx-text-fill: #9aa; -fx-font-size: 12;" }
         encoderSummaryLabel = encoderSummary
         fun isHw(item: String?): Boolean = item?.contains("NVENC") == true || item?.contains("QSV") == true || item?.contains("AMF") == true
+        fun isDisabledHw(item: String?): Boolean = item?.contains("QSV") == true || item?.contains("AMF") == true
         fun updateEncoderSummary() {
             val sel = encoder.selectionModel.selectedItem ?: "H.264 (libx264)"
-            val hw = isHw(sel)
-            if (hw) {
+            if (isDisabledHw(sel)) {
                 // prevent selecting disabled options
                 encoder.selectionModel.select(0)
             }
             val current = encoder.selectionModel.selectedItem ?: "H.264 (libx264)"
-            val availability = if (isHw(current)) "Unavailable in v0.1.0" else "Available"
+            val availability = when {
+                current.contains("NVENC") -> "GPU accelerated (NVENC)"
+                isDisabledHw(current) -> "Unavailable in v0.1.0"
+                else -> "Available"
+            }
             encoderSummary.text = "Selected: $current · $availability"
         }
         encoder.setOnAction { updateEncoderSummary() }
@@ -168,6 +157,7 @@ class ExportTab {
 
         // Load presets and bind to UI (Task 3.2)
         val presets = ExportPresetsIO.load()
+        presetsList = presets
         presetBox.items.addAll(presets.map { it.label })
         presetBox.isDisable = false
         val defaultIdx = ExportPresetsIO.defaultBalancedIndex(presets)
@@ -363,6 +353,14 @@ class ExportTab {
     fun isIdleTrimEnabled(): Boolean = idleTrimCheck?.isSelected ?: true
     fun edlKeepIntervals(): List<PointV1> = edlValidated
     fun selectedEncoderLabel(): String = encoderBox?.selectionModel?.selectedItem ?: "H.264 (libx264)"
+    private fun selectedPreset(): ExportPreset? {
+        val idx = presetBoxRef?.selectionModel?.selectedIndex ?: -1
+        return if (idx in presetsList.indices) presetsList[idx] else null
+    }
+    private fun selectedDims(): Pair<Int, Int> {
+        val sel = resBoxRef?.selectionModel?.selectedItem ?: "1080p"
+        return if (sel == "4K") 3840 to 2160 else 1920 to 1080
+    }
 
     // --- Task 3.6: Initialize Render → Save As dialog and enqueue UI card ---
     private fun handleInitializeRender() {
@@ -436,9 +434,64 @@ class ExportTab {
             // Remember last save directory in app prefs
             prefs.put("export.lastDir", outFile.parentFile.absolutePath)
 
-            // Enqueue a render job (MVP Task 3.6: UI only)
-            addActiveJobCard(outFile.name)
-            println("[EXPORT] Enqueued render (UI only for 3.6): ${outFile.absolutePath}")
+            // Build and preview ffmpeg command (Task 3.7)
+            try {
+                val manifestPath2 = ProjectsDispatcher.currentProjectPath
+                val manifest = if (!manifestPath2.isNullOrBlank()) ManifestIO.read(manifestPath2) else null
+                val sourcePath = manifest?.sourceVideo
+                if (sourcePath.isNullOrBlank()) {
+                    println("[WARN] No source video in manifest; command preview skipped.")
+                } else {
+                    val preset = selectedPreset() ?: ExportPresetsIO.load().let { it[ExportPresetsIO.defaultBalancedIndex(it)] }
+                    val dims = selectedDims()
+                    val params = FFmpegCommandBuilder.BuildParams(
+                        sourcePath = sourcePath,
+                        outputPath = outFile.absolutePath,
+                        preset = preset,
+                        outWidth = dims.first,
+                        outHeight = dims.second,
+                        encoderLabel = selectedEncoderLabel(),
+                        idleTrim = isIdleTrimEnabled(),
+                        keeps = if (isIdleTrimEnabled()) edlKeepIntervals() else emptyList(),
+                    )
+                    val cmd = FFmpegCommandBuilder.build(params)
+                    println("[DEBUG] ffmpeg command preview:\n${cmd.preview}")
+                }
+            } catch (tt: Throwable) {
+                System.err.println("[ERROR] Failed to build command preview: ${tt.message}")
+                tt.printStackTrace()
+            }
+
+            // Enqueue a render job (Task 3.8)
+            try {
+                val manifestPath3 = ProjectsDispatcher.currentProjectPath
+                val manifest3 = if (!manifestPath3.isNullOrBlank()) ManifestIO.read(manifestPath3) else null
+                val source3 = manifest3?.sourceVideo
+                if (source3.isNullOrBlank()) {
+                    DialogUtils.error("Cannot start render", content = "Project has no source video set.")
+                    return
+                }
+                val preset3 = selectedPreset() ?: ExportPresetsIO.load().let { it[ExportPresetsIO.defaultBalancedIndex(it)] }
+                val dims3 = selectedDims()
+                val job = RenderJob(
+                    projectId = manifest3?.id,
+                    sourcePath = source3,
+                    edlSnapshot = if (isIdleTrimEnabled()) edlKeepIntervals() else emptyList(),
+                    presetId = preset3.id,
+                    outWidth = dims3.first,
+                    outHeight = dims3.second,
+                    encoderLabel = selectedEncoderLabel(),
+                    idleTrim = isIdleTrimEnabled(),
+                    outputPath = outFile.absolutePath,
+                )
+                RenderQueueManager.enqueue(job)
+                addActiveJobCard(job)
+                println("[EXPORT] Enqueued render job id=${job.id}: ${job.outputPath}")
+            } catch (tt: Throwable) {
+                System.err.println("[ERROR] Failed to enqueue render: ${tt.message}")
+                tt.printStackTrace()
+                DialogUtils.error("Failed to enqueue render", content = tt.message)
+            }
         } catch (t: Throwable) {
             System.err.println("[ERROR] Initialize Render failed: ${t.message}")
             t.printStackTrace()
@@ -446,24 +499,63 @@ class ExportTab {
         }
     }
 
-    private fun addActiveJobCard(fileName: String) {
+    private fun addActiveJobCard(job: RenderJob) {
         val box = activeListBox ?: return
         // Remove placeholder if present (first child is Label)
         if (box.children.size == 1 && box.children[0] is Label) {
             box.children.clear()
         }
-        val jobId = UUID.randomUUID().toString().substring(0, 8).uppercase()
+        activeCardJobId = job.id
+        val fileName = File(job.outputPath).name
         val title = Label(fileName).apply { style = "-fx-text-fill: #ddd; -fx-font-weight: bold;" }
-        val idLbl = Label("ID: ${jobId}").apply { style = "-fx-text-fill: #9aa; -fx-font-size: 11; -fx-font-family: 'Consolas', 'Courier New', monospace;" }
-        val header = HBox(8.0, VBox(2.0, title, idLbl), Label("0%"))
-        val progress = ProgressBar(0.0).apply {
-            prefWidth = 280.0
+        activeCardTitle = title
+        val shortId = job.id.take(8).uppercase()
+        val idLbl = Label("ID: ${shortId}").apply { style = "-fx-text-fill: #9aa; -fx-font-size: 11; -fx-font-family: 'Consolas', 'Courier New', monospace;" }
+        activeCardIdLbl = idLbl
+        val percentLbl = Label("0%")
+        activeCardPercentLbl = percentLbl
+        val header = HBox(8.0, VBox(2.0, title, idLbl), percentLbl)
+        val progress = ProgressBar(0.0).apply { prefWidth = 280.0 }
+        activeCardProgress = progress
+        val eta = Label("ETA: --:--    0.0 MB").apply { style = "-fx-text-fill: #888; -fx-font-size: 11; -fx-font-family: 'Consolas', 'Courier New', monospace;" }
+        activeCardEtaLbl = eta
+        val simNote = Label("Simulation mode: no file will be written in this build.").apply {
+            style = "-fx-text-fill: #aa7; -fx-font-size: 11; -fx-font-style: italic;"
         }
-        val eta = Label("ETA: --:--    0 / ?").apply { style = "-fx-text-fill: #888; -fx-font-size: 11; -fx-font-family: 'Consolas', 'Courier New', monospace;" }
-        val card = VBox(6.0, header, progress, eta).apply {
+        val card = VBox(6.0, header, progress, eta, simNote).apply {
             style = "-fx-background-color: #222; -fx-padding: 10; -fx-border-color: #a1fe00; -fx-border-width: 0 0 0 2;"
         }
         box.children.add(0, card)
+
+        // Attach observer to update UI ~ on state changes
+        RenderQueueManager.addObserver { snap ->
+            val cur = snap.current
+            if (cur == null) {
+                // Job finished or no active job
+                return@addObserver
+            }
+            if (cur.id != activeCardJobId) return@addObserver
+            Platform.runLater {
+                val p = cur.progress.coerceIn(0.0, 1.0)
+                activeCardProgress?.progress = p
+                activeCardPercentLbl?.text = "${(p * 100).toInt()}%"
+                val etaStr = formatEta(cur.etaSeconds)
+                val sizeStr = formatSize(cur.bytesWritten)
+                activeCardEtaLbl?.text = "ETA: ${etaStr}    ${sizeStr}"
+            }
+        }
+    }
+
+    private fun formatEta(secs: Long?): String {
+        val s = secs ?: return "--:--"
+        val mm = s / 60
+        val ss = s % 60
+        return String.format("%02d:%02d", mm, ss)
+    }
+
+    private fun formatSize(bytes: Long): String {
+        val mb = bytes / 1_000_000.0
+        return String.format("%.1f MB", mb)
     }
 
     val view: Node get() = viewInternal

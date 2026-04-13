@@ -165,7 +165,7 @@ General findings & scope notes (review)
     - From Projects flows, opening/creating a project with `sourceVideo` lands on Markup.
     - If `sourceVideo` is missing, route to Select Source first, then Markup.
   - Implementation Guide:
-    - Extend `Navigator` described in Projects 0.10 with a `Markup`/`Step2Trim` route.
+    - Extend `Navigator` described in Projects 0.10 with a `Markup` route.
   - Review notes:
     - Ensure the Markup tab initializes with the viewer loaded and the Points list focused appropriately for keyboard shortcuts.
     - When `sourceVideo` becomes unavailable (moved/missing), handle gracefully: show error and route back to Select Source.

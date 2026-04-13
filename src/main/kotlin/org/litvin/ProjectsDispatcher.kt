@@ -8,7 +8,7 @@ import java.io.File
  * In later steps, these will open dialogs and navigate to flows.
  */
 class ProjectsDispatcher {
-    enum class Route { PROJECTS, Step1SelectSource, Step2Trim, EXPORT }
+    enum class Route { PROJECTS, Step1SelectSource, MARKUP, EXPORT, VIDEO_TEST }
 
     // Navigation callback: MainApp sets this to swap views
     var onNavigate: ((Route) -> Unit)? = null
@@ -84,8 +84,8 @@ class ProjectsDispatcher {
 
             // 5) Open the project and navigate to Step 2 (Trim)
             // Navigator not implemented yet; log intent for now.
-            println("[NAVIGATE] -> Step2Trim (project opened)")
-            onNavigate?.invoke(Route.Step2Trim)
+            println("[NAVIGATE] -> MARKUP (project opened)")
+            onNavigate?.invoke(Route.MARKUP)
         } catch (t: Throwable) {
             System.err.println("[ERROR] Failed to create project: ${t.message}")
             t.printStackTrace()
@@ -105,8 +105,8 @@ class ProjectsDispatcher {
             currentProjectPath = manifestPath
             val hasVideo = !updated.sourceVideo.isNullOrBlank()
             println("[INFO] Project loaded: ${updated.name} (id=${updated.id})")
-            println("[NAVIGATE] -> ${if (hasVideo) "Step2Trim" else "Step1SelectSource"}")
-            onNavigate?.invoke(if (hasVideo) Route.Step2Trim else Route.Step1SelectSource)
+            println("[NAVIGATE] -> ${if (hasVideo) "MARKUP" else "Step1SelectSource"}")
+            onNavigate?.invoke(if (hasVideo) Route.MARKUP else Route.Step1SelectSource)
         } catch (t: Throwable) {
             System.err.println("[ERROR] Failed to open project '$manifestPath': ${t.message}")
             t.printStackTrace()

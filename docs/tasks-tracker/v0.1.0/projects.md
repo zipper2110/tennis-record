@@ -118,6 +118,6 @@
     - New Project ends on Step 1.
     - Open Existing Project routes to Step 1 or Step 2 based on manifest content.
   - Implementation Guide:
-    - Define a simple `Navigator` with routes: `Projects`, `Step1SelectSource`, `Step2Trim`.
+    - Define a simple `Navigator` with routes: `Projects`, `Step1SelectSource`, `Markup`.
     - From `onNewProjectClicked` and `onOpenProject...`, call `Navigator.goTo(Step1/Step2)` after context is ready.
     - Ensure routes can be re-entered safely after project switches.

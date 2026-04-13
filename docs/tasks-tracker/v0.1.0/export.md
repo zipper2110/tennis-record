@@ -5,6 +5,7 @@ Notes
 - The goal is to render a single edited video (gap-free based on Markup/EDL), with simple preset control. No scoreboard/overlay in v0.1.0 (see roadmap).
 - Presets source: docs/export-presets.json (Fast, Balanced, Quality — H.264 MP4).
 - FFmpeg is the execution engine. Use trim+concat strategy per roadmap. Hardware encoders are post‑MVP.
+- Current development build note: rendering is simulated (progress/UI only). FFmpeg is not executed and no output file is written yet.
 
 User workflow (center of this spec)
 - Select output quality/resolution (or preset → implies codec/bitrate/CRF + optional scaling).
@@ -68,19 +69,30 @@ General findings & scope notes (review)
   - Implementation Guide:
     - Use existing DialogUtils or platform file chooser. Remember last save directory in app prefs.
 
-- [ ] 3.7 — FFmpeg command builder (v1)
+- [x] 3.7 — FFmpeg command builder (v1)
   - Description: Build the final command line from: source file, EDL keep list (optional), encoder, preset, resolution.
   - Acceptance Criteria:
     - H.264 (libx264) output MP4; applies `-vf scale` when needed; sets CRF/bitrate/encoder tune from preset.
     - For idle-trim ON: uses concat demuxer or filtergraph with accurate re-encode at segment borders.
     - Command string preview visible in dev logs for debugging.
 
-- [ ] 3.8 — Render job model and global queue manager
+- [x] 3.8 — Render job model and global queue manager
   - Description: Introduce `RenderJob` data model and a process-managed queue. Queue is global across projects within app session.
   - Acceptance Criteria:
     - Jobs hold: id, projectId (optional), source path, edl snapshot, preset id, resolution, encoder, idleTrim flag, outputPath, status, progress, eta, bytesWritten.
     - Dispatcher/manager exposes flows/observers to refresh UI on state changes.
     - Multiple jobs can run sequentially (single-worker) in MVP; parallelism off by default.
+
+- [x] 3.8.1 — Actual rendering engine (ffmpeg execution)
+  - Description: Replace the simulation loop with invoking ffmpeg using `FFmpegCommandBuilder` args to produce a real output file.
+  - Acceptance Criteria:
+    - When job status switches to RUNNING, spawn an ffmpeg process with built args; output is written to the chosen path (use a .part temp name and rename on success).
+    - Job status reflects process result: COMPLETED on exit code 0; FAILED otherwise.
+    - Stdout/stderr are captured; last stderr lines kept for diagnostics; full command logged at DEBUG.
+  - Implementation Guide:
+    - Use ProcessBuilder to launch ffmpeg; read stderr asynchronously (parsing comes in 3.9).
+    - Ensure output directory exists; overwrite behavior already handled by Save As confirmation.
+    - Clean up partial output on failure/cancel (finalize deletion rules in 3.10).
 
 - [ ] 3.9 — Progress parsing and UI card (Active Processing)
   - Description: Parse ffmpeg stderr for time/size/speed to estimate percent and ETA. Update a progress bar and stats on the active card.

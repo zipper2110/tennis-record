@@ -2,7 +2,6 @@ package org.litvin
 
 import javafx.geometry.Insets
 import javafx.geometry.Pos
-import javafx.geometry.Side
 import javafx.scene.Node
 import javafx.scene.control.Button
 import javafx.scene.control.ContentDisplay
@@ -16,8 +15,6 @@ import javafx.scene.paint.LinearGradient
 import javafx.scene.paint.Stop
 import javafx.scene.shape.Circle
 import javafx.scene.shape.Rectangle
-import javafx.scene.text.Font
-import javafx.scene.text.FontWeight
 import java.io.File
 
 /**
@@ -149,59 +146,13 @@ class ProjectsTab(private val dispatcher: ProjectsDispatcher) {
     }
 
     private fun buildSidebar(): Node {
-        val brandIcon = Label("⬢").apply {
-            styleClass.add("brand-icon")
-        }
-        val version = Label("v1.0.4").apply { styleClass.add("brand-version") }
-        val brandBox = VBox(4.0, brandIcon, version).apply {
-            alignment = Pos.CENTER
-        }
-
-        fun navItem(text: String, active: Boolean = false): Node = VBox(4.0).apply {
-            val icon = Label("●").apply { styleClass.add(if (active) "nav-icon-active" else "nav-icon") }
-            val label = Label(text).apply { styleClass.add(if (active) "nav-label-active" else "nav-label") }
-            children.addAll(icon, label)
-            alignment = Pos.CENTER
-            styleClass.add("nav-item")
-        }
-
-        val nav = VBox(16.0,
-            navItem("Projects", active = true),
-            VBox(4.0).apply {
-                val icon = Label("●").apply { styleClass.add("nav-icon") }
-                val label = Label("Markup").apply { styleClass.add("nav-label") }
-                children.addAll(icon, label)
-                alignment = Pos.CENTER
-                styleClass.add("nav-item")
-                setOnMouseClicked { dispatcher.onNavigate?.invoke(ProjectsDispatcher.Route.Step2Trim) }
-            },
-            navItem("Adjust"),
-            navItem("Scoring"),
-            VBox(4.0).apply {
-                val icon = Label("●").apply { styleClass.add("nav-icon") }
-                val label = Label("Export").apply { styleClass.add("nav-label") }
-                children.addAll(icon, label)
-                alignment = Pos.CENTER
-                styleClass.add("nav-item")
-                setOnMouseClicked { dispatcher.onNavigate?.invoke(ProjectsDispatcher.Route.EXPORT) }
-            }
-        ).apply { alignment = Pos.TOP_CENTER }
-
-        val settingsBtn = Button("⚙").apply {
-            styleClass.add("settings-btn")
-            setOnAction { println("[INFO] Settings clicked") }
-        }
-        val settingsBox = VBox(settingsBtn).apply { alignment = Pos.CENTER }
-
-        return VBox().apply {
-            prefWidth = 80.0
-            minWidth = 80.0
-            maxWidth = 80.0
-            spacing = 24.0
-            padding = Insets(16.0, 0.0, 16.0, 0.0)
-            styleClass.add("sidebar")
-            children.addAll(VBox(10.0, brandBox, nav).apply { alignment = Pos.TOP_CENTER; VBox.setVgrow(nav, Priority.ALWAYS) }, settingsBox)
-        }
+        return org.litvin.markup.AppSidebar.build(
+            active = org.litvin.markup.AppSidebar.Active.PROJECTS,
+            onProjects = { /* already here */ },
+            onMarkup = { dispatcher.onNavigate?.invoke(ProjectsDispatcher.Route.MARKUP) },
+            onExport = { dispatcher.onNavigate?.invoke(ProjectsDispatcher.Route.EXPORT) },
+            onVideoTest = { dispatcher.onNavigate?.invoke(ProjectsDispatcher.Route.VIDEO_TEST) }
+        )
     }
 
     private fun buildMainContent(): Node {

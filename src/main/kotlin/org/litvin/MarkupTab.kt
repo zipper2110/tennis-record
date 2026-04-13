@@ -8,19 +8,15 @@ import javafx.scene.Node
 import javafx.scene.control.Button
 import javafx.scene.control.Label
 import javafx.scene.control.Slider
-import javafx.scene.control.TableCell
-import javafx.scene.control.TableColumn
-import javafx.scene.control.TableView
-import javafx.scene.control.TableRow
-import javafx.beans.property.SimpleStringProperty
 import javafx.scene.input.KeyCode
 import javafx.scene.input.MouseEvent
 import javafx.scene.layout.*
 import javafx.stage.Popup
-import javafx.scene.media.Media
-import javafx.scene.media.MediaPlayer
-import javafx.scene.media.MediaView
 import javafx.util.Duration
+import org.litvin.media.AppMediaPlayer
+import org.litvin.media.JavaFxMediaPlayerAdapter
+import org.litvin.media.PlayerStatus
+import org.litvin.media.VlcjMediaPlayerAdapter
 import java.io.File
 
 /**
@@ -31,8 +27,7 @@ import java.io.File
  * - Exposes getPlayheadMs() and seekTo(ms)
  */
 class MarkupTab(private val dispatcher: MarkupDispatcher) {
-    // Timeline (2.13)
-    private var viewerPane: StackPane? = null
+
     private var timelineArea: StackPane? = null
     private var videoTrackPane: StackPane? = null
     private var marksTrackPane: Pane? = null
@@ -47,6 +42,8 @@ class MarkupTab(private val dispatcher: MarkupDispatcher) {
     var onRequestNavigateProjects: (() -> Unit)? = null
     // Request host to navigate to Export when user clicks Export in sidebar
     var onRequestNavigateExport: (() -> Unit)? = null
+    // Request host to navigate to Video Test when user clicks sidebar item
+    var onRequestNavigateVideoTest: (() -> Unit)? = null
     private var toastPopup: Popup? = null
 
     private fun showToast(message: String) {
@@ -79,11 +76,9 @@ class MarkupTab(private val dispatcher: MarkupDispatcher) {
     }
 
     private val root = BorderPane()
-    private val mediaView = MediaView().apply {
-        // Disable smoothing to reduce scaling cost and improve performance
-        try { this.isSmooth = false } catch (_: Throwable) {}
-    }
-    private var mediaPlayer: MediaPlayer? = null
+    // Container for video surface provided by underlying media backend (VLCJ or JavaFX)
+    private val videoContainer = StackPane()
+    private var appPlayer: org.litvin.media.AppMediaPlayer? = null
     private val timeLabel = Label("00:00:00.000")
     private var playIconLabel: Label? = null
     private val seekSlider = Slider(0.0, 1.0, 0.0).apply {
@@ -189,64 +184,73 @@ class MarkupTab(private val dispatcher: MarkupDispatcher) {
         }
     }
 
-    fun getPlayheadMs(): Long = mediaPlayer?.currentTime?.toMillis()?.toLong() ?: 0L
+    fun getPlayheadMs(): Long = appPlayer?.currentTimeMs() ?: 0L
 
     fun seekTo(ms: Long) {
-        mediaPlayer?.seek(Duration.millis(ms.coerceAtLeast(0L).toDouble()))
+        appPlayer?.seek(ms.coerceAtLeast(0L))
     }
 
     private fun loadMedia(file: File) {
         currentVideoFileName = file.name
-            currentVideoFileName = file.name
         try {
-            mediaPlayer?.dispose()
-            val media = Media(file.toURI().toString())
-            val player = MediaPlayer(media)
-            player.setOnReady {
-                            // timeline rebuild when media metadata is ready
-                            rebuildTimeline()
-                            updatePlayheadInTimeline()
-                            // Initialize seek slider and time display when media metadata is ready
-                            val durMs = player.totalDuration.toMillis()
-                            if (durMs.isFinite() && durMs > 0) {
-                                seekSlider.max = durMs
-                                seekSlider.isDisable = false
-                            } else {
-                                seekSlider.max = 1.0
-                                seekSlider.isDisable = true
-                            }
-                            updateTimeUI()
-                            updatePlayButtonIcon()
-                        }
-            player.statusProperty().addListener { _, _, new ->
-                if (new == MediaPlayer.Status.PLAYING) {
+            // Dispose old player and clear view
+            appPlayer?.dispose()
+            videoContainer.children.clear()
+
+            // Try VLCJ first, fallback to JavaFX if it fails
+            val player: AppMediaPlayer = try {
+                VlcjMediaPlayerAdapter()
+            } catch (t: Throwable) {
+                System.err.println("[MARKUP] VLCJ not available, falling back to JavaFX MediaPlayer: ${t.message}")
+                JavaFxMediaPlayerAdapter()
+            }
+            appPlayer = player
+
+            // Attach view node
+            videoContainer.children.add(player.viewNode)
+            StackPane.setAlignment(player.viewNode, Pos.CENTER)
+
+            player.onReady = {
+                // timeline rebuild when media metadata is ready
+                rebuildTimeline()
+                updatePlayheadInTimeline()
+                // Initialize seek slider and time display when media metadata is ready
+                val durMs = player.totalDurationMs().toDouble()
+                if (durMs.isFinite() && durMs > 0) {
+                    seekSlider.max = durMs
+                    seekSlider.isDisable = false
+                } else {
+                    seekSlider.max = 1.0
+                    seekSlider.isDisable = true
+                }
+                updateTimeUI()
+                updatePlayButtonIcon()
+            }
+            player.onStatusChanged = { st ->
+                if (st == PlayerStatus.PLAYING) {
                     ticker.start()
                 } else {
                     ticker.stop()
-                    // Ensure UI shows the final time when paused/stopped
                     updateTimeUI()
                 }
-                // Update play/pause icon according to new status
                 updatePlayButtonIcon()
             }
-            // While paused or during seeks, reflect time changes without a continuous timer
-            player.currentTimeProperty().addListener { _, _, _ ->
-                if (player.status != MediaPlayer.Status.PLAYING && !isUserSeeking) {
+            player.onTimeChanged = { _ ->
+                if (player.status() != PlayerStatus.PLAYING && !isUserSeeking) {
                     updateTimeUI()
                 }
             }
-            mediaView.mediaPlayer = player
-            mediaPlayer = player
+
+            player.load(file)
         } catch (t: Throwable) {
             System.err.println("[MARKUP] Failed to load media: ${t.message}")
         }
     }
 
     private fun togglePlayPause() {
-        val p = mediaPlayer ?: return
-        when (p.status) {
-            MediaPlayer.Status.PLAYING -> p.pause()
-            MediaPlayer.Status.PAUSED, MediaPlayer.Status.STOPPED, MediaPlayer.Status.READY, MediaPlayer.Status.HALTED, MediaPlayer.Status.UNKNOWN -> p.play()
+        val p = appPlayer ?: return
+        when (p.status()) {
+            PlayerStatus.PLAYING -> p.pause()
             else -> p.play()
         }
         // Update icon immediately for snappy UI; listener will also adjust once status changes
@@ -255,19 +259,17 @@ class MarkupTab(private val dispatcher: MarkupDispatcher) {
     }
 
     private fun jumpBy(deltaMs: Long) {
-        val p = mediaPlayer ?: return
-        val cur = p.currentTime
-        val target = cur.toMillis() + deltaMs
-        p.seek(Duration.millis(target.coerceAtLeast(0.0)))
-        if (p.status != MediaPlayer.Status.PLAYING) updateTimeUI()
+        val p = appPlayer ?: return
+        val target = p.currentTimeMs() + deltaMs
+        p.seek(target)
+        if (p.status() != PlayerStatus.PLAYING) updateTimeUI()
         if (deltaMs < 0) dispatcher.onJumpBackClicked() else dispatcher.onJumpForwardClicked()
     }
 
     private fun updateTimeUI() {
         val ms = getPlayheadMs()
         // Throttle UI updates to reduce layout/render overhead
-        val status = mediaPlayer?.status
-        val playing = status == MediaPlayer.Status.PLAYING
+        val playing = appPlayer?.status() == PlayerStatus.PLAYING
         if (lastUiMs >= 0) {
             val delta = kotlin.math.abs(ms - lastUiMs)
             val minDelta = if (playing) 80L else 0L // when playing, skip tiny changes (<~80ms)
@@ -291,9 +293,9 @@ class MarkupTab(private val dispatcher: MarkupDispatcher) {
 
     private fun updatePlayButtonIcon() {
         val icon = playIconLabel ?: return
-        val status = mediaPlayer?.status
+        val playing = appPlayer?.status() == PlayerStatus.PLAYING
         // Use proper Unicode icons: ▶ (U+25B6) for play, ⏸ (U+23F8) for pause
-        icon.text = if (status == MediaPlayer.Status.PLAYING) "\u23F8" else "\u25B6"
+        icon.text = if (playing) "\u23F8" else "\u25B6"
     }
 
     private fun setupSeekSliderHandlers() {
@@ -302,7 +304,7 @@ class MarkupTab(private val dispatcher: MarkupDispatcher) {
             isUserSeeking = changing
             if (!changing) {
                 // Drag ended; perform seek
-                mediaPlayer?.seek(Duration.millis(seekSlider.value))
+                appPlayer?.seek(seekSlider.value.toLong())
                 // After seek completes (approx), update active selection once
                 updateActiveSelectionFromTime(seekSlider.value.toLong())
             }
@@ -313,51 +315,21 @@ class MarkupTab(private val dispatcher: MarkupDispatcher) {
         }
         seekSlider.addEventHandler(MouseEvent.MOUSE_RELEASED) {
             isUserSeeking = false
-            mediaPlayer?.seek(Duration.millis(seekSlider.value))
+            appPlayer?.seek(seekSlider.value.toLong())
             updateActiveSelectionFromTime(seekSlider.value.toLong())
         }
     }
 
     private fun buildView(): Node {
-        // Build left navigation sidebar (reuse Projects visuals, mark Markup active)
-        fun buildSidebar(): Node {
-            val brandIcon = Label("⬢").apply { styleClass.add("brand-icon") }
-            val version = Label("v1.0.4").apply { styleClass.add("brand-version") }
-            val brandBox = VBox(4.0, brandIcon, version).apply { alignment = Pos.CENTER }
-            fun navItem(text: String, active: Boolean = false, onClick: (() -> Unit)? = null): Node = VBox(4.0).apply {
-                val icon = Label("●").apply { styleClass.add(if (active) "nav-icon-active" else "nav-icon") }
-                val label = Label(text).apply { styleClass.add(if (active) "nav-label-active" else "nav-label") }
-                children.addAll(icon, label)
-                alignment = Pos.CENTER
-                styleClass.add("nav-item")
-                isFocusTraversable = false
-                if (onClick != null) {
-                    setOnMouseClicked { onClick.invoke() }
-                }
-            }
-            val nav = VBox(16.0,
-                navItem("Projects", active = false) { onRequestNavigateProjects?.invoke() },
-                navItem("Markup", active = true),
-                navItem("Adjust"),
-                navItem("Scoring"),
-                navItem("Export") { onRequestNavigateExport?.invoke() }
-            ).apply { alignment = Pos.TOP_CENTER }
-            val settingsBtn = Button("⚙").apply {
-                styleClass.add("settings-btn")
-                isFocusTraversable = false
-            }
-            val settingsBox = VBox(settingsBtn).apply { alignment = Pos.CENTER }
-            return VBox().apply {
-                prefWidth = 80.0; minWidth = 80.0; maxWidth = 80.0
-                spacing = 24.0
-                padding = Insets(16.0, 0.0, 16.0, 0.0)
-                styleClass.add("sidebar")
-                children.addAll(VBox(10.0, brandBox, nav).apply { alignment = Pos.TOP_CENTER; VBox.setVgrow(nav, Priority.ALWAYS) }, settingsBox)
-            }
-        }
 
-        // Attach left navigation
-        root.left = buildSidebar()
+        // Attach left navigation (shared sidebar)
+        root.left = org.litvin.markup.AppSidebar.build(
+            active = org.litvin.markup.AppSidebar.Active.MARKUP,
+            onProjects = { onRequestNavigateProjects?.invoke() },
+            onMarkup = { /* already here */ },
+            onExport = { onRequestNavigateExport?.invoke() },
+            onVideoTest = { onRequestNavigateVideoTest?.invoke() }
+        )
 
         // Right sidebar: Points list (Markup panel side)
         val pointsHeader = HBox(8.0).apply {
@@ -586,13 +558,13 @@ class MarkupTab(private val dispatcher: MarkupDispatcher) {
         }
 
         // Center: Viewer + transport
-        val viewer = StackPane(mediaView).apply {
+        val viewer = StackPane(videoContainer).apply {
             padding = Insets(8.0)
             style = "-fx-background-color: #111;"
         }
-        mediaView.fitWidthProperty().bind(viewer.widthProperty())
-        mediaView.fitHeightProperty().bind(viewer.heightProperty().subtract(100.0)) // leave room for controls visually
-        mediaView.isPreserveRatio = true
+        // Ensure the video container follows available space leaving room for controls
+        videoContainer.maxWidth = Double.MAX_VALUE
+        videoContainer.maxHeight = Double.MAX_VALUE
 
         // Controls row under viewer
         val pointStart = Button("Point Start [C]").apply {
@@ -757,7 +729,7 @@ class MarkupTab(private val dispatcher: MarkupDispatcher) {
         scrubberTrack.addEventFilter(MouseEvent.MOUSE_RELEASED) { ev ->
             if (seekSlider.isDisable) return@addEventFilter
             isUserSeeking = false
-            mediaPlayer?.seek(Duration.millis(seekSlider.value))
+            appPlayer?.seek(seekSlider.value.toLong())
             updateScrubberVisuals()
             ev.consume()
         }
@@ -769,12 +741,12 @@ class MarkupTab(private val dispatcher: MarkupDispatcher) {
 
         // Keep width roughly aligned with rendered video content
         fun updateScrubberWidth() {
-            val videoW = mediaView.boundsInParent.width
+            val videoW = videoContainer.boundsInParent.width
             val viewerW = viewer.width - 16.0
             val target = kotlin.math.max(0.0, kotlin.math.min(videoW, viewerW))
             if (target > 0) scrubberTrack.prefWidth = target
         }
-        mediaView.boundsInParentProperty().addListener { _, _, _ -> updateScrubberWidth() }
+        videoContainer.boundsInParentProperty().addListener { _, _, _ -> updateScrubberWidth() }
         viewer.widthProperty().addListener { _, _, _ -> updateScrubberWidth() }
 
         // Initialize visuals/width now
