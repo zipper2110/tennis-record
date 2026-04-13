@@ -4,13 +4,13 @@ Notes
 - This spec defines the MVP Export/Render tab. It follows the style and rigor of the Markup tasks file and maps closely to the UI mock: design/export.html.
 - The goal is to render a single edited video (gap-free based on Markup/EDL), with simple preset control. No scoreboard/overlay in v0.1.0 (see roadmap).
 - Presets source: docs/export-presets.json (Fast, Balanced, Quality — H.264 MP4).
-- FFmpeg is the execution engine. Use trim+concat strategy per roadmap. Hardware encoders are post‑MVP.
+- FFmpeg is the execution engine. Use trim+concat strategy per roadmap. Hardware encoders (NVENC/QSV/AMF) are available in v0.1.0 alongside software H.264.
 - Current development build note: rendering is simulated (progress/UI only). FFmpeg is not executed and no output file is written yet.
 
 User workflow (center of this spec)
 - Select output quality/resolution (or preset → implies codec/bitrate/CRF + optional scaling).
 - Select whether to remove the idle time (i.e., render only “kept” segments from EDL).
-- Select the encoder engine (MVP: H.264 software path; HW accel options shown but disabled/placeholder).
+- Select the encoder engine (H.264 software or hardware acceleration: NVENC/QSV/AMF, when available).
 - Click “Initialize Render”. Prompt for output folder and filename. Begin render.
 - Show render progress as a card under “Active Processing” with percent, ETA, size, and Cancel.
 - On completion, move to “Completed Renders” with resolution/encoder summary, file size, and an “Open folder” button.
@@ -19,7 +19,7 @@ User workflow (center of this spec)
 General findings & scope notes (review)
 - Mock alignment: design/export.html shows a left settings panel and right queue (Active Processing + Completed Renders). MVP follows this structure.
 - Presets vs manual controls: For v0.1.0, keep presets simple (Fast/Balanced/Quality) and allow an explicit output resolution toggle (1080p/4K) as shown in mock. Bitrate slider in mock can represent preset selection feedback; advanced free-form bitrate entry is out of scope.
-- Encoders: MVP ships with software H.264 (libx264). Hardware acceleration (NVENC/QSV/AMF) will be planned for v0.2.0.
+- Encoders: v0.1.0 supports software H.264 (libx264) and hardware acceleration (NVENC/QSV/AMF) when available on the system.
 - Global queue: Visible and identical regardless of which project is open; enqueue jobs with a snapshot of project settings and EDL at the time of submission.
 - Persistence: Persist only completed jobs in MVP. Restoring/resuming in-flight jobs after app restart is out of scope.
 - EDL integration: When “Remove idle time” is ON, build FFmpeg concat list from EdlV1 points (keeps). When OFF, render full source.
@@ -58,9 +58,10 @@ General findings & scope notes (review)
     - Read EDL from project. Ensure validation (sorted, half-open intervals) is honored. Re-encode borders as per roadmap.
 
 - [x] 3.5 — Encoder engine selector (MVP scope)
-  - Description: Encoder options listed; only software H.264 path is available in v0.1.0. Hardware options are displayed but disabled.
+  - Description: Encoder options listed; software H.264 and hardware acceleration (NVENC/QSV/AMF) are available in v0.1.0.
   - Acceptance Criteria:
-    - UI clearly indicates availability. Selected encoder stored in job config and shown in summaries.
+    - UI allows selecting among available software and hardware encoders; unavailable ones are hidden or clearly marked unsupported.
+    - Selected encoder stored in job config and shown in summaries.
 
 - [x] 3.6 — Initialize Render → Save As dialog
   - Description: On click, show file save dialog with suggested filename and last-used folder. On confirm, enqueue a render job.
@@ -138,7 +139,7 @@ General findings & scope notes (review)
     - Logs are on by default at INFO; ffmpeg command lines logged at DEBUG.
 
 Out of scope for v0.1.0 → v0.2.0 candidates
-- Hardware-accelerated encode paths (NVENC/QSV/AMF) with device detection and fallbacks.
+- Advanced hardware encode features only (automatic device detection, intelligent fallbacks, per-device tuning/profiles).
 - Resume in-progress jobs after app restart; durable Active queue; crash-safe checkpoints.
 - Batch preset management UI (create/edit/delete presets); more codecs (HEVC, ProRes), per-preset advanced flags.
 - Concurrent renders (parallel workers) with device-aware scheduling.

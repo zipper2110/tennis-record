@@ -68,6 +68,7 @@ General findings & scope notes (review)
     - Pressing V fills End for the currently active/selected point. If no active pending point exists, pressing V has no effect (or shows a gentle hint) and does not create a new point.
     - When both are set and valid, the point is created instantly; UI clears pending start/end indicators.
     - Visual indicators show pending Start/End times while incomplete; active row styling matches design/markup.html.
+    - The Marked points list is always sorted by startMs ascending; the pending Start-only row (if present) appears at the top and is not counted in the numbering; the Number column reflects the sorted order of completed points.
   - Implementation Guide:
     - Keep pending marks in view-model state. No Add/Save button; creation triggers automatically when valid.
     - Ensure “active point” state is unique (only one can be pending at a time). Selecting another row cancels pending end.

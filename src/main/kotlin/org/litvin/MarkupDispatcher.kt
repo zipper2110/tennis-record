@@ -72,6 +72,8 @@ class MarkupDispatcher {
         }
         pendingStartMs = t
         println("[MARKUP] Pending Start set at $pendingStartMs ms")
+        // Notify UI so it can render/update the pending row immediately
+        onPointsChanged?.invoke()
     }
 
     /** Half-open overlap check against existing points: [s, e) intersects [p.start, p.end) */
@@ -106,6 +108,8 @@ class MarkupDispatcher {
         }
         val id = "PT_${points.size + 1}"
         points.add(PointV1(id = id, startMs = s, endMs = e))
+        // Keep list sorted by start time to satisfy 2.4/2.6 acceptance
+        points.sortBy { it.startMs }
         // Clear pending after successful creation
         pendingStartMs = null
         println("[MARKUP] Point created: $id [$s, $e]")
@@ -137,6 +141,14 @@ class MarkupDispatcher {
         points.clear()
         pendingStartMs = null
         onPointsChanged?.invoke()
+    }
+
+    /** Clears the pending Start marker without affecting existing points. */
+    fun clearPending() {
+        if (pendingStartMs != null) {
+            pendingStartMs = null
+            onPointsChanged?.invoke()
+        }
     }
 
     // Transport telemetry (optional logging)

@@ -34,6 +34,9 @@ data class RenderJob(
     var progress: Double = 0.0,          // 0.0 .. 1.0
     var etaSeconds: Long? = null,
     var bytesWritten: Long = 0,
+    // Error reporting (negative cases)
+    var failureReason: String? = null,
+    var stderrTail: String? = null,
     val createdAtEpochMs: Long = System.currentTimeMillis(),
     var updatedAtEpochMs: Long = System.currentTimeMillis(),
 )
@@ -57,6 +60,23 @@ object RenderQueueManager {
 
     private val started = AtomicBoolean(false)
     private val stopSignal = AtomicBoolean(false)
+
+    // Track current ffmpeg process and .part file for cancel/cleanup
+    @Volatile private var currentProc: Process? = null
+    @Volatile private var currentPartFile: java.io.File? = null
+    @Volatile private var currentCanceled: Boolean = false
+
+    /** Cancel the currently running job, if any. */
+    fun cancelCurrent() {
+        val proc = currentProc
+        val job = currentJob
+        if (proc != null && job != null && job.status == RenderStatus.RUNNING) {
+            println("[QUEUE] Cancel requested for id=${job.id}")
+            currentCanceled = true
+            try { proc.destroy() } catch (_: Throwable) { }
+            try { proc.destroyForcibly() } catch (_: Throwable) { }
+        }
+    }
 
     fun addObserver(cb: (ActiveQueueSnapshot) -> Unit) {
         observers.add(cb)
@@ -130,9 +150,15 @@ object RenderQueueManager {
                 )
                 println("[DEBUG] ffmpeg command: ${build.preview}")
 
+                // Resolve ffmpeg executable (FFMPEG_PATH env var overrides PATH)
+                fun ffmpegExe(): String {
+                    val envPath = System.getenv("FFMPEG_PATH")?.trim().orEmpty()
+                    return if (envPath.isNotEmpty()) envPath else "ffmpeg"
+                }
+
                 // Start process
                 val cmd = mutableListOf<String>()
-                cmd += "ffmpeg"
+                cmd += ffmpegExe()
                 cmd += build.args
                 val pb = ProcessBuilder(cmd)
                 pb.redirectErrorStream(false)
@@ -140,6 +166,8 @@ object RenderQueueManager {
                 val proc = try { pb.start() } catch (ex: Throwable) {
                     System.err.println("[QUEUE][ERROR] Failed to start ffmpeg: ${ex.message}")
                     job.status = RenderStatus.FAILED
+                    job.failureReason = "Failed to start FFmpeg: ${ex.javaClass.simpleName}: ${ex.message}. Ensure ffmpeg is installed and on PATH or set FFMPEG_PATH."
+                    job.stderrTail = null
                     job.updatedAtEpochMs = System.currentTimeMillis()
                     notifyObservers()
                     // Clear current and continue
@@ -147,6 +175,10 @@ object RenderQueueManager {
                     notifyObservers()
                     continue
                 }
+                // Expose current process for cancel; reset cancel flag and remember .part
+                currentProc = proc
+                currentPartFile = partOut
+                currentCanceled = false
 
                 // Capture stdout/stderr asynchronously; keep last N stderr lines
                 val tailSize = 200
@@ -268,7 +300,19 @@ object RenderQueueManager {
                 outReader.join(200)
                 job.updatedAtEpochMs = System.currentTimeMillis()
 
-                if (exit == 0) {
+                // Clear process refs early
+                currentProc = null
+                currentPartFile = null
+
+                if (currentCanceled) {
+                    // Treat as canceled
+                    job.status = RenderStatus.CANCELED
+                    // Cleanup partial
+                    if (partOut.exists()) partOut.delete()
+                    println("[QUEUE] CANCELED id=${job.id}")
+                    // Notify UI about final state before clearing current
+                    notifyObservers()
+                } else if (exit == 0) {
                     // Move .part → final (replace if exists)
                     try {
                         java.nio.file.Files.move(
@@ -281,6 +325,8 @@ object RenderQueueManager {
                         job.status = RenderStatus.FAILED
                         // Cleanup partial if any remains
                         if (partOut.exists()) partOut.delete()
+                        // Notify UI about failure before clearing current
+                        notifyObservers()
                         currentJob = null
                         notifyObservers()
                         continue
@@ -289,11 +335,21 @@ object RenderQueueManager {
                     job.progress = 1.0
                     job.status = RenderStatus.COMPLETED
                     println("[QUEUE] COMPLETED id=${job.id}")
+                    // Notify UI about completion before clearing current
+                    notifyObservers()
                 } else {
                     job.status = RenderStatus.FAILED
                     // Cleanup partial
                     if (partOut.exists()) partOut.delete()
                     val tailCopy = synchronized(errTail) { errTail.joinToString("\n") }
+                    job.stderrTail = tailCopy
+                    // Derive a brief failure reason
+                    val brief = tailCopy.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.lastOrNull()
+                    job.failureReason = if (brief != null) {
+                        "ffmpeg exited with code $exit — $brief"
+                    } else {
+                        "ffmpeg exited with code $exit (see logs)"
+                    }
                     System.err.println("[QUEUE][ERROR] ffmpeg exited with code $exit for job ${job.id}. Stderr tail:\n$tailCopy")
                 }
 

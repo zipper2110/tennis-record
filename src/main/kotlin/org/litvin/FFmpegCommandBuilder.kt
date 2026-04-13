@@ -37,8 +37,12 @@ object FFmpegCommandBuilder {
 
         // Select video codec based on encoder label; default to libx264
         val isNvenc = p.encoderLabel.contains("NVENC", ignoreCase = true)
+        val isQsv = p.encoderLabel.contains("QSV", ignoreCase = true)
+        val isAmf = p.encoderLabel.contains("AMF", ignoreCase = true)
         val videoCodec = when {
             isNvenc -> "h264_nvenc"
+            isQsv -> "h264_qsv"
+            isAmf -> "h264_amf"
             p.encoderLabel.contains("libx264", ignoreCase = true) -> "libx264"
             else -> (v.codec ?: "libx264")
         }
@@ -80,7 +84,7 @@ object FFmpegCommandBuilder {
             // Map CRF to CQ for NVENC; choose a reasonable preset
             val cq = (v.crf ?: 21).coerceIn(0, 51)
             args += listOf("-cq", cq.toString())
-            // NVENC presets: default to "p6" (roughly medium) if not specified
+            // NVENC presets: default to a medium level if not specified
             val nvPreset = when (v.x264Preset?.lowercase()) {
                 "veryfast" -> "p1"
                 "faster", "fast" -> "p3"
@@ -91,9 +95,12 @@ object FFmpegCommandBuilder {
             args += listOf("-preset", nvPreset)
             // Use high profile yuv420p unless overridden
             args += listOf("-profile:v", "high")
-        } else {
+        } else if (p.encoderLabel.contains("libx264", ignoreCase = true)) {
+            // Software x264 tuning
             v.x264Preset?.let { args += listOf("-preset", it) }
             v.crf?.let { args += listOf("-crf", it.toString()) }
+        } else {
+            // Other hardware encoders (QSV/AMF): keep defaults; consider mapping CRF to a vendor-specific quality if needed in future.
         }
         v.vbvMaxrateK?.let { maxk ->
             args += listOf("-maxrate", "${maxk}k")
