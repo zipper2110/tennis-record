@@ -159,48 +159,59 @@
     <section class="bg-surface-container-low flex flex-col border-r border-outline-variant/10 min-h-0">
         <div class="p-4 border-b border-outline-variant/10 flex justify-between items-center">
             <h2 class="font-headline font-bold text-sm tracking-widest uppercase text-on-surface-variant">Point Markers</h2>
-            <span class="text-[10px] bg-surface-container-highest px-2 py-0.5 rounded text-primary-fixed">14 TOTAL</span>
+            <div class="flex items-center gap-2">
+                <span class="text-[10px] bg-surface-container-highest px-2 py-0.5 rounded text-primary-fixed">14 Total</span>
+                <span class="text-[10px] bg-surface-container-highest px-2 py-0.5 rounded text-on-surface-variant">1 Scored</span>
+            </div>
         </div>
         <div class="flex-1 overflow-y-auto obsidian-scroll p-2 space-y-1">
             <!-- Marker Item Active -->
-            <div class="p-3 bg-surface-bright rounded-lg border-l-2 border-primary-fixed flex items-center gap-3">
-                <div class="text-[10px] font-mono text-primary-fixed">00:12:45</div>
+            <div class="p-3 bg-surface-bright rounded-lg border-l-2 border-primary-fixed flex items-center gap-3" aria-label="Point 1, start 00:12:45, duration 8 seconds, scored">
+                <div class="w-24 shrink-0 flex items-center gap-1">
+                    <div class="text-[10px] font-mono text-primary-fixed">00:12:45</div>
+                    <span class="text-[10px] font-mono text-primary-fixed/80" title="Duration" aria-hidden="true">• 8s</span>
+                </div>
                 <div class="flex-1">
-                    <div class="text-xs font-medium">ACE - Player 1</div>
-                    <div class="text-[10px] text-on-surface-variant">Service Winner</div>
+                    <div class="text-xs font-medium">Point 1</div>
                 </div>
                 <span class="material-symbols-outlined text-sm text-primary-fixed" data-icon="check_circle" style="font-variation-settings: 'FILL' 1;">check_circle</span>
             </div>
             <!-- Marker Items -->
-            <div class="p-3 hover:bg-surface-container-high rounded-lg transition-colors flex items-center gap-3 group">
-                <div class="text-[10px] font-mono text-on-surface-variant group-hover:text-on-surface">00:14:02</div>
+            <div class="p-3 hover:bg-surface-container-high rounded-lg transition-colors flex items-center gap-3 group" aria-label="Point 2, start 00:14:02, duration 12 seconds, unscored">
+                <div class="w-24 shrink-0 flex items-center gap-1">
+                    <div class="text-[10px] font-mono text-on-surface-variant group-hover:text-on-surface">00:14:02</div>
+                    <span class="text-[10px] font-mono text-on-surface-variant/80 group-hover:text-on-surface/80" title="Duration" aria-hidden="true">• 12s</span>
+                </div>
                 <div class="flex-1">
-                    <div class="text-xs font-medium text-on-surface-variant group-hover:text-on-surface">Fault - Player 2</div>
-                    <div class="text-[10px] text-on-surface-variant/60">First Serve</div>
+                    <div class="text-xs font-medium text-on-surface-variant group-hover:text-on-surface">Point 2</div>
                 </div>
             </div>
-            <div class="p-3 hover:bg-surface-container-high rounded-lg transition-colors flex items-center gap-3 group">
-                <div class="text-[10px] font-mono text-on-surface-variant group-hover:text-on-surface">00:14:33</div>
+            <div class="p-3 hover:bg-surface-container-high rounded-lg transition-colors flex items-center gap-3 group" aria-label="Point 3, start 00:14:33, duration 7 seconds, unscored">
+                <div class="w-24 shrink-0 flex items-center gap-1">
+                    <div class="text-[10px] font-mono text-on-surface-variant group-hover:text-on-surface">00:14:33</div>
+                    <span class="text-[10px] font-mono text-on-surface-variant/80 group-hover:text-on-surface/80" title="Duration" aria-hidden="true">• 7s</span>
+                </div>
                 <div class="flex-1">
-                    <div class="text-xs font-medium text-on-surface-variant group-hover:text-on-surface">Winner - Player 1</div>
-                    <div class="text-[10px] text-on-surface-variant/60">Backhand Crosscourt</div>
+                    <div class="text-xs font-medium text-on-surface-variant group-hover:text-on-surface">Point 3</div>
                 </div>
             </div>
-            <div class="p-3 hover:bg-surface-container-high rounded-lg transition-colors flex items-center gap-3 group">
-                <div class="text-[10px] font-mono text-on-surface-variant group-hover:text-on-surface">00:15:10</div>
-                <div class="flex-1">
-                    <div class="text-xs font-medium text-on-surface-variant group-hover:text-on-surface">Unforced Error - P2</div>
-                    <div class="text-[10px] text-on-surface-variant/60">Net Cord</div>
+            <div class="p-3 hover:bg-surface-container-high rounded-lg transition-colors flex items-center gap-3 group" aria-label="Point 4, start 00:15:10, duration 9 seconds, unscored">
+                <div class="w-24 shrink-0 flex items-center gap-1">
+                    <div class="text-[10px] font-mono text-on-surface-variant group-hover:text-on-surface">00:15:10</div>
+                    <span class="text-[10px] font-mono text-on-surface-variant/80 group-hover:text-on-surface/80" title="Duration" aria-hidden="true">• 9s</span>
                 </div>
-            </div>
-            <!-- Repeat for density -->
-            <div class="p-3 hover:bg-surface-container-high rounded-lg transition-colors flex items-center gap-3 group opacity-40">
-                <div class="text-[10px] font-mono text-on-surface-variant">00:16:00</div>
-                <div class="flex-1"><div class="text-xs font-medium">Pending Entry...</div></div>
+                <div class="flex-1">
+                    <div class="text-xs font-medium text-on-surface-variant group-hover:text-on-surface">Point 4</div>
+                </div>
             </div>
         </div>
         <div class="p-4 bg-surface-container-lowest">
-            <button class="w-full py-2 flex items-center justify-center gap-2 border border-outline-variant/30 rounded text-xs hover:bg-surface-container-high transition-colors">
+            <button accesskey="w" title="Hotkey: W — Next Point" class="w-full py-2 flex items-center justify-center gap-2 border border-outline-variant/30 rounded text-xs hover:bg-surface-container-high transition-colors text-primary-fixed" aria-label="Go to next point">
+                <span class="material-symbols-outlined text-sm" data-icon="skip_next">skip_next</span>
+                <span class="font-headline font-bold text-xs tracking-widest uppercase">Next Point</span>
+                <span class="kbd ml-2">W</span>
+            </button>
+            <button class="w-full mt-2 py-2 flex items-center justify-center gap-2 border border-outline-variant/30 rounded text-xs hover:bg-surface-container-high transition-colors">
                 <span class="material-symbols-outlined text-sm" data-icon="add">add</span>
                 Manual Marker
             </button>
@@ -219,16 +230,15 @@
                 <!-- Scoreboard Overlay (relative to frame) -->
                 <div class="absolute top-4 left-4 md:top-10 md:left-10 flex flex-col gap-px bg-black/60 backdrop-blur-md border border-white/10 rounded-lg overflow-hidden shadow-2xl">
                     <div class="flex items-center h-10 px-4 gap-8">
-                        <span class="font-headline font-bold text-xs tracking-tighter text-white/50">MATCH STATUS</span>
                         <div class="flex items-center gap-2">
                             <span class="w-1.5 h-1.5 rounded-full bg-primary-fixed shadow-[0_0_8px_#a1fe00]"></span>
-                            <span class="text-[10px] font-bold text-primary-fixed uppercase tracking-widest">Live Recording</span>
+                            <span class="text-[10px] font-bold text-primary-fixed uppercase tracking-widest">Batumi Raketo league</span>
                         </div>
                     </div>
                     <div class="grid grid-cols-[160px_40px_40px_60px] bg-black/40">
                         <div class="px-4 py-3 text-xs font-bold uppercase tracking-tight text-white flex items-center gap-2 border-r border-white/5">
                             <span class="w-2 h-2 rounded-sm bg-blue-500"></span>
-                            N. DJOKOVIC
+                            Player 1
                         </div>
                         <div class="flex items-center justify-center text-sm font-mono text-white/40 border-r border-white/5">6</div>
                         <div class="flex items-center justify-center text-sm font-mono text-white/40 border-r border-white/5">4</div>
@@ -237,11 +247,24 @@
                     <div class="grid grid-cols-[160px_40px_40px_60px] bg-black/20">
                         <div class="px-4 py-3 text-xs font-bold uppercase tracking-tight text-white/70 flex items-center gap-2 border-r border-white/5">
                             <span class="w-2 h-2 rounded-sm bg-red-500"></span>
-                            C. ALCARAZ
+                            Player 2
                         </div>
                         <div class="flex items-center justify-center text-sm font-mono text-white/40 border-r border-white/5">3</div>
                         <div class="flex items-center justify-center text-sm font-mono text-white/40 border-r border-white/5">6</div>
                         <div class="flex items-center justify-center text-lg font-headline font-bold text-white/30">15</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Playback Bar: scrubs within current point segment -->
+        <div class="px-6 py-3 bg-surface-container-lowest border-t border-outline-variant/10">
+            <div class="mx-auto w-full max-w-[1600px]">
+                <div class="flex items-center gap-3">
+                    <div class="text-[10px] font-mono text-on-surface-variant shrink-0">00:12:45</div>
+                    <input type="range" min="0" max="100" value="30" aria-label="Scrub current point segment" class="flex-1 h-1.5 appearance-none rounded bg-surface-variant accent-primary-fixed">
+                    <div class="flex items-center gap-2 shrink-0">
+                        <span class="text-[10px] font-mono text-on-surface-variant">00:12:53</span>
+                        <span class="text-[9px] uppercase tracking-widest text-on-surface-variant/60">Point segment</span>
                     </div>
                 </div>
             </div>
@@ -253,40 +276,36 @@
                 <div class="w-[360px]">
                     <div class="space-y-4">
                         <div class="flex items-center justify-between">
-                            <button accesskey="a" class="inline-flex items-center gap-2 px-3 py-1.5 rounded bg-surface-container-highest hover:bg-surface-bright text-blue-400 border border-outline-variant/20 focus:outline-none">
-                                <span class="material-symbols-outlined text-sm" data-icon="sports_score">sports_score</span>
-                                <span class="font-headline font-bold text-sm tracking-widest uppercase">Point for Player 1</span>
-                                <span class="kbd ml-2">A</span>
-                            </button>
-                            <span class="text-[10px] text-on-surface-variant font-mono">SERVE</span>
-                        </div>
-                        <div class="grid grid-cols-3 gap-2">
-                            <!-- Points -->
-                            <div class="bg-surface-container-lowest p-3 rounded-lg flex flex-col items-center gap-2">
-                                <span class="text-[10px] text-on-surface-variant font-bold">POINTS</span>
-                                <div class="text-3xl font-headline font-bold text-primary-fixed">40</div>
-                                <div class="flex w-full gap-1">
-                                    <button class="flex-1 h-8 bg-surface-container-highest rounded flex items-center justify-center hover:bg-surface-bright"><span class="material-symbols-outlined text-sm" data-icon="remove">remove</span></button>
-                                    <button class="flex-1 h-8 bg-surface-container-highest rounded flex items-center justify-center hover:bg-surface-bright"><span class="material-symbols-outlined text-sm" data-icon="add">add</span></button>
+                            <div class="flex items-center gap-3">
+                                <div class="flex items-center gap-1">
+                                    <span class="text-xs text-on-surface-variant font-bold">POINTS</span>
+                                    <span class="px-2 py-1 rounded bg-surface-container-highest text-primary-fixed font-headline font-bold text-base leading-none" aria-label="Player 1 points: 40">40</span>
                                 </div>
+                                <button accesskey="a" class="inline-flex items-center gap-2 px-3 py-1.5 rounded bg-surface-container-highest hover:bg-surface-bright text-blue-400 border border-outline-variant/20 focus:outline-none">
+                                    <span class="material-symbols-outlined text-sm" data-icon="sports_score">sports_score</span>
+                                    <span class="font-headline font-bold text-sm tracking-widest uppercase">Point for Player 1</span>
+                                    <span class="kbd ml-2">A</span>
+                                </button>
                             </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
                             <!-- Games -->
                             <div class="bg-surface-container-lowest p-3 rounded-lg flex flex-col items-center gap-2">
                                 <span class="text-[10px] text-on-surface-variant font-bold">GAMES</span>
                                 <div class="text-3xl font-headline font-bold text-on-surface">4</div>
-                                <div class="flex w-full gap-1">
-                                    <button class="flex-1 h-8 bg-surface-container-highest rounded flex items-center justify-center hover:bg-surface-bright"><span class="material-symbols-outlined text-sm" data-icon="remove">remove</span></button>
-                                    <button class="flex-1 h-8 bg-surface-container-highest rounded flex items-center justify-center hover:bg-surface-bright"><span class="material-symbols-outlined text-sm" data-icon="add">add</span></button>
-                                </div>
+                                <button class="w-full h-8 bg-surface-container-highest rounded flex items-center justify-center hover:bg-surface-bright text-blue-400 border border-outline-variant/20" aria-label="Player 1: Game won">
+                                    <span class="material-symbols-outlined text-sm" data-icon="flag">flag</span>
+                                    <span class="font-headline font-bold text-xs tracking-widest uppercase ml-2">Game Won</span>
+                                </button>
                             </div>
                             <!-- Sets -->
                             <div class="bg-surface-container-lowest p-3 rounded-lg flex flex-col items-center gap-2">
                                 <span class="text-[10px] text-on-surface-variant font-bold">SETS</span>
                                 <div class="text-3xl font-headline font-bold text-on-surface">1</div>
-                                <div class="flex w-full gap-1">
-                                    <button class="flex-1 h-8 bg-surface-container-highest rounded flex items-center justify-center hover:bg-surface-bright"><span class="material-symbols-outlined text-sm" data-icon="remove">remove</span></button>
-                                    <button class="flex-1 h-8 bg-surface-container-highest rounded flex items-center justify-center hover:bg-surface-bright"><span class="material-symbols-outlined text-sm" data-icon="add">add</span></button>
-                                </div>
+                                <button class="w-full h-8 bg-surface-container-highest rounded flex items-center justify-center hover:bg-surface-bright text-blue-400 border border-outline-variant/20" aria-label="Player 1: Set won">
+                                    <span class="material-symbols-outlined text-sm" data-icon="emoji_events">emoji_events</span>
+                                    <span class="font-headline font-bold text-xs tracking-widest uppercase ml-2">Set Won</span>
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -294,10 +313,14 @@
 
                 <!-- Center: Current Frame + Playback Controls -->
                 <div class="flex flex-col items-center gap-3">
-                    <div class="flex flex-col items-center">
-                        <span class="text-[10px] text-on-surface-variant uppercase tracking-widest font-bold">Current Frame</span>
-                        <span class="font-mono text-lg text-primary-fixed">00:12:45:12</span>
+                    <!-- Top action row: align with side player buttons -->
+                    <div class="flex items-center gap-2">
+                        <button class="inline-flex items-center gap-2 px-3 py-1.5 rounded bg-surface-container-highest hover:bg-surface-bright text-on-surface-variant border border-outline-variant/20 focus:outline-none" aria-label="Mark current point as No Point">
+                            <span class="material-symbols-outlined text-sm" data-icon="block">block</span>
+                            <span class="font-headline font-bold text-sm tracking-widest uppercase">No Point</span>
+                        </button>
                     </div>
+                    <!-- Playback controls (moved up into the Current Frame spot) -->
                     <div class="flex items-center gap-2">
                         <button class="w-10 h-10 rounded-full flex items-center justify-center hover:bg-surface-bright text-on-surface transition-colors">
                             <span class="material-symbols-outlined" data-icon="fast_rewind">fast_rewind</span>
@@ -309,46 +332,57 @@
                             <span class="material-symbols-outlined" data-icon="fast_forward">fast_forward</span>
                         </button>
                     </div>
+                    <!-- Speed controls moved under playback controls -->
+                    <div class="flex items-center gap-2 mt-1">
+                        <select aria-label="Playback speed" title="Use ↑ / ↓ to change speed" class="text-[12px] leading-[1.2] bg-surface-container-highest text-on-surface border border-outline-variant/20 rounded px-2 py-1.5 w-16">
+                            <option value="2">2×</option>
+                            <option value="1" selected>1×</option>
+                            <option value="0.5">0.5×</option>
+                            <option value="0.25">0.25×</option>
+                            <option value="0.1">0.1×</option>
+                        </select>
+                        <span class="hidden md:flex items-center gap-1 text-[10px] text-on-surface-variant/70 ml-1" aria-hidden="true" title="Arrow Up/Down adjust speed">
+                            <span class="kbd">↑</span>
+                            <span class="kbd">↓</span>
+                            <span>speed</span>
+                        </span>
+                    </div>
                 </div>
 
                 <!-- Player 2 Controls (moved from right panel) -->
                 <div class="w-[360px]">
                     <div class="space-y-4">
                         <div class="flex items-center justify-between">
-                            <button accesskey="l" class="inline-flex items-center gap-2 px-3 py-1.5 rounded bg-surface-container-highest hover:bg-surface-bright text-red-400 border border-outline-variant/20 focus:outline-none">
-                                <span class="material-symbols-outlined text-sm" data-icon="sports_score">sports_score</span>
-                                <span class="font-headline font-bold text-sm tracking-widest uppercase">Point for Player 2</span>
-                                <span class="kbd ml-2">L</span>
-                            </button>
-                            <button class="w-6 h-6 rounded bg-surface-container-highest flex items-center justify-center"><span class="material-symbols-outlined text-xs" data-icon="sports_tennis">sports_tennis</span></button>
-                        </div>
-                        <div class="grid grid-cols-3 gap-2">
-                            <!-- Points -->
-                            <div class="bg-surface-container-lowest p-3 rounded-lg flex flex-col items-center gap-2">
-                                <span class="text-[10px] text-on-surface-variant font-bold">POINTS</span>
-                                <div class="text-3xl font-headline font-bold text-on-surface">15</div>
-                                <div class="flex w-full gap-1">
-                                    <button class="flex-1 h-8 bg-surface-container-highest rounded flex items-center justify-center hover:bg-surface-bright"><span class="material-symbols-outlined text-sm" data-icon="remove">remove</span></button>
-                                    <button class="flex-1 h-8 bg-surface-container-highest rounded flex items-center justify-center hover:bg-surface-bright"><span class="material-symbols-outlined text-sm" data-icon="add">add</span></button>
+                            <div class="flex items-center gap-3">
+                                <div class="flex items-center gap-1">
+                                    <span class="text-xs text-on-surface-variant font-bold">POINTS</span>
+                                    <span class="px-2 py-1 rounded bg-surface-container-highest text-on-surface font-headline font-bold text-base leading-none" aria-label="Player 2 points: 15">15</span>
                                 </div>
+                                <button accesskey="l" class="inline-flex items-center gap-2 px-3 py-1.5 rounded bg-surface-container-highest hover:bg-surface-bright text-red-400 border border-outline-variant/20 focus:outline-none">
+                                    <span class="material-symbols-outlined text-sm" data-icon="sports_score">sports_score</span>
+                                    <span class="font-headline font-bold text-sm tracking-widest uppercase">Point for Player 2</span>
+                                    <span class="kbd ml-2">L</span>
+                                </button>
                             </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
                             <!-- Games -->
                             <div class="bg-surface-container-lowest p-3 rounded-lg flex flex-col items-center gap-2">
                                 <span class="text-[10px] text-on-surface-variant font-bold">GAMES</span>
                                 <div class="text-3xl font-headline font-bold text-on-surface">6</div>
-                                <div class="flex w-full gap-1">
-                                    <button class="flex-1 h-8 bg-surface-container-highest rounded flex items-center justify-center hover:bg-surface-bright"><span class="material-symbols-outlined text-sm" data-icon="remove">remove</span></button>
-                                    <button class="flex-1 h-8 bg-surface-container-highest rounded flex items-center justify-center hover:bg-surface-bright"><span class="material-symbols-outlined text-sm" data-icon="add">add</span></button>
-                                </div>
+                                <button class="w-full h-8 bg-surface-container-highest rounded flex items-center justify-center hover:bg-surface-bright text-red-400 border border-outline-variant/20" aria-label="Player 2: Game won">
+                                    <span class="material-symbols-outlined text-sm" data-icon="flag">flag</span>
+                                    <span class="font-headline font-bold text-xs tracking-widest uppercase ml-2">Game Won</span>
+                                </button>
                             </div>
                             <!-- Sets -->
                             <div class="bg-surface-container-lowest p-3 rounded-lg flex flex-col items-center gap-2">
                                 <span class="text-[10px] text-on-surface-variant font-bold">SETS</span>
                                 <div class="text-3xl font-headline font-bold text-on-surface">0</div>
-                                <div class="flex w-full gap-1">
-                                    <button class="flex-1 h-8 bg-surface-container-highest rounded flex items-center justify-center hover:bg-surface-bright"><span class="material-symbols-outlined text-sm" data-icon="remove">remove</span></button>
-                                    <button class="flex-1 h-8 bg-surface-container-highest rounded flex items-center justify-center hover:bg-surface-bright"><span class="material-symbols-outlined text-sm" data-icon="add">add</span></button>
-                                </div>
+                                <button class="w-full h-8 bg-surface-container-highest rounded flex items-center justify-center hover:bg-surface-bright text-red-400 border border-outline-variant/20" aria-label="Player 2: Set won">
+                                    <span class="material-symbols-outlined text-sm" data-icon="emoji_events">emoji_events</span>
+                                    <span class="font-headline font-bold text-xs tracking-widest uppercase ml-2">Set Won</span>
+                                </button>
                             </div>
                         </div>
                     </div>
