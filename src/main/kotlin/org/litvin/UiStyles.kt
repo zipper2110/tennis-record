@@ -200,17 +200,20 @@ object UiStyles {
             set(value) { field = value; repaint() }
         init {
             this.icon = icon
-            horizontalAlignment = SwingConstants.LEFT
-            iconTextGap = 12
+            // Center icon and place text under the icon
+            horizontalAlignment = SwingConstants.CENTER
+            horizontalTextPosition = SwingConstants.CENTER
+            verticalTextPosition = SwingConstants.BOTTOM
+            iconTextGap = 6
             isContentAreaFilled = false
             isBorderPainted = false
             isFocusPainted = false
             cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
             foreground = SIDEBAR_FG
-            border = BorderFactory.createEmptyBorder(10, 8, 10, 8)
-            preferredSize = Dimension(180, 44)
-            minimumSize = Dimension(120, 44)
-            maximumSize = Dimension(Int.MAX_VALUE, 44)
+            border = BorderFactory.createEmptyBorder(8, 6, 8, 6)
+            preferredSize = Dimension(180, 56)
+            minimumSize = Dimension(0, 56)
+            maximumSize = Dimension(Int.MAX_VALUE, 56)
         }
         override fun paintComponent(g: Graphics) {
             val g2 = g as Graphics2D

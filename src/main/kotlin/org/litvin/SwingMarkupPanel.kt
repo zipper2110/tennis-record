@@ -26,6 +26,16 @@ import kotlin.math.max
  */
 class SwingMarkupPanel : JPanel(BorderLayout()) {
 
+    // Lifecycle hooks controlled by navigation
+    fun onActivated() {
+        try { player.pause() } catch (_: Throwable) {}
+        // Do not auto-play; optionally restore focus to player area
+        EventQueue.invokeLater { try { player.component.requestFocusInWindow() } catch (_: Throwable) {} }
+    }
+    fun onDeactivated() {
+        try { player.pause() } catch (_: Throwable) {}
+    }
+
     // Media
     private val player = VlcjSwingMediaPlayerAdapter()
 

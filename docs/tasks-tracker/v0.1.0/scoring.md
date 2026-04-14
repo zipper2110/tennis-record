@@ -22,7 +22,7 @@ User workflow (center of this spec)
 General findings & scope notes (review)
 
 - Consistency with mock: `design/scoring.html` shows the left list (with counts and check marks), a scoreboard overlay above the video, a per-point scrub bar under the video, top action row (Point P1 — centered No Point — Point P2) aligned with side player buttons, playback transport and a compact speed control with ↑/↓ hint, bottom player panels with per-player Points, Games, Sets and action buttons, and a Next Point button (W) at the bottom of the list.
-- Tennis rules engine: for v0.1.0, implement standard game scoring (0, 15, 30, 40, deuce/advantage) and set progression with configurable match format (best‑of‑3 default). Tiebreaks are supported (see 3.8 for details of the chosen implementation).
+- Tennis rules engine: for v0.1.0, implement standard game scoring (0, 15, 30, 40, deuce/advantage) and set progression with configurable match format (best‑of‑3 default). Tiebreaks are supported (see 4.8 for details of the chosen implementation).
 - Persistence: outcomes should be saved alongside points (a separate `score.json` v1 is preferred to keep EDL clean) with autosave behavior consistent with Markup.
 - Keyboard focus: Space play/pause and arrow seeks should work like on Markup; ensure inputs don’t interfere with text fields or dropdowns (speed control) when they are focused.
 - Export usage: computing scoreboard overlay during export is out of scope for this file, but stored outcomes and computed states must be sufficient for later use.
@@ -40,7 +40,7 @@ Decisions incorporated in this spec (answers provided):
 - Layout: the left points list has a fixed width of 140 px; the video area fits the remaining horizontal space; the video scales to fit (no internal scrollbars) while preserving 16:9.
 - Scoreboard overlay titles (player/league labels) use static placeholder strings in v0.1.0.
 
-- [ ]  3.1 — Scoring tab shell (UI scaffolding)
+- [x]  4.1 — Scoring tab shell (UI scaffolding)
 
   - Description: Implement the Scoring tab per `design/scoring.html` with left points list, center video with scoreboard overlay, per‑point scrub bar, top action row, transport, speed control, and bottom player panels.
   - Acceptance Criteria:
@@ -56,7 +56,7 @@ Decisions incorporated in this spec (answers provided):
 
     - Include the two footer buttons from the mock (“Manual Marker”, “Scoreboard Settings”) but make them no-ops in v0.1.0.
     - Layout: Left points list has a fixed width of 140 px; the video area fits the remaining horizontal space.
-- [ ]  3.2 — Load points list and selection behavior
+- [x]  4.2 — Load points list and selection behavior
 
   - Description: Populate the left list from EDL points; show start time and duration; show a small scored check icon when an outcome exists.
   - Acceptance Criteria:
@@ -71,7 +71,7 @@ Decisions incorporated in this spec (answers provided):
       - Keep a `scored` boolean derived from outcome presence; render the check icon accordingly.
     - Decisions:
       - “Scored” count includes `NONE` outcomes.
-- [ ]  3.3 — Segment‑limited video playback and scrubbing
+- [x]  4.3 — Segment‑limited video playback and scrubbing
 
   - Description: While a point is selected, playback and scrubbing are limited to that point’s `[startMs, endMs)` segment.
   - Acceptance Criteria:
@@ -84,7 +84,7 @@ Decisions incorporated in this spec (answers provided):
     - No auto-advance; on reaching `endMs`, pause at end.
     - Seeking past bounds clamps to the nearest bound; no wrap.
     - Do not show absolute end timestamp in v0.1.0; keep labels as in mock.
-- [ ]  3.4 — Transport controls and seeks (match Markup)
+- [x]  4.4 — Transport controls and seeks (match Markup)
 
   - Description: Provide on‑screen play/pause and seek buttons; keyboard seeks of ±1 s and ±10 s.
   - Acceptance Criteria:
@@ -96,7 +96,7 @@ Decisions incorporated in this spec (answers provided):
   - Open questions:
     - Key handling scope: Should seek keys (Left/Right, Shift+arrows) be active when the speed dropdown has focus, or only Up/Down are captured by the speed control while Left/Right still perform seek?
     - Consistency with Markup: Confirm the same 1s / 10s increments and acceleration constants should be reused rather than redefined.
-- [ ]  3.5 — Playback speed control (compact dropdown with ↑/↓ hint)
+- [x]  4.5 — Playback speed control (compact dropdown with ↑/↓ hint)
 
   - Description: Provide a compact dropdown under transport with options: 2×, 1× (default), 0.5×, 0.25×, 0.1×. Show a small "↑/↓ speed" hint (tooltip on small screens).
   - Acceptance Criteria:
@@ -110,13 +110,13 @@ Decisions incorporated in this spec (answers provided):
   - Open questions:
     - Focus rules: Should Up/Down change speed only when the dropdown or player area is focused, or always (global handler) unless a text input is focused?
     - Non‑preset speeds: Any need for fine‑grained speeds (e.g., 0.33×) via hidden debug/advanced toggle, or strictly the five presets?
-- [ ]  3.6 — Top action row: Point for P1 — No Point — Point for P2
+- [x]  4.6 — Top action row: Point for P1 — No Point — Point for P2
 
   - Description: Implement the three primary outcome actions aligned on one horizontal line (left: Point for Player 1, center: No Point, right: Point for Player 2) as shown in the mock.
   - Acceptance Criteria:
     - Hotkeys: A = Point for Player 1, N = No Point, L = Point for Player 2 (match on‑screen hints where shown; mock shows A/L labels and a centered No Point button).
     - Clicking or pressing a hotkey sets the outcome for the selected point, marks it as scored, persists it, and updates score state.
-    - If the user changes the outcome later, recompute score state accordingly (see 3.8 recompute rules).
+    - If the user changes the outcome later, recompute score state accordingly (see 4.8 recompute rules).
   - Implementation Guide:
     - Disabled state: if no point is selected, these actions are disabled.
     - Visual state: when revisiting a scored point, the corresponding action appears pressed/selected.
@@ -124,12 +124,11 @@ Decisions incorporated in this spec (answers provided):
     - Hotkeys: Spec proposes A/N/L. Are there any conflicts with existing global shortcuts? Should we expose hints (KBD tags) next to all three buttons consistently (mock shows A/L; what about N)?
     - Changing outcomes: If the user changes an already‑scored point’s outcome, should the UI immediately recompute and update all subsequent states, even if that moves “pressed” indicators for previously visited points?
     - Disabled states: If the selected point has invalid duration (edge case), all three actions are disabled. Should we also show an inline error banner near the top action row?
-- [ ]  3.7 — Bottom player panels: Points, Games, Sets and quick actions
+- [x]  4.7 — Bottom player panels: Points, Games, Sets and quick actions
 
-  - Description: Implement per‑player panels under the video showing current Points, Games, Sets, and action buttons "Point for Player" (duplicating top actions), "Game Won", and "Set Won" as in the mock.
+  - Description: Implement per‑player panels under the video showing current Points, Games, Sets, "Game Won", and "Set Won" as in the mock.
   - Acceptance Criteria:
     - Panels display the current computed match state (Points within game, Games within set, Sets in match) for the time at/after the selected point’s outcome.
-    - The "Point for Player" buttons trigger the same outcome action as the top row for the selected point.
     - If tennis rules imply the game or set is completed when a point is awarded, the corresponding "Game Won" or "Set Won" button should show a pressed/armed visual state (non‑interactive indicator in v0.1.0).
   - Implementation Guide:
     - Keep display read‑only for Game/Set buttons in v0.1.0 (they reflect computed results). Actual manual override can be considered later.
@@ -138,14 +137,14 @@ Decisions incorporated in this spec (answers provided):
     - Player accent colors are fixed (match mock blue/red) and are not user-configurable in v0.1.0.
   - Open questions:
     - Synchronization: Panels mirror the state “after” applying the selected point’s outcome. Should there be a way to preview state “before” the point (e.g., hover)? Out of scope for v0.1.0?
-- [ ]  3.8 — Tennis rules engine and recomputation
+- [x]  4.8 — Tennis rules engine and recomputation
 
   - Description: Implement a rules engine that converts the sequence of per‑point outcomes into game and set progress, respecting deuce/advantage and tiebreaks.
   - Acceptance Criteria:
     - Given an ordered list of outcomes, the engine produces a derived timeline of game/point/set state after each scored point.
     - Changing any point’s outcome triggers recomputation from that point onward.
     - Match format default: best‑of‑3 sets; regular games are win‑by‑2 after 40–40 (deuce/advantage cycles unlimited).
-    - Tiebreaks are supported: at 6–6 in games within a set, start a standard 7‑point tiebreak (first to 7, win‑by‑2). The winner takes the set 7–6. Apply tiebreaks to all sets in v0.1.0.
+    - Tiebreaks are supported: at 6–6 in games within a set, start a standard 7‑point tiebreak (first to 7, win‑by‑2). The winner takes the set 7–6.
   - Implementation Guide:
     - Pure functions with deterministic output; separate from UI for testability.
     - Represent outcomes as an enum: `P1`, `P2`, `NONE`; store per point ID.
@@ -153,11 +152,11 @@ Decisions incorporated in this spec (answers provided):
     - Ignore serving order entirely in v0.1.0.
   - Decisions:
     - Support standard 7‑point (win‑by‑2) tiebreak at 6–6 in every set; record final set score as 7–6 for the set winner.
-  - Open questions:
-    - Match format config: Where is best‑of‑3 defined and persisted (manifest vs score.json)? Any per‑match overrides?
-    - No‑ad scoring: Is “no‑ad” ever used in this product? If not now, should the engine be designed for future extension (param for ad/no‑ad)?
-    - Long deuce handling: Any cap on the number of advantage exchanges (should be unlimited). Unit tests to include long sequences?
-- [ ]  3.9 — Persistence model for scoring (ScoreV1)
+  - Decisions — Answers to previously open questions:
+    - Match format config: Store match format (default best‑of‑3) in `score.json` (v1). No per‑match overrides in v0.1.0; may be added later.
+    - No‑ad scoring: Not implemented in v0.1.0. Design the engine for future extension (a parameter to switch ad/no‑ad) in later versions.
+    - Long deuce handling: Support extended deuce/advantage sequences with a practical cap of 100 points within a single game. Unit tests should include long sequences up to this cap.
+- [ ]  4.9 — Persistence model for scoring (ScoreV1)
 
   - Description: Define storage for outcomes and optional metadata separate from EDL.
   - Acceptance Criteria:
@@ -169,11 +168,11 @@ Decisions incorporated in this spec (answers provided):
     - Reuse existing JSON IO patterns from `EdlIO`/`ManifestIO`.
   - Decisions:
     - When a previously scored point is deleted or its timing is edited on Markup, prompt the user: either keep subsequent scores as‑is (no recompute) or remove scoring for subsequent points and recompute from the change.
-  - Open questions:
-    - File location and naming: Confirm `score.json` sits alongside `edl.json` in the project root. Any desire to namespace future versions (e.g., `score.v1.json`)?
-    - Schema shape: Map of `pointId -> Outcome` only, or do we also want optional metadata (note/reason) for `NONE` (e.g., “let”, “fault replayed”) in v0.1.0?
-    - Orphans and migrations: On load, remove outcomes whose pointId no longer exists? Log and ignore? Surface a small non-blocking notice?
-- [ ]  3.10 — Next Point navigation and hotkeys
+  - Decisions — Answers to previously open questions:
+    - File location and naming: Use `score.json` alongside `edl.json` in the project root; no versioned filenames (no `score.v1.json`).
+    - Schema shape: Keep it simple — `Map<PointId, Outcome>` only; no extra metadata for `NONE` in v0.1.0.
+    - Orphans and migrations: Ignore for now — on load, silently ignore outcomes whose `pointId` no longer exists (no notice).
+- [ ]  4.10 — Next Point navigation and hotkeys
 
   - Description: Implement a compact "Next Point" button at the bottom of the list and a W hotkey that advances to the next point.
   - Acceptance Criteria:
@@ -186,16 +185,16 @@ Decisions incorporated in this spec (answers provided):
     - No auto-advance anywhere; W follows strict next-index selection and does not skip scored points.
   - Open questions:
     - None at this time.
-- [ ]  3.11 — Selecting a scored point restores pressed state
+- [ ]  4.11 — Selecting a scored point restores pressed state
 
   - Description: When the user selects a point that already has an outcome, the corresponding action button shows as pressed/selected.
   - Acceptance Criteria:
     - All three action areas (top row, bottom P1/P2 buttons) reflect the stored outcome consistently.
     - "No Point" selection leaves scoreboard and counters unchanged for that step but marks the point as scored.
-  - Open questions:
-    - Visual cohesion: Should top row and bottom panels animate or just snap to the stored outcome state when switching selection?
-    - Conflicts: If the UI somehow shows stale state (due to async IO), should buttons default to neutral until load completes, or show the last known local cache?
-- [ ]  3.12 — Overlay scoreboard above the video
+  - Decisions — Answers to previously open questions:
+    - Visual cohesion: Snap immediately to the stored outcome; no animations in v0.1.0 (keep it simple).
+    - Conflicts/stale state: Show the last known local cache while async IO completes; update to persisted state once loaded. No special neutral/loading state in v0.1.0.
+- [ ]  4.12 — Overlay scoreboard above the video
 
   - Description: Render a compact scoreboard overlay (players, sets/games/points) positioned as in the mock (`design/scoring.html`).
   - Acceptance Criteria:
@@ -210,8 +209,8 @@ Decisions incorporated in this spec (answers provided):
     - Set columns are dynamic (no fixed limit); rely on computed scoring to determine how many to display.
     - Player/league labels: use static placeholder strings in v0.1.0.
   - Open questions:
-    - Overlay visibility toggle: Do we need a quick “show/hide overlay” toggle for preview (for v0.1.0)? If yes, where should it live?
-- [ ]  3.13 — Autosave and project integration
+    - Overlay visibility toggle: Do we need a quick “show/hide overlay” toggle for preview (for v0.1.0)? If yes, where should it live? Answer: no, no need for such toggle.
+- [ ]  4.13 — Autosave and project integration
 
   - Description: Persist scoring outcomes shortly after changes and reload them on project open.
   - Acceptance Criteria:
@@ -222,7 +221,7 @@ Decisions incorporated in this spec (answers provided):
   - Open questions:
     - Debounce window: Reuse 300 ms from Markup exactly? Any need for a visual “Saving…” indicator on Scoring now, or follow Markup’s approach (out of scope for v0.1.0)?
     - Save scope: If both EDL and Score change close together, do we save both independently or sequence them (order doesn’t strictly matter, but confirm expectations)?
-- [ ]  3.14 — Tests: rules engine and persistence
+- [ ]  4.14 — Tests: rules engine and persistence
 
   - Description: Add unit tests for the rules engine (points → games → sets) and for `ScoreV1` read/write.
   - Acceptance Criteria:
@@ -233,7 +232,7 @@ Decisions incorporated in this spec (answers provided):
   - Open questions:
     - Test coverage minima: Any additional cases you want guaranteed (e.g., 6–6 extended sets, long deuce, flipping an early outcome and verifying recompute)?
     - Golden files: Should we include a small golden `edl.json` + `score.json` pair in tests to validate end‑to‑end load/apply behavior?
-- [ ]  3.15 — Accessibility and focus management
+- [ ]  4.15 — Accessibility and focus management
 
   - Description: Ensure keyboard usage mirrors Markup behavior and controls are accessible.
   - Acceptance Criteria:
@@ -244,7 +243,7 @@ Decisions incorporated in this spec (answers provided):
     - Screen reader specifics are out of scope for v0.1.0; provide reasonable component names only.
   - Open questions:
     - Keyboard focus map: Do we need explicit tab order defined (left list → top action row → transport → speed → bottom panels), or follow toolkit defaults?
-- [ ]  3.16 — Empty state and edge cases
+- [ ]  4.16 — Empty state and edge cases
 
   - Description: Handle projects with no points and other edge cases.
   - Acceptance Criteria:

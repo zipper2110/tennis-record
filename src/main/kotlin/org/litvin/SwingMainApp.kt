@@ -15,6 +15,7 @@ object SwingMainApp {
     private const val CARD_PROJECTS = "projects"
     private const val CARD_MARKUP = "markup"
     private const val CARD_EXPORT = "export"
+    private const val CARD_SCORING = "scoring"
 
     @JvmStatic
     fun main(args: Array<String>) {
@@ -111,7 +112,7 @@ object SwingMainApp {
                 // Sidebar styled to match the mock
                 val sidebar = JPanel().apply {
                     UiStyles.styleSidebarContainer(this)
-                    preferredSize = Dimension(220, 0)
+                    preferredSize = Dimension(100, 0)
                     foreground = UiStyles.SIDEBAR_FG
                 }
 
@@ -120,11 +121,12 @@ object SwingMainApp {
                 // Buttons with lime icons
                 lateinit var btnProjects: UiStyles.SidebarButton
                 lateinit var btnMarkup: UiStyles.SidebarButton
+                lateinit var btnScoring: UiStyles.SidebarButton
                 lateinit var btnExport: UiStyles.SidebarButton
 
                 fun addItem(b: UiStyles.SidebarButton) {
                     b.alignmentX = 0f
-                    b.maximumSize = Dimension(Int.MAX_VALUE, 44)
+                    b.maximumSize = Dimension(Int.MAX_VALUE, 64)
                     sidebar.add(b)
                     sidebar.add(Box.createRigidArea(Dimension(0, 6)))
                 }
@@ -139,43 +141,72 @@ object SwingMainApp {
                 // Projects screen (Swing Phase 2) and Markup (Phase 3)
                 var setActive: (String) -> Unit = {}
                 val markupPanel = SwingMarkupPanel()
+                val scoringPanel = SwingScoringPanel()
                 val exportPanel = SwingExportPanel()
                 val projectsPanel = SwingProjectsPanel().apply {
                     onProjectOpened = { path ->
                         try {
                             currentManifestPath = path
                             markupPanel.setProjectManifest(path)
+                            scoringPanel.setProjectManifest(path)
                             exportPanel.setProjectManifest(path)
                             frame.title = "Tennis Record — Markup (Swing)"
                             cl.show(cards, CARD_MARKUP)
                             setActive(CARD_MARKUP)
+                            try { markupPanel.onActivated() } catch (_: Throwable) {}
                         } catch (_: Throwable) { }
                     }
                 }
 
                 cards.add(projectsPanel, CARD_PROJECTS)
                 cards.add(markupPanel, CARD_MARKUP)
+                cards.add(scoringPanel, CARD_SCORING)
                 cards.add(exportPanel, CARD_EXPORT)
+
+                // Navigation helper with lifecycle wiring
+                var currentCard: String? = null
+                fun goTo(card: String) {
+                    try {
+                        // Pause media on panels being left
+                        when (currentCard) {
+                            CARD_MARKUP -> try { markupPanel.onDeactivated() } catch (_: Throwable) {}
+                            CARD_SCORING -> try { scoringPanel.onDeactivated() } catch (_: Throwable) {}
+                        }
+                        // Show target card
+                        cl.show(cards, card)
+                        // Update button active states
+                        setActive(card)
+                        // Activate the new panel (no autoplay)
+                        when (card) {
+                            CARD_MARKUP -> try { markupPanel.onActivated() } catch (_: Throwable) {}
+                            CARD_SCORING -> try { scoringPanel.onActivated() } catch (_: Throwable) {}
+                        }
+                        currentCard = card
+                    } catch (_: Throwable) { }
+                }
 
                 // Create sidebar items with icons and actions
                 btnProjects = UiStyles.sidebarButton("Projects", UiStyles.folderIcon()) {
                     frame.title = "Tennis Record — Projects (Swing)"
-                    cl.show(cards, CARD_PROJECTS)
-                    setActive(CARD_PROJECTS)
+                    goTo(CARD_PROJECTS)
                 }
                 addItem(btnProjects)
 
                 btnMarkup = UiStyles.sidebarButton("Markup", UiStyles.slidersIcon()) {
                     frame.title = "Tennis Record — Markup (Swing)"
-                    cl.show(cards, CARD_MARKUP)
-                    setActive(CARD_MARKUP)
+                    goTo(CARD_MARKUP)
                 }
                 addItem(btnMarkup)
 
+                btnScoring = UiStyles.sidebarButton("Scoring", UiStyles.targetIcon()) {
+                    frame.title = "Tennis Record — Scoring (Swing)"
+                    goTo(CARD_SCORING)
+                }
+                addItem(btnScoring)
+
                 btnExport = UiStyles.sidebarButton("Export", UiStyles.exportIcon()) {
                     frame.title = "Tennis Record — Export (Swing)"
-                    cl.show(cards, CARD_EXPORT)
-                    setActive(CARD_EXPORT)
+                    goTo(CARD_EXPORT)
                 }
                 addItem(btnExport)
 
@@ -183,6 +214,7 @@ object SwingMainApp {
                 setActive = { card ->
                     btnProjects.active = card == CARD_PROJECTS
                     btnMarkup.active = card == CARD_MARKUP
+                    btnScoring.active = card == CARD_SCORING
                     btnExport.active = card == CARD_EXPORT
                 }
 
@@ -191,12 +223,15 @@ object SwingMainApp {
                 val viewMenu = JMenu("View")
                 val miProjects = JMenuItem("Projects")
                 val miMarkup = JMenuItem("Markup")
+                val miScoring = JMenuItem("Scoring")
                 val miExport = JMenuItem("Export")
                 miProjects.addActionListener { btnProjects.doClick() }
                 miMarkup.addActionListener { btnMarkup.doClick() }
+                miScoring.addActionListener { btnScoring.doClick() }
                 miExport.addActionListener { btnExport.doClick() }
                 viewMenu.add(miProjects)
                 viewMenu.add(miMarkup)
+                viewMenu.add(miScoring)
                 viewMenu.add(miExport)
                 menuBar.add(viewMenu)
                 frame.jMenuBar = menuBar

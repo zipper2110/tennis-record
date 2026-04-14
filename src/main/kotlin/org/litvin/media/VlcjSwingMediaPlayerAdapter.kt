@@ -29,6 +29,10 @@ class VlcjSwingMediaPlayerAdapter {
     var onStatusChanged: ((PlayerStatus) -> Unit)? = null
     var onTimeChanged: ((Long) -> Unit)? = null
 
+    fun setRate(rate: Float) {
+        try { mediaPlayer.controls().setRate(rate) } catch (_: Throwable) { }
+    }
+
     init {
         mediaPlayer.events().addMediaPlayerEventListener(object : MediaPlayerEventAdapter() {
             override fun playing(mediaPlayer: MediaPlayer) {
@@ -61,7 +65,7 @@ class VlcjSwingMediaPlayerAdapter {
     }
 
     fun play() = mediaPlayer.controls().play()
-    fun pause() = mediaPlayer.controls().pause()
+    fun pause() = mediaPlayer.controls().setPause(true)
     fun stop() = mediaPlayer.controls().stop()
     fun seek(ms: Long) = mediaPlayer.controls().setTime(ms.coerceAtLeast(0L))
 
