@@ -10,6 +10,63 @@ import javax.swing.*
  * - Secondary button: subtle dark surface with thin rounded border.
  */
 object UiStyles {
+    // Small action icons for cards
+    fun targetIcon(size: Int = 18): Icon = object : Icon {
+        override fun getIconWidth() = size
+        override fun getIconHeight() = size
+        override fun paintIcon(c: Component?, g: Graphics?, x: Int, y: Int) {
+            val g2 = g as Graphics2D
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+            val w = size; val h = size
+            // outer circle
+            g2.color = LIME
+            g2.drawOval(x + 1, y + 1, w - 2, h - 2)
+            // dot
+            g2.fillOval(x + w/2 - 2, y + h/2 - 2, 4, 4)
+        }
+    }
+    fun pencilIcon(size: Int = 18): Icon = object : Icon {
+        override fun getIconWidth() = size
+        override fun getIconHeight() = size
+        override fun paintIcon(c: Component?, g: Graphics?, x: Int, y: Int) {
+            val g2 = g as Graphics2D
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+            g2.color = LIME
+            val w = size; val h = size
+            g2.stroke = BasicStroke(2f)
+            g2.drawLine(x + w/4, y + h - h/4, x + w - w/6, y + h/6)
+            g2.drawLine(x + w - w/6, y + h/6, x + w - w/8, y + h/4)
+            g2.drawRect(x + w/4 - 2, y + h - h/4 - 2, 4, 4)
+        }
+    }
+    fun crossIcon(size: Int = 18): Icon = object : Icon {
+        override fun getIconWidth() = size
+        override fun getIconHeight() = size
+        override fun paintIcon(c: Component?, g: Graphics?, x: Int, y: Int) {
+            val g2 = g as Graphics2D
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+            g2.color = Color(0xFF, 0x55, 0x55)
+            val w = size; val h = size
+            g2.stroke = BasicStroke(2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
+            g2.drawLine(x + 4, y + 4, x + w - 4, y + h - 4)
+            g2.drawLine(x + w - 4, y + 4, x + 4, y + h - 4)
+        }
+    }
+    fun smallIconButton(icon: Icon, tooltip: String? = null, onClick: () -> Unit): JButton = JButton().apply {
+        this.icon = icon
+        toolTipText = tooltip
+        isFocusPainted = false
+        isBorderPainted = false
+        isContentAreaFilled = true
+        background = SURFACE_HIGH
+        foreground = FG_PRIMARY
+        border = BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(CARD_BORDER, 1, true),
+            BorderFactory.createEmptyBorder(4, 6, 4, 6)
+        )
+        cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
+        addActionListener { onClick() }
+    }
     // Palette inspired by design/projects.html dark theme
     val DARK_BG: Color = Color(0x0E, 0x0E, 0x0E)            // background / surface-dim
     val SURFACE_HIGH: Color = Color(0x20, 0x20, 0x1F)       // surface-container-high

@@ -48,10 +48,32 @@ class SwingMarkupPanel : JPanel(BorderLayout()) {
     private val countBadge = JLabel("0 MARKED")
 
     private val pointsModel = PointsTableModel()
-    private val pointsTable = JTable(pointsModel)
+    private val pointsTable = JTable(pointsModel) // legacy, no longer shown; kept for compile simplicity
     private var lastPreviewWasStart = true
+
+    // Cards list (replaces table view)
+    private val cardsListPanel = JPanel().apply {
+        layout = BoxLayout(this, BoxLayout.Y_AXIS)
+        isOpaque = false
+    }
+    private val cardsScroll = JScrollPane(cardsListPanel).apply {
+        border = BorderFactory.createEmptyBorder()
+        verticalScrollBar.unitIncrement = 16
+        verticalScrollBar.blockIncrement = 120
+        horizontalScrollBarPolicy = ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER
+        isOpaque = false
+        viewport.isOpaque = false
+    }
+    private val cardComponents: MutableList<JComponent> = mutableListOf()
+    private var selectedVisualIndex: Int = -1 // visual index within cards collection (pending at 0 when present)
+
+    // Fixed sizing constants (right panel/cards)
+    private val RIGHT_PANEL_WIDTH = 420
+    private val CARD_H_MARGIN = 10 // equal left/right margin inside right panel
+    private val CARD_WIDTH = RIGHT_PANEL_WIDTH - CARD_H_MARGIN * 2
+    private val CARD_HEIGHT = 68
     
-    // Renders pending row (row 0) in italic gray when a Start is set but End not yet
+    // Renders pending row (row 0) in italic gray when a Start is set but End not yet (table legacy)
     private val pendingRenderer = object : javax.swing.table.DefaultTableCellRenderer() {
         override fun getTableCellRendererComponent(table: JTable?, value: Any?, isSelected: Boolean, hasFocus: Boolean, row: Int, column: Int): Component {
             val c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column)
@@ -282,13 +304,24 @@ class SwingMarkupPanel : JPanel(BorderLayout()) {
 
         // Center: video and points list side-by-side
         val center = JSplitPane(JSplitPane.HORIZONTAL_SPLIT)
+        center.isOneTouchExpandable = false
+        center.setContinuousLayout(true)
+        center.isEnabled = false
+        center.dividerSize = 0
+        center.resizeWeight = 1.0
         val leftColumn = JPanel(BorderLayout())
         leftColumn.isOpaque = false
         leftColumn.add(player.component, BorderLayout.CENTER)
         leftColumn.add(bottom, BorderLayout.SOUTH)
+        leftColumn.minimumSize = Dimension(320, 0)
         center.leftComponent = leftColumn
 
         val rightPanel = JPanel(BorderLayout())
+        rightPanel.minimumSize = Dimension(RIGHT_PANEL_WIDTH, 0)
+        rightPanel.preferredSize = Dimension(RIGHT_PANEL_WIDTH, 0)
+        rightPanel.maximumSize = Dimension(RIGHT_PANEL_WIDTH, Int.MAX_VALUE)
+        rightPanel.isOpaque = true
+        rightPanel.background = UiStyles.DARK_BG
         // Header with count badge on the right
         val header = JPanel(BorderLayout())
         header.isOpaque = false
@@ -299,6 +332,7 @@ class SwingMarkupPanel : JPanel(BorderLayout()) {
             BorderFactory.createLineBorder(Color(0x44, 0x88, 0x00)),
             BorderFactory.createEmptyBorder(2, 6, 2, 6)
         )
+        countBadge.foreground = UiStyles.LIME
         header.add(countBadge, BorderLayout.EAST)
         rightPanel.add(header, BorderLayout.NORTH)
 
@@ -320,7 +354,7 @@ class SwingMarkupPanel : JPanel(BorderLayout()) {
             }
         } catch (_: Throwable) { }
         
-        // Install per-row mouse interactions
+        // Install per-row mouse interactions (legacy table, kept for logic compatibility)
         pointsTable.addMouseListener(object : MouseAdapter() {
             override fun mouseClicked(e: MouseEvent) {
                 try {
@@ -363,11 +397,32 @@ class SwingMarkupPanel : JPanel(BorderLayout()) {
             }
         })
 
-        rightPanel.add(JScrollPane(pointsTable), BorderLayout.CENTER)
+        // Replace table with cards list
+        rightPanel.add(cardsScroll, BorderLayout.CENTER)
+        // Equal left/right margins for cards inside the right panel
+        try { cardsListPanel.border = BorderFactory.createEmptyBorder(0, CARD_H_MARGIN, 0, CARD_H_MARGIN) } catch (_: Throwable) { }
         center.rightComponent = rightPanel
-        center.resizeWeight = 0.7
+        center.resizeWeight = 1.0
         // Add bottom controls and center split
         add(center, BorderLayout.CENTER)
+        // Keep right panel fixed width on first show and on resize
+        try {
+            val fixDivider: () -> Unit = {
+                try {
+                    val sp = (this.layout as BorderLayout).getLayoutComponent(BorderLayout.CENTER)
+                    if (sp is JSplitPane) {
+                        val total = sp.size.width
+                        if (total > 0) {
+                            sp.setDividerLocation((total - RIGHT_PANEL_WIDTH).coerceAtLeast(0))
+                        }
+                    }
+                } catch (_: Throwable) { }
+            }
+            SwingUtilities.invokeLater { fixDivider() }
+            this.addComponentListener(object: java.awt.event.ComponentAdapter(){
+                override fun componentResized(e: java.awt.event.ComponentEvent) { fixDivider() }
+            })
+        } catch (_: Throwable) { }
         // Timeline spans full width at the bottom
         add(timeline, BorderLayout.SOUTH)
 
@@ -411,14 +466,16 @@ class SwingMarkupPanel : JPanel(BorderLayout()) {
         dispatcher.onPointsChanged = {
             EventQueue.invokeLater {
                 val pts = dispatcher.getCompletedPoints()
-                pointsModel.setPoints(pts)
+                pointsModel.setPoints(pts) // kept for potential table-related logic
                 countBadge.text = "${pts.size} MARKED"
+                rebuildCards()
                 timeline.repaint()
                 scheduleAutosave()
             }
         }
 
         installKeyBindings()
+        rebuildCards()
     }
 
     fun setProjectManifest(path: String) {
@@ -451,34 +508,228 @@ class SwingMarkupPanel : JPanel(BorderLayout()) {
         return menu
     }
 
-    private fun jumpToSelected() {
-        val row = pointsTable.selectedRow
-        if (row >= 0) {
-            // Ignore action on pending row (row 0 when pending exists)
-            if (dispatcher.getPendingStart() != null && row == 0) return
-            val p = pointsModel.get(row)
+    // Build cards list based on dispatcher state (pending + completed)
+    private fun rebuildCards() {
+        try {
+            cardsListPanel.removeAll()
+            cardComponents.clear()
+            val hasPending = dispatcher.getPendingStart() != null
+            if (hasPending) {
+                val s = dispatcher.getPendingStart()!!.toLong()
+                val card = buildPendingCard(0, s)
+                cardComponents.add(card)
+                cardsListPanel.add(card)
+                cardsListPanel.add(Box.createVerticalStrut(10))
+            }
+            val points = dispatcher.getCompletedPoints()
+            points.forEachIndexed { i, p ->
+                val visual = i + (if (hasPending) 1 else 0)
+                val card = buildPointCard(visual, i, p)
+                cardComponents.add(card)
+                cardsListPanel.add(card)
+                cardsListPanel.add(Box.createVerticalStrut(10))
+            }
+            cardsListPanel.revalidate()
+            cardsListPanel.repaint()
+            // Ensure divider respects fixed RIGHT_PANEL_WIDTH on first rebuild as well
+            try {
+                val sp = (this.layout as BorderLayout).getLayoutComponent(BorderLayout.CENTER)
+                if (sp is JSplitPane) {
+                    SwingUtilities.invokeLater {
+                        val total = sp.size.width
+                        if (total > 0) {
+                            sp.setDividerLocation((total - RIGHT_PANEL_WIDTH).coerceAtLeast(0))
+                        }
+                    }
+                }
+            } catch (_: Throwable) { }
+        } catch (_: Throwable) { }
+    }
+
+    private fun buildPendingCard(visualIndex: Int, startMs: Long): JComponent {
+        val card = JPanel(BorderLayout())
+        card.isOpaque = true
+        card.background = UiStyles.SURFACE_HIGH
+        card.border = BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(UiStyles.CARD_BORDER, 1, true),
+            BorderFactory.createEmptyBorder(10, 12, 10, 12)
+        )
+        card.alignmentX = Component.LEFT_ALIGNMENT
+        // Fixed card size
+        run {
+            val sz = Dimension(CARD_WIDTH, CARD_HEIGHT)
+            card.minimumSize = sz
+            card.preferredSize = sz
+            card.maximumSize = sz
+        }
+        val content = JPanel()
+        content.isOpaque = false
+        content.layout = BoxLayout(content, BoxLayout.Y_AXIS)
+        content.add(JLabel("Pending…").apply { foreground = UiStyles.FG_SECONDARY; font = font.deriveFont(Font.BOLD) })
+        content.add(Box.createVerticalStrut(4))
+        content.add(JLabel(Timecode.format(startMs)).apply { foreground = UiStyles.FG_PRIMARY })
+        card.add(content, BorderLayout.CENTER)
+        // Highlight stripe similar to mock
+        card.add(object: JComponent(){
+            override fun getPreferredSize() = Dimension(4, 1)
+            override fun paintComponent(g: Graphics) { g.color = UiStyles.LIME; g.fillRect(0,0,width,height) }
+        }, BorderLayout.WEST)
+        // not interactive
+        card.toolTipText = "Pending point — press V to set End"
+        // Selection state
+        applyCardSelectionStyle(card, visualIndex == selectedVisualIndex)
+        return card
+    }
+
+    private fun buildPointCard(visualIndex: Int, dataIndex: Int, p: PointV1): JComponent {
+        val card = JPanel(BorderLayout())
+        card.isOpaque = true
+        card.background = UiStyles.CARD_BG
+        card.border = BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(UiStyles.CARD_BORDER, 1, true),
+            BorderFactory.createEmptyBorder(10, 12, 10, 12)
+        )
+        card.alignmentX = Component.LEFT_ALIGNMENT
+        // Fixed card size
+        run {
+            val sz = Dimension(CARD_WIDTH, CARD_HEIGHT)
+            card.minimumSize = sz
+            card.preferredSize = sz
+            card.maximumSize = sz
+        }
+        // Left stripe for active
+        val stripe = object: JComponent(){
+            override fun getPreferredSize() = Dimension(4, 1)
+            override fun paintComponent(g: Graphics) {
+                g.color = if (visualIndex == selectedVisualIndex) UiStyles.LIME else UiStyles.CARD_BORDER
+                g.fillRect(0,0,width,height)
+            }
+        }
+        card.add(stripe, BorderLayout.WEST)
+        val center = JPanel()
+        center.isOpaque = false
+        center.layout = BoxLayout(center, BoxLayout.Y_AXIS)
+        val title = JLabel("Point ${dataIndex + 1}").apply { foreground = UiStyles.FG_PRIMARY; font = font.deriveFont(Font.BOLD) }
+        val times = JPanel(FlowLayout(FlowLayout.LEFT, 14, 0)).apply {
+            isOpaque = false
+            add(JLabel(Timecode.format(p.startMs.toLong())).apply { foreground = UiStyles.FG_SECONDARY })
+            add(JLabel(Timecode.format(p.endMs.toLong())).apply { foreground = UiStyles.FG_SECONDARY })
+        }
+        center.add(title)
+        center.add(Box.createVerticalStrut(6))
+        center.add(times)
+        card.add(center, BorderLayout.CENTER)
+        val actions = JPanel().apply {
+            isOpaque = false
+            layout = BoxLayout(this, BoxLayout.X_AXIS)
+        }
+        val goBtn = UiStyles.smallIconButton(UiStyles.targetIcon(), "Go to marked point") {
+            // If a pending exists and user acts on a completed card, cancel pending
+            if (dispatcher.getPendingStart() != null && visualIndex > 0) dispatcher.clearPending()
             player.seek(p.startMs.toLong())
-            // Ensure timeline/playhead updates immediately even when paused and focus player for Space
             EventQueue.invokeLater { refreshUiAtCurrentTime(); player.component.requestFocusInWindow() }
+            setSelectedVisual(visualIndex)
+        }
+        val editBtn = UiStyles.smallIconButton(UiStyles.pencilIcon(), "Edit times/label") { showEditDialog(p) }
+        val delBtn = UiStyles.smallIconButton(UiStyles.crossIcon(), "Delete point") {
+            setSelectedVisual(visualIndex)
+            confirmDelete(p)
+        }
+        actions.add(goBtn); actions.add(Box.createHorizontalStrut(8)); actions.add(editBtn); actions.add(Box.createHorizontalStrut(8)); actions.add(delBtn)
+        card.add(actions, BorderLayout.EAST)
+        // Clicking card seeks to start
+        card.addMouseListener(object: MouseAdapter(){
+            override fun mouseClicked(e: MouseEvent) {
+                if (SwingUtilities.isLeftMouseButton(e)) {
+                    player.seek(p.startMs.toLong())
+                    EventQueue.invokeLater { refreshUiAtCurrentTime(); player.component.requestFocusInWindow() }
+                    setSelectedVisual(visualIndex)
+                }
+            }
+        })
+        applyCardSelectionStyle(card, visualIndex == selectedVisualIndex)
+        return card
+    }
+
+    private fun applyCardSelectionStyle(card: JComponent, selected: Boolean) {
+        card.background = if (selected) UiStyles.SURFACE_HIGH else UiStyles.CARD_BG
+        card.repaint()
+    }
+
+    private fun setSelectedVisual(visualIndex: Int) {
+        selectedVisualIndex = visualIndex
+        // update styles only on actual card components (exclude spacers)
+        for (i in cardComponents.indices) {
+            val c = cardComponents[i]
+            applyCardSelectionStyle(c, i == selectedVisualIndex)
+        }
+        scrollCardIntoView(visualIndex)
+    }
+
+    private fun scrollCardIntoView(visualIndex: Int) {
+        try {
+            if (visualIndex < 0 || visualIndex >= cardComponents.size) return
+            val comp = cardComponents[visualIndex]
+            val r = comp.bounds
+            cardsListPanel.scrollRectToVisible(r)
+        } catch (_: Throwable) { }
+    }
+
+    private fun showEditDialog(p: PointV1) {
+        val panel = JPanel(GridBagLayout())
+        val gc = GridBagConstraints().apply { insets = Insets(4,4,4,4); anchor = GridBagConstraints.WEST }
+        val tfStart = JTextField(Timecode.format(p.startMs.toLong()), 14)
+        val tfEnd = JTextField(Timecode.format(p.endMs.toLong()), 14)
+        val tfLabel = JTextField(p.label ?: "", 18)
+        fun addRow(y:Int, label:String, comp:JComponent){
+            gc.gridx=0; gc.gridy=y; panel.add(JLabel(label), gc)
+            gc.gridx=1; panel.add(comp, gc)
+        }
+        addRow(0, "Start:", tfStart)
+        addRow(1, "End:", tfEnd)
+        addRow(2, "Label:", tfLabel)
+        val res = JOptionPane.showConfirmDialog(this, panel, "Edit point", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE)
+        if (res == JOptionPane.OK_OPTION) {
+            val ok = dispatcher.updatePoint(p.id, Timecode.parse(tfStart.text), Timecode.parse(tfEnd.text), tfLabel.text)
+            if (!ok) maybeShowDispatcherHint()
         }
     }
 
-    private fun deleteSelected() {
-        val row = pointsTable.selectedRow
-        if (row >= 0) {
-            // Ignore delete on pending row (row 0 when pending exists)
-            if (dispatcher.getPendingStart() != null && row == 0) return
-            val p = pointsModel.get(row)
-            val name = Timecode.format(p.startMs.toLong()) + " - " + Timecode.format(p.endMs.toLong())
-            val res = JOptionPane.showConfirmDialog(this, "Delete marked point $name?", "Confirm delete", JOptionPane.OK_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE)
-            if (res == JOptionPane.OK_OPTION) {
-                if (dispatcher.deletePoint(p.id)) {
-                    pointsModel.setPoints(dispatcher.getCompletedPoints())
-                    timeline.repaint()
-                    scheduleAutosave()
-                }
+    private fun confirmDelete(p: PointV1) {
+        val name = Timecode.format(p.startMs.toLong()) + " - " + Timecode.format(p.endMs.toLong())
+        val res = JOptionPane.showConfirmDialog(this, "Delete marked point $name?", "Confirm delete", JOptionPane.OK_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE)
+        if (res == JOptionPane.OK_OPTION) {
+            if (dispatcher.deletePoint(p.id)) {
+                pointsModel.setPoints(dispatcher.getCompletedPoints())
+                timeline.repaint()
+                scheduleAutosave()
             }
         }
+    }
+
+    private fun jumpToSelected() {
+        val hasPending = dispatcher.getPendingStart() != null
+        val sel = selectedVisualIndex
+        if (sel < 0) return
+        if (hasPending && sel == 0) return
+        val dataIndex = sel - if (hasPending) 1 else 0
+        val pts = dispatcher.getCompletedPoints()
+        if (dataIndex !in pts.indices) return
+        val p = pts[dataIndex]
+        player.seek(p.startMs.toLong())
+        EventQueue.invokeLater { refreshUiAtCurrentTime(); player.component.requestFocusInWindow() }
+    }
+
+    private fun deleteSelected() {
+        val hasPending = dispatcher.getPendingStart() != null
+        val sel = selectedVisualIndex
+        if (sel < 0) return
+        if (hasPending && sel == 0) return
+        val dataIndex = sel - if (hasPending) 1 else 0
+        val pts = dispatcher.getCompletedPoints()
+        if (dataIndex !in pts.indices) return
+        val p = pts[dataIndex]
+        confirmDelete(p)
     }
 
     private fun autoActivatePoint(t: Long) {
@@ -488,13 +739,13 @@ class SwingMarkupPanel : JPanel(BorderLayout()) {
         val idx = p.indexOfFirst { it.startMs <= t && t < it.endMs }
         if (idx >= 0) {
             val visual = idx + if (hasPending) 1 else 0
-            pointsTable.selectionModel.setSelectionInterval(visual, visual)
-            pointsTable.scrollRectToVisible(pointsTable.getCellRect(visual, 0, true))
+            setSelectedVisual(visual)
         } else {
-            // If a pending row exists and is currently selected, keep it selected
-            val sel = pointsTable.selectedRow
-            if (!(hasPending && sel == 0)) {
-                pointsTable.clearSelection()
+            // Keep pending selected if present; otherwise clear selection
+            if (hasPending) {
+                setSelectedVisual(0)
+            } else {
+                setSelectedVisual(-1)
             }
         }
     }
@@ -528,11 +779,11 @@ class SwingMarkupPanel : JPanel(BorderLayout()) {
     private fun onStartAtPlayhead() {
         dispatcher.onPointStart(player.currentTimeMs())
         maybeShowDispatcherHint()
-        // Select the pending row (visual row 0) and scroll it into view
+        // Refresh cards and select the pending visual row (0)
         EventQueue.invokeLater {
+            rebuildCards()
             if (dispatcher.getPendingStart() != null) {
-                pointsTable.selectionModel.setSelectionInterval(0, 0)
-                pointsTable.scrollRectToVisible(pointsTable.getCellRect(0, 0, true))
+                setSelectedVisual(0)
             }
         }
     }
