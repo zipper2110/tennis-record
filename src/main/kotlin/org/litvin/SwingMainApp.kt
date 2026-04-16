@@ -180,6 +180,7 @@ object SwingMainApp {
                         when (card) {
                             CARD_MARKUP -> try { markupPanel.onActivated() } catch (_: Throwable) {}
                             CARD_SCORING -> try { scoringPanel.onActivated() } catch (_: Throwable) {}
+                            CARD_EXPORT -> try { exportPanel.onActivated() } catch (_: Throwable) {}
                         }
                         currentCard = card
                     } catch (_: Throwable) { }
@@ -218,8 +219,19 @@ object SwingMainApp {
                     btnExport.active = card == CARD_EXPORT
                 }
 
-                // Menu bar (simple View menu for navigation too)
+                // Menu bar with File (Save All) and View navigation
                 val menuBar = JMenuBar()
+                // File menu
+                val fileMenu = JMenu("File")
+                val miSaveAll = JMenuItem("Save All")
+                try { miSaveAll.accelerator = KeyStroke.getKeyStroke("control S") } catch (_: Throwable) { }
+                miSaveAll.addActionListener {
+                    try { markupPanel.saveNow() } catch (_: Throwable) { }
+                    try { scoringPanel.saveNow() } catch (_: Throwable) { }
+                }
+                fileMenu.add(miSaveAll)
+                menuBar.add(fileMenu)
+                // View menu
                 val viewMenu = JMenu("View")
                 val miProjects = JMenuItem("Projects")
                 val miMarkup = JMenuItem("Markup")

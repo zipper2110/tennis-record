@@ -22,6 +22,7 @@ object FFmpegCommandBuilder {
         val encoderLabel: String = "H.264 (libx264)",
         val idleTrim: Boolean = true,
         val keeps: List<PointV1> = emptyList(),
+        val subtitlesAssPath: String? = null, // when non-null, burn-in subtitles (scoreboard)
     )
 
     data class Result(
@@ -48,7 +49,8 @@ object FFmpegCommandBuilder {
         }
 
         val args = mutableListOf<String>()
-        args += listOf("-y", "-hide_banner", "-v", "error") // be quiet by default
+        // Enable info-level logs and show banner; also request machine-readable progress to stderr
+        args += listOf("-y", "-v", "info", "-progress", "pipe:2", "-nostats")
         args += listOf("-i", p.sourcePath)
 
         var filterComplex: String? = null
@@ -73,8 +75,18 @@ object FFmpegCommandBuilder {
             // Concat and scale after concat
             parts += vLabels.joinToString(separator = "") + "concat=n=" + p.keeps.size + ":v=1:a=0[vcat]"
             val scaleStr = "scale=${p.outWidth}:-2"
-            parts += "[vcat]$scaleStr$vMap"
+            // Output scaled video into an intermediate label; we may append subtitles next
+            parts += "[vcat]$scaleStr[vsc]"
             parts += aLabels.joinToString(separator = "") + "concat=n=${p.keeps.size}:v=0:a=1" + aMap
+            // If subtitles present, append burn-in after scaling; else just map vsc as output
+            val subPath = p.subtitlesAssPath
+            if (subPath != null) {
+                val esc = escapeForFilterPath(subPath)
+                parts += "[vsc]subtitles='${esc}'$vMap"
+            } else {
+                // No extra node; map label directly by setting vMap to [vsc]
+                vMap = "[vsc]"
+            }
             filterComplex = parts.joinToString(";")
         }
 
@@ -124,8 +136,15 @@ object FFmpegCommandBuilder {
         if (filterComplex != null) {
             args += listOf("-filter_complex", filterComplex, "-map", vMap, "-map", aMap)
         } else {
-            // simple scale filter on video only
-            args += listOf("-vf", "scale=${p.outWidth}:-2")
+            // simple scale, optionally followed by subtitles burn-in
+            val sub = p.subtitlesAssPath
+            val vf = if (sub != null) {
+                val esc = escapeForFilterPath(sub)
+                "scale=${p.outWidth}:-2,subtitles='${esc}'"
+            } else {
+                "scale=${p.outWidth}:-2"
+            }
+            args += listOf("-vf", vf)
         }
 
         // Container options
@@ -154,4 +173,15 @@ object FFmpegCommandBuilder {
 private fun Double.formatSecs(): String {
     // Keep 3 decimal places for sub-second accuracy; force dot decimal regardless of locale
     return java.lang.String.format(java.util.Locale.US, "%.3f", this)
+}
+
+private fun escapeForFilterPath(path: String): String {
+    // Escape for use inside ffmpeg filter arguments on Windows:
+    // - escape backslashes
+    // - escape drive letter colon and any other colons
+    // - escape single quotes (we wrap in single quotes)
+    return path
+        .replace("\\", "\\\\")
+        .replace(":", "\\:")
+        .replace("'", "\\'")
 }

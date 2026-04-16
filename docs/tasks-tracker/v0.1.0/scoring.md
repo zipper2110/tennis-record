@@ -29,7 +29,7 @@ General findings & scope notes (review)
 
 Decisions incorporated in this spec (answers provided):
 
-- Player names and colors are fixed for now (hardcoded constants in v0.1.0). Ignore server/receiver.
+- Player names are user-configurable via two text inputs on the Scoring tab (v0.1.0); player accent colors remain fixed. Ignore server/receiver.
 - Manual Marker and Scoreboard Settings buttons are present in the UI but do nothing in v0.1.0 (no-ops).
 - No auto-advancement after choosing an outcome; selection stays on the current point until the user navigates.
 - Playback speed choice is remembered while the app is open (session-scoped), resets on app restart.
@@ -110,9 +110,9 @@ Decisions incorporated in this spec (answers provided):
   - Open questions:
     - Focus rules: Should Up/Down change speed only when the dropdown or player area is focused, or always (global handler) unless a text input is focused?
     - Non‑preset speeds: Any need for fine‑grained speeds (e.g., 0.33×) via hidden debug/advanced toggle, or strictly the five presets?
-- [x]  4.6 — Top action row: Point for P1 — No Point — Point for P2
+- [x]  4.6 — Top action row: No Point only (P1/P2 via side panels + hotkeys)
 
-  - Description: Implement the three primary outcome actions aligned on one horizontal line (left: Point for Player 1, center: No Point, right: Point for Player 2) as shown in the mock.
+  - Description: The top action row now contains only a centered "No Point" button. "Point for Player 1" and "Point for Player 2" actions are available via the side player panels and hotkeys (A/L).
   - Acceptance Criteria:
     - Hotkeys: A = Point for Player 1, N = No Point, L = Point for Player 2 (match on‑screen hints where shown; mock shows A/L labels and a centered No Point button).
     - Clicking or pressing a hotkey sets the outcome for the selected point, marks it as scored, persists it, and updates score state.
@@ -164,7 +164,7 @@ Decisions incorporated in this spec (answers provided):
     - Records map `pointId -> outcome` plus optional audit fields (createdAt, updatedAt). Keep unknown fields on read if possible.
     - Autosave with ~300 ms debounce on changes; integrate with project open/close lifecycle.
   - Implementation Guide:
-    - Kotlin data classes: `Outcome { P1, P2, NONE }`, `ScoreV1(version=1, outcomes: Map<PointId, Outcome>)`.
+    - Kotlin data classes: `Outcome { P1, P2, NONE }`, `ScoreV1(version=1, player1Name: String = "Player 1", player2Name: String = "Player 2", outcomes: Map<PointId, Outcome>)`.
     - Reuse existing JSON IO patterns from `EdlIO`/`ManifestIO`.
   - Decisions:
     - When a previously scored point is deleted or its timing is edited on Markup, prompt the user: either keep subsequent scores as‑is (no recompute) or remove scoring for subsequent points and recompute from the change.
@@ -204,7 +204,7 @@ Decisions incorporated in this spec (answers provided):
     - During a tiebreak, display the set as 7–6 for the winner once completed; the in‑progress tiebreak can be reflected as numeric points in the current game cell if practical.
   - Implementation Guide:
     - For v0.1.0, render a minimal layout consistent with the rest of the app’s UI stack; no animation required.
-    - Player names/colors are fixed placeholders (match mock blue/red accents); ignore server indicator.
+    - Player names come from user input (see 4.17) while colors remain fixed (match mock blue/red accents); ignore server indicator.
   - Decisions:
     - Set columns are dynamic (no fixed limit); rely on computed scoring to determine how many to display.
     - Player/league labels: use static placeholder strings in v0.1.0.
@@ -214,13 +214,13 @@ Decisions incorporated in this spec (answers provided):
 
   - Description: Persist scoring outcomes shortly after changes and reload them on project open.
   - Acceptance Criteria:
-    - Outcomes autosave within ~300 ms of a change (with debounce). Manual Save All also saves scoring.
+    - Outcomes are saved immediately on change (no debounce). Manual Save All also saves scoring.
     - Switching projects unloads scoring state safely without leaks.
   - Implementation Guide:
     - Reuse `AutosaveScheduler` pattern used for Markup (2.8) and wiring in Projects flows.
-  - Open questions:
-    - Debounce window: Reuse 300 ms from Markup exactly? Any need for a visual “Saving…” indicator on Scoring now, or follow Markup’s approach (out of scope for v0.1.0)?
-    - Save scope: If both EDL and Score change close together, do we save both independently or sequence them (order doesn’t strictly matter, but confirm expectations)?
+  - Decisions — Answers to previously open questions:
+    - Debounce window: Save immediately on change (no debounce). No visual saving indicator in v0.1.0 (follow Markup’s approach; out of scope).
+    - Save scope: Save score independently. On the Scoring tab, only score data changes; save it separately from EDL/other data.
 - [ ]  4.14 — Tests: rules engine and persistence
 
   - Description: Add unit tests for the rules engine (points → games → sets) and for `ScoreV1` read/write.
@@ -229,9 +229,9 @@ Decisions incorporated in this spec (answers provided):
     - Persistence: round‑trip JSON for `ScoreV1`; outcomes load and apply to UI state.
   - Implementation Guide:
     - Place tests under `src/test/kotlin/...`; mirror approach used by `EdlIOTest` and `MarkupDispatcherTest`.
-  - Open questions:
-    - Test coverage minima: Any additional cases you want guaranteed (e.g., 6–6 extended sets, long deuce, flipping an early outcome and verifying recompute)?
-    - Golden files: Should we include a small golden `edl.json` + `score.json` pair in tests to validate end‑to‑end load/apply behavior?
+  - Decisions — Answers to previously open questions:
+    - Test coverage minima: Yes. Include extended 6–6 sets including a standard 7‑point (win‑by‑2) tiebreak, long deuce/advantage sequences up to the 100‑point practical cap, and a test that flips an early outcome and verifies correct recomputation from that point onward.
+    - Golden files: Yes. Include a small golden `edl.json` + `score.json` pair to validate end‑to‑end load/apply behavior in tests.
 - [ ]  4.15 — Accessibility and focus management
 
   - Description: Ensure keyboard usage mirrors Markup behavior and controls are accessible.
@@ -241,18 +241,18 @@ Decisions incorporated in this spec (answers provided):
     - Time formatting mirrors Markup helpers; locale/language specifics are the same as Markup.
   - Decisions:
     - Screen reader specifics are out of scope for v0.1.0; provide reasonable component names only.
-  - Open questions:
-    - Keyboard focus map: Do we need explicit tab order defined (left list → top action row → transport → speed → bottom panels), or follow toolkit defaults?
+  - Decisions — Answers to previously open questions:
+    - Keyboard focus map / tab order: No explicit tab order; follow Swing/toolkit defaults.
 - [ ]  4.16 — Empty state and edge cases
 
   - Description: Handle projects with no points and other edge cases.
   - Acceptance Criteria:
     - If there are no points, show an empty state with guidance to create points on the Markup tab.
     - If a selected point has zero duration due to malformed data, disable outcome actions and show an inline error until fixed (validation should prevent this in normal flow).
-  - Open questions:
-    - Empty state CTA: Should the empty Scoring state provide a button to switch to Markup immediately?
-    - Malformed data: If a segment is invalid (zero/negative duration), should we offer a “Fix in Markup” quick action from Scoring?
-    - Mixed edits while scoring: If the user edits points in Markup while Scoring is open in another view (future), how should Scoring respond (live reload with selection preserved; prompt to reload)?
+  - Decisions — Answers to previously open questions:
+    - Empty state CTA: No. Show a placeholder on the points panel instructing to add points on the Markup tab first; no direct CTA button to switch tabs in v0.1.0.
+    - Malformed data: Show an inline label on the affected segment indicating invalid duration and disable outcome actions until fixed in Markup; no “Fix in Markup” quick action.
+    - Mixed edits while scoring: Not applicable in v0.1.0 — the edit flow is fully sequential; no live mixed-edit handling.
 
 Appendix — Implementation details mirrored from design/scoring.html (for fidelity)
 
@@ -261,8 +261,31 @@ Appendix — Implementation details mirrored from design/scoring.html (for fidel
 - Next Point button with W hotkey hint appears at the bottom of the list.
 - Video frame maintains aspect ratio (16:9). Scoreboard overlay sits at top‑left of the frame.
 - Per‑point scrub bar directly under the video shows segment start on the left and current time on the right with a "Point segment" label.
-- Top action row on a single line: left side aligned with Player 1 panel’s button, center button is No Point, right side aligns with Player 2 panel’s button.
+- Top action row contains only a centered "No Point" button; Player 1/2 scoring buttons live in the side panels and are also available via hotkeys (A/L).
 - Transport controls: rewind, play/pause (prominent), forward — same icons/positions as on Markup.
 - Playback speed dropdown: presets 2×, 1× (default), 0.5×, 0.25×, 0.1×; always visible; small "↑/↓ speed" hint next to it (tooltip on small screens).
 - Bottom panels (P1/P2): show POINTS value, a "Point for Player" button (hotkeys A/L), and two small blocks for GAMES and SETS each with a reflecting press state for Game Won / Set Won when rules dictate completion.
 - Navigation: W advances to next point; selecting a scored point shows its outcome as pressed.
+
+
+
+Update — 2026-04-15
+
+- Manual Marker and Scoreboard Settings buttons are temporarily disabled in the Scoring tab UI until their functionality is implemented. This is intentional for v0.1.0.
+- Scoreboard overlay in the Scoring tab is temporarily disabled for v0.1.0. A proper, reliable overlay will be implemented in v0.2.0.
+
+- [ ]  4.17 — Player names inputs and dynamic labels
+
+  - Description: Add two text inputs under the left points list: "Player 1 name" and "Player 2 name" with default values "Player 1" and "Player 2". Persist names to `score.json` (ScoreV1) and use them to dynamically label scoring buttons and overlays on this tab.
+  - Acceptance Criteria:
+    - Two inputs are visible under the points list with labels "Player 1 name" and "Player 2 name".
+    - Defaults are prefilled as "Player 1" and "Player 2" on empty projects; on load, inputs reflect values from `score.json` when present.
+    - On change, names are saved to `score.json` (v1) with minimal debounce (~300 ms) consistent with scoring autosave.
+    - The actions/buttons read "Point for <Player 1 name>" and "Point for <Player 2 name>" in the UI (including any on‑screen hints) and update immediately as the user types.
+  - Implementation Guide:
+    - Bind inputs to a small `PlayerNames` model within scoring state and serialize into `ScoreV1` alongside `outcomes`.
+    - Enforce a practical max length (e.g., 24 chars) and trim whitespace; allow empty to fallback to defaults in UI.
+    - Consider simple uppercase transformation only in overlay/labels if needed for style; keep original casing in inputs and persistence.
+  - Decisions:
+    - Hotkeys remain A/N/L; only button texts change. Tooltips and aria‑labels include the current player names.
+    - Player accent colors are unchanged (fixed), only names are user‑configurable in v0.1.0.

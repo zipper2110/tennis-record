@@ -10,6 +10,12 @@ import java.io.File
 import javax.swing.*
 import javax.swing.border.EmptyBorder
 import javax.swing.event.ChangeListener
+import javax.swing.event.DocumentEvent
+import javax.swing.event.DocumentListener
+import javax.swing.text.AbstractDocument
+import javax.swing.text.AttributeSet
+import javax.swing.text.BadLocationException
+import javax.swing.text.DocumentFilter
 import kotlin.math.max
 import org.litvin.SessionSettings
 import javax.swing.SwingUtilities
@@ -37,6 +43,8 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
     fun onActivated() {
         isActive = true
         try { player.pause() } catch (_: Throwable) {}
+        // Refresh points every time the tab is opened to reflect latest Markup changes
+        try { refreshPointsFromProject() } catch (_: Throwable) { }
         // Do not auto-play; optionally restore focus
         EventQueue.invokeLater { try { player.component.requestFocusInWindow() } catch (_: Throwable) {} }
     }
@@ -71,8 +79,8 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
     private val scoredPointIds: Set<String>
         get() = outcomesByPointId.keys
 
-    // Autosave debounce timer (~300 ms) for score.json (Task 4.9)
-    private val autosaveTimer = javax.swing.Timer(300) { _ -> autosaveNow() }.apply { isRepeats = false }
+    // Autosave timer for names typing debounce (~300 ms)
+    private val namesSaveTimer = javax.swing.Timer(300) { _ -> autosaveNow() }.apply { isRepeats = false }
 
     // Left list UI refs
     private lateinit var headerTotalBadge: JLabel
@@ -83,15 +91,22 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
     private var selectedIndex: Int = -1
     private lateinit var nextPointBtn: JButton
 
+    // Player names (Task 4.17)
+    private var player1Name: String = "Player 1"
+    private var player2Name: String = "Player 2"
+    private lateinit var p1NameField: JTextField
+    private lateinit var p2NameField: JTextField
+    private var isUpdatingNameFields: Boolean = false
+
     // Scrub/UI refs in center
     private lateinit var segStartLabel: JLabel
     private lateinit var segNowLabel: JLabel
     private lateinit var scrubSlider: JSlider
+    private lateinit var segErrorLabel: JLabel
     private lateinit var videoFrame: JComponent
 
-    // Overlay UI (Task 4.12)
-    private lateinit var overlayPanel: JPanel
-    private lateinit var overlayTitle: JLabel
+    // Overlay UI (Task 4.12) — temporarily removed for v0.1.0; will be reimplemented in v0.2.0.
+    // (Keeping method stubs like updateOverlay() as no-ops to simplify future reintegration.)
 
     // Speed control UI
     private lateinit var speedCombo: JComboBox<String>
@@ -134,17 +149,30 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
     fun setProjectManifest(path: String) {
         this.currentManifestPath = path
         try {
+            try { namesSaveTimer.stop() } catch (_: Throwable) { }
             this.projectDir = File(path).parentFile.absolutePath
             // Load points from EDL (sorted by startMs)
             val edl = EdlIO.readForProjectDir(projectDir!!)
             points = edl.points.sortedBy { it.startMs }
-            // Load outcomes from score.json (ignore orphans)
+            // Load outcomes and player names from score.json (ignore orphans)
             outcomesByPointId.clear()
             try {
                 val score = ScoreIO.readForProjectDir(projectDir!!)
+                // Names
+                player1Name = score.player1Name
+                player2Name = score.player2Name
+                if (::p1NameField.isInitialized && ::p2NameField.isInitialized) {
+                    isUpdatingNameFields = true
+                    try {
+                        p1NameField.text = player1Name
+                        p2NameField.text = player2Name
+                    } finally { isUpdatingNameFields = false }
+                }
+                refreshNameDependentUi()
+                // Outcomes
                 val validIds = points.map { it.id }.toSet()
                 score.outcomes.forEach { (id, out) -> if (id in validIds) outcomesByPointId[id] = out }
-            } catch (_: Throwable) { /* keep empty on error */ }
+            } catch (_: Throwable) { /* keep defaults and empty on error */ }
             rebuildPointsList()
             autoSelectInitial()
             // Load media from manifest
@@ -157,6 +185,34 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
             // Keep scaffold visible; in real app show dialog
             t.printStackTrace()
         }
+    }
+
+    // Reload points from the project's EDL and refresh UI; invoked on tab activation
+    private fun refreshPointsFromProject() {
+        try {
+            val dir = projectDir ?: return
+            // Remember currently selected point id (if any) to restore selection after reload
+            val prevSelectedId = if (selectedIndex in points.indices) points[selectedIndex].id else null
+            // Re-read EDL and sort points
+            val edl = EdlIO.readForProjectDir(dir)
+            val newPoints = edl.points.sortedBy { it.startMs }
+            points = newPoints
+            // Remove outcomes for orphaned point ids (keep existing outcomes for still-valid ids)
+            val validIds = newPoints.map { it.id }.toSet()
+            val itKeys = outcomesByPointId.keys.iterator()
+            while (itKeys.hasNext()) {
+                val k = itKeys.next()
+                if (!validIds.contains(k)) itKeys.remove()
+            }
+            // Rebuild list UI and restore selection if possible
+            rebuildPointsList()
+            val newIndex = prevSelectedId?.let { id -> newPoints.indexOfFirst { it.id == id } } ?: -1
+            when {
+                newIndex >= 0 -> setSelectedIndex(newIndex, userInitiated = false)
+                newPoints.isNotEmpty() && selectedIndex !in newPoints.indices -> autoSelectInitial()
+                else -> { /* keep current selection (or none) */ }
+            }
+        } catch (_: Throwable) { /* ignore refresh errors to avoid breaking UI */ }
     }
 
     init {
@@ -184,9 +240,17 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
                 // Apply current session speed to player
                 try { player.setRate(SessionSettings.toRate(SessionSettings.playbackSpeedIndex)) } catch (_: Throwable) {}
                 if (selectedIndex in points.indices) {
-                    // Jump to start of current segment
-                    player.seek(segStartMs)
-                    player.pause()
+                    // Jump to start of current segment and ensure a preview frame is rendered immediately
+                    // Some VLC builds keep the canvas black until the first decoded frame is shown.
+                    // Nudge by seeking a millisecond forward and back while paused to force a frame render.
+                    try {
+                        player.pause()
+                        player.seek(segStartMs)
+                        val maxPlayable = (segEndMs - 1).coerceAtLeast(segStartMs)
+                        val nudge = (segStartMs + 1).coerceAtMost(maxPlayable)
+                        if (nudge != segStartMs) player.seek(nudge)
+                        player.seek(segStartMs)
+                    } catch (_: Throwable) { /* ignore preview priming errors */ }
                 }
                 updatePlayPauseButton()
             }
@@ -201,26 +265,39 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
             headerTotalBadge.text = "${points.size} Total"
             val scoredCount = points.count { scoredPointIds.contains(it.id) }
             headerScoredBadge.text = "$scoredCount Scored"
-            points.forEachIndexed { i, p ->
-                val label = buildString {
-                    append("#${i + 1}")
-                    p.label?.let { if (it.isNotBlank()) append(" — ").append(it) }
-                }
-                val startTc = Timecode.format(p.startMs.toLong()).substring(0, 8)
-                val durSec = max(0, (p.endMs - p.startMs)) / 1000
-                val isScored = scoredPointIds.contains(p.id)
-                val row = pointRow(label, startTc, durSec, isScored)
-                // Selection visuals and click handler
-                decorateRowSelection(row, selected = (i == selectedIndex), scored = isScored)
-                row.cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
-                row.addMouseListener(object : MouseAdapter() {
-                    override fun mouseClicked(e: MouseEvent) {
-                        setSelectedIndex(i, userInitiated = true)
+            if (points.isEmpty()) {
+                // Empty state per Task 4.16 — guidance to create points on Markup tab
+                val empty = JPanel(BorderLayout())
+                empty.isOpaque = false
+                empty.border = EmptyBorder(12, 8, 12, 8)
+                val msg = JLabel("No points yet. Open the Markup tab and add point markers.")
+                msg.foreground = Color(0xAD, 0xAA, 0xAA)
+                msg.font = msg.font.deriveFont(Font.ITALIC, 12f)
+                empty.add(msg, BorderLayout.NORTH)
+                listContainer.add(empty)
+                try { if (::nextPointBtn.isInitialized) nextPointBtn.isEnabled = false } catch (_: Throwable) {}
+            } else {
+                points.forEachIndexed { i, p ->
+                    val label = buildString {
+                        append("#${i + 1}")
+                        p.label?.let { if (it.isNotBlank()) append(" — ").append(it) }
                     }
-                })
-                rowComponents.add(row)
-                listContainer.add(row)
-                listContainer.add(Box.createVerticalStrut(4))
+                    val startTc = Timecode.format(p.startMs.toLong()).substring(0, 8)
+                    val durSec = max(0, (p.endMs - p.startMs)) / 1000
+                    val isScored = scoredPointIds.contains(p.id)
+                    val row = pointRow(label, startTc, durSec, isScored)
+                    // Selection visuals and click handler
+                    decorateRowSelection(row, selected = (i == selectedIndex), scored = isScored)
+                    row.cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
+                    row.addMouseListener(object : MouseAdapter() {
+                        override fun mouseClicked(e: MouseEvent) {
+                            setSelectedIndex(i, userInitiated = true)
+                        }
+                    })
+                    rowComponents.add(row)
+                    listContainer.add(row)
+                    listContainer.add(Box.createVerticalStrut(4))
+                }
             }
             listContainer.revalidate()
             listContainer.repaint()
@@ -264,6 +341,8 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
             segStartLabel.text = "00:00:00"
             segNowLabel.text = "00:00:00  "
             scrubSlider.value = 0
+            // Hide inline error on no selection
+            try { if (::segErrorLabel.isInitialized) segErrorLabel.isVisible = false } catch (_: Throwable) {}
             updateActionButtonsState(enable = false, selectedOutcome = null)
             // Disable Next on no selection or empty list
             try { if (::nextPointBtn.isInitialized) nextPointBtn.isEnabled = false } catch (_: Throwable) {}
@@ -277,17 +356,27 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
         // Update segment bounds
         segStartMs = p.startMs.toLong()
         segEndMs = p.endMs.toLong()
-        // Update scrub panel to show segment start and reset current within-segment time
+        // Update scrub panel to show segment start and end of the point
         segStartLabel.text = Timecode.format(segStartMs).substring(0, 8)
+        segNowLabel.text = Timecode.format(segEndMs).substring(0, 8) + "  "
         updateScrubUi(segStartMs)
         // Jump playback to start and pause; focus player when active
         player.pause()
         player.seek(segStartMs)
+        // Prime a preview frame to avoid an initial black canvas on some systems
+        try {
+            val maxPlayable = (segEndMs - 1).coerceAtLeast(segStartMs)
+            val nudge = (segStartMs + 1).coerceAtMost(maxPlayable)
+            if (nudge != segStartMs) player.seek(nudge)
+            player.seek(segStartMs)
+        } catch (_: Throwable) { }
         if (isActive) player.component.requestFocusInWindow()
         // Update action buttons based on existing stored outcome and validity
         val valid = segEndMs > segStartMs
         val existing = outcomesByPointId[p.id]
         updateActionButtonsState(enable = valid, selectedOutcome = existing)
+        // Inline error indicator for malformed/zero-duration segments (Task 4.16)
+        try { if (::segErrorLabel.isInitialized) segErrorLabel.isVisible = !valid } catch (_: Throwable) {}
         // Enable/disable Next based on whether a subsequent point exists
         try { if (::nextPointBtn.isInitialized) nextPointBtn.isEnabled = (selectedIndex + 1) in points.indices } catch (_: Throwable) {}
         // Recompute panels for current selection
@@ -350,7 +439,8 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
             } finally {
                 isScrubUpdatingFromPlayer = false
             }
-            segNowLabel.text = Timecode.format(rel).substring(0, 8) + "  "
+            // Show the ending time of the point on the right label (not the current playback position)
+            segNowLabel.text = Timecode.format(segEndMs).substring(0, 8) + "  "
         } else {
             isScrubUpdatingFromPlayer = true
             try { scrubSlider.value = 0 } finally { isScrubUpdatingFromPlayer = false }
@@ -366,7 +456,7 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
                 BorderFactory.createMatteBorder(0, 3, 0, 0, Color(0xA1, 0xFE, 0x00)),
                 (row.border ?: EmptyBorder(0, 0, 0, 0))
             )
-        } else EmptyBorder(8, 8, 8, 8)
+        } else EmptyBorder(4, 8, 4, 8)
     }
 
     private fun buildLeftListPanel(): JComponent {
@@ -374,7 +464,7 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
         panel.layout = BorderLayout()
         panel.background = Color(0x15, 0x15, 0x15)
         panel.border = BorderFactory.createMatteBorder(0, 0, 0, 1, Color(0x48, 0x48, 0x47, 0x33))
-        panel.preferredSize = Dimension(320, 0) // Match mock left panel width (~320 px)
+        panel.preferredSize = Dimension(240, 0) // Fixed left list width per spec (was ~320 px)
 
         // Header with badges: "Point Markers" + Total/Scored
         val header = JPanel(BorderLayout())
@@ -404,12 +494,18 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
         listScroll = JScrollPane(listContainer)
         listScroll.border = null
         listScroll.verticalScrollBar.unitIncrement = 16
+        // Match Markup list background — avoid white viewport
+        listScroll.isOpaque = false
+        listScroll.viewport.isOpaque = false
+        listScroll.background = panel.background
+        listScroll.viewport.background = panel.background
         panel.add(listScroll, BorderLayout.CENTER)
 
-        // Footer buttons: Next Point (W), Manual Marker, Scoreboard Settings — all no-ops
+        // Footer buttons and Player Names (Task 4.17)
         val footer = JPanel()
         footer.layout = BoxLayout(footer, BoxLayout.Y_AXIS)
-        footer.border = EmptyBorder(8, 8, 8, 8)
+        // Match points list side padding (6px) so buttons align to list width
+        footer.border = EmptyBorder(6, 6, 6, 6)
         footer.isOpaque = false
 
         fun fullButton(text: String): JButton {
@@ -421,23 +517,115 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
                 BorderFactory.createLineBorder(Color(0x48, 0x48, 0x47, 0x55), 1),
                 EmptyBorder(8, 8, 8, 8)
             )
+            // Make the button stretch to full available width in the footer
+            val prefH = b.preferredSize.height
+            b.maximumSize = Dimension(Int.MAX_VALUE, prefH)
+            b.minimumSize = Dimension(0, prefH)
             b.alignmentX = 0f
             return b
         }
 
-        nextPointBtn = fullButton("Next Point    W")
+        nextPointBtn = fullButton("Next Point  [R]")
+        nextPointBtn.name = "next-point"
+        nextPointBtn.accessibleContext.accessibleName = "Next Point"
+        nextPointBtn.toolTipText = "R — Next Point"
         nextPointBtn.addActionListener { advanceToNextPoint() }
         nextPointBtn.isEnabled = false
         val manualBtn = fullButton("Manual Marker")
+        manualBtn.name = "manual-marker"
+        manualBtn.accessibleContext.accessibleName = "Manual Marker"
         manualBtn.foreground = Color(0xFF, 0xFF, 0xFF)
+        manualBtn.isEnabled = false
+        manualBtn.toolTipText = "Temporarily disabled"
         val settingsBtn = fullButton("Scoreboard Settings")
+        settingsBtn.name = "scoreboard-settings"
+        settingsBtn.accessibleContext.accessibleName = "Scoreboard Settings"
         settingsBtn.foreground = Color(0xFF, 0xFF, 0xFF)
+        settingsBtn.isEnabled = false
+        settingsBtn.toolTipText = "Temporarily disabled"
+
+        // Player names panel
+        fun nameField(labelText: String): JTextField {
+            val tf = JTextField()
+            tf.background = Color(0x26, 0x26, 0x26)
+            tf.foreground = Color(0xFF, 0xFF, 0xFF)
+            tf.caretColor = Color(0xFF, 0xFF, 0xFF)
+            tf.border = BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(Color(0x48, 0x48, 0x47, 0x55), 1),
+                EmptyBorder(6, 6, 6, 6)
+            )
+            tf.maximumSize = Dimension(Int.MAX_VALUE, tf.preferredSize.height)
+            tf.alignmentX = 0f
+            try { tf.accessibleContext.accessibleName = labelText } catch (_: Throwable) { }
+            // Limit to 24 chars
+            val doc = tf.document
+            if (doc is AbstractDocument) {
+                doc.documentFilter = object : DocumentFilter() {
+                    @Throws(BadLocationException::class)
+                    override fun insertString(fb: FilterBypass, offs: Int, str: String, a: AttributeSet?) {
+                        val newLen = fb.document.length + (str.length)
+                        if (newLen <= 24) super.insertString(fb, offs, str, a)
+                        else {
+                            val allowed = 24 - fb.document.length
+                            if (allowed > 0) super.insertString(fb, offs, str.substring(0, allowed), a)
+                        }
+                    }
+                    @Throws(BadLocationException::class)
+                    override fun replace(fb: FilterBypass, offs: Int, length: Int, str: String?, a: AttributeSet?) {
+                        val currentLen = fb.document.length
+                        val addLen = str?.length ?: 0
+                        val newLen = currentLen - length + addLen
+                        if (newLen <= 24) super.replace(fb, offs, length, str, a)
+                        else {
+                            val allowed = 24 - (currentLen - length)
+                            if (allowed > 0 && str != null) super.replace(fb, offs, length, str.substring(0, allowed), a)
+                        }
+                    }
+                }
+            }
+            return tf
+        }
+        val p1Label = JLabel("Player 1 name")
+        p1Label.foreground = Color(0xAD, 0xAA, 0xAA)
+        p1Label.font = p1Label.font.deriveFont(Font.BOLD, 10f)
+        p1NameField = nameField("Player 1 name")
+        val p2Label = JLabel("Player 2 name")
+        p2Label.foreground = Color(0xAD, 0xAA, 0xAA)
+        p2Label.font = p2Label.font.deriveFont(Font.BOLD, 10f)
+        p2NameField = nameField("Player 2 name")
+
+        fun onNameChanged(isP1: Boolean) {
+            if (isUpdatingNameFields) return
+            val raw = if (isP1) p1NameField.text else p2NameField.text
+            val trimmed = raw.trim()
+            if (isP1) player1Name = trimmed else player2Name = trimmed
+            refreshNameDependentUi()
+            try { namesSaveTimer.restart() } catch (_: Throwable) { autosaveNow() }
+        }
+        p1NameField.document.addDocumentListener(object : DocumentListener {
+            override fun insertUpdate(e: DocumentEvent) = onNameChanged(true)
+            override fun removeUpdate(e: DocumentEvent) = onNameChanged(true)
+            override fun changedUpdate(e: DocumentEvent) = onNameChanged(true)
+        })
+        p2NameField.document.addDocumentListener(object : DocumentListener {
+            override fun insertUpdate(e: DocumentEvent) = onNameChanged(false)
+            override fun removeUpdate(e: DocumentEvent) = onNameChanged(false)
+            override fun changedUpdate(e: DocumentEvent) = onNameChanged(false)
+        })
 
         footer.add(nextPointBtn)
         footer.add(Box.createVerticalStrut(6))
         footer.add(manualBtn)
         footer.add(Box.createVerticalStrut(6))
         footer.add(settingsBtn)
+        footer.add(Box.createVerticalStrut(10))
+        footer.add(p1Label)
+        footer.add(Box.createVerticalStrut(3))
+        footer.add(p1NameField)
+        footer.add(Box.createVerticalStrut(6))
+        footer.add(p2Label)
+        footer.add(Box.createVerticalStrut(3))
+        footer.add(p2NameField)
 
         val footerWrap = JPanel(BorderLayout())
         footerWrap.isOpaque = false
@@ -449,7 +637,7 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
 
     private fun pointRow(label: String, startTc: String, durationSec: Int, scored: Boolean): JComponent {
         val row = JPanel(BorderLayout(6, 0))
-        row.border = EmptyBorder(8, 8, 8, 8)
+        row.border = EmptyBorder(4, 8, 4, 8)
         row.background = if (scored) Color(0x2C, 0x2C, 0x2C) else Color(0x1A, 0x1A, 0x1A)
         val left = JLabel("$startTc • ${durationSec}s")
         left.font = Font(Font.MONOSPACED, Font.PLAIN, 10)
@@ -460,10 +648,15 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
         center.font = center.font.deriveFont(Font.PLAIN, 12f)
         row.add(center, BorderLayout.CENTER)
         if (scored) {
-            val check = JLabel("\u2714")
-            check.foreground = Color(0xA1, 0xFE, 0x00)
+            val check = JLabel()
+            check.icon = scoredIcon(18)
             row.add(check, BorderLayout.EAST)
         }
+        val fixedH = 40
+        row.minimumSize = Dimension(0, fixedH)
+        row.preferredSize = Dimension(0, fixedH)
+        row.maximumSize = Dimension(Int.MAX_VALUE, fixedH)
+        row.alignmentX = 0f
         return row
     }
 
@@ -475,6 +668,37 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
         l.border = EmptyBorder(2, 6, 2, 6)
         l.font = l.font.deriveFont(10f)
         return l
+    }
+
+    // Green circle with white checkmark icon for scored points
+    private fun scoredIcon(size: Int = 18): Icon {
+        return object : Icon {
+            override fun getIconWidth(): Int = size
+            override fun getIconHeight(): Int = size
+            override fun paintIcon(c: Component?, g: Graphics?, x: Int, y: Int) {
+                if (g == null) return
+                val g2 = (g.create() as Graphics2D)
+                try {
+                    g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+                    val d = size
+                    val green = Color(0x71, 0xB4, 0x00)
+                    // Draw filled green circle
+                    g2.color = green
+                    g2.fillOval(x, y, d, d)
+                    // Draw white checkmark
+                    val s = d.toDouble()
+                    val p = java.awt.geom.Path2D.Double()
+                    p.moveTo(x + 0.28 * s, y + 0.55 * s)
+                    p.lineTo(x + 0.45 * s, y + 0.72 * s)
+                    p.lineTo(x + 0.75 * s, y + 0.35 * s)
+                    g2.color = Color.WHITE
+                    g2.stroke = BasicStroke((d * 0.12f), BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
+                    g2.draw(p)
+                } finally {
+                    g2.dispose()
+                }
+            }
+        }
     }
 
     private fun buildCenterPanel(): JComponent {
@@ -496,32 +720,11 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
         // Add media player component (stretched to full area by AspectPanel.doLayout)
         val videoComponent = player.component
         videoComponent.name = "video"
+        try { videoComponent.accessibleContext.accessibleName = "Video player" } catch (_: Throwable) {}
         vf.add(videoComponent)
 
-        // Overlay (top-left) — dynamic scoreboard (Task 4.12)
-        overlayPanel = JPanel()
-        overlayPanel.layout = BorderLayout()
-        overlayPanel.background = Color(0, 0, 0, 160)
-        overlayPanel.border = BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(Color(255, 255, 255, 25)),
-            EmptyBorder(6, 8, 6, 8)
-        )
-        val titleWrap = JPanel(FlowLayout(FlowLayout.LEFT, 8, 0))
-        titleWrap.isOpaque = false
-        overlayTitle = JLabel("Batumi Raketo league")
-        overlayTitle.foreground = Color(0xA1, 0xFE, 0x00)
-        overlayTitle.font = overlayTitle.font.deriveFont(Font.BOLD, 10f)
-        titleWrap.add(overlayTitle)
-        overlayPanel.add(titleWrap, BorderLayout.NORTH)
-        // placeholder center; real content built by updateOverlay()
-        overlayPanel.add(JPanel().apply { isOpaque = false }, BorderLayout.CENTER)
-
-        // Place overlay
-        vf.add(overlayPanel)
-        overlayPanel.setBounds(24, 24, 420, 110)
-
-        // Initial overlay state 0–0
-        updateOverlay(MatchState(0,0,0,0,0,0,null,null,false), emptyList())
+        // Overlay temporarily removed in v0.1.0. A proper implementation will be added in v0.2.0.
+        // No overlay panel/window is created here.
 
         videoWrap.add(vf, BorderLayout.CENTER)
         root.add(videoWrap, BorderLayout.CENTER)
@@ -543,7 +746,16 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
         rightBox.isOpaque = false
         rightBox.add(segNowLabel)
         rightBox.add(segLbl)
+        // Inline error for zero-duration/malformed segment (Task 4.16)
+        segErrorLabel = JLabel("Invalid point duration — fix on Markup tab")
+        segErrorLabel.foreground = Color(0xFF, 0x66, 0x66)
+        segErrorLabel.font = segLbl.font.deriveFont(Font.BOLD, 10f)
+        segErrorLabel.isVisible = false
+        rightBox.add(segErrorLabel)
         scrubSlider = JSlider(0, 100, 0)
+        scrubSlider.name = "scrub"
+        try { scrubSlider.accessibleContext.accessibleName = "Point segment scrub bar" } catch (_: Throwable) {}
+        scrubSlider.toolTipText = "Scrub within the selected point segment"
         scrubSlider.background = scrubPanel.background
         scrubSlider.addChangeListener(ChangeListener {
             if (isScrubUpdatingFromPlayer) return@ChangeListener
@@ -563,7 +775,6 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
 
         // Bottom controls & player panels
         val bottom = JPanel(BorderLayout())
-        bottom.border = EmptyBorder(8, 12, 8, 12)
         bottom.background = Color(0x1A, 0x1A, 0x1A)
 
         val leftPlayer = buildPlayerPanel("Player 1", primary = true)
@@ -574,9 +785,9 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
         bottom.add(centerControls, BorderLayout.CENTER)
         bottom.add(rightPlayer, BorderLayout.EAST)
 
-        val southWrap = JPanel(BorderLayout())
-        southWrap.add(bottom, BorderLayout.CENTER)
-        southWrap.border = BorderFactory.createMatteBorder(1, 0, 0, 0, Color(0x48, 0x48, 0x47, 0x33))
+        // Apply former southWrap border directly to the bottom panel and drop the extra wrapper
+        // Preserve previous 10px padding by composing MatteBorder (outer) + EmptyBorder (inner)
+        bottom.border = EmptyBorder(10, 20, 20, 20)
 
         // Attach south after the scrub bar: create a stack (video -> scrub -> bottom)
         val centerStack = JPanel()
@@ -586,7 +797,7 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
 
         val centerWithBottom = JPanel(BorderLayout())
         centerWithBottom.add(centerStack, BorderLayout.CENTER)
-        centerWithBottom.add(southWrap, BorderLayout.SOUTH)
+        centerWithBottom.add(bottom, BorderLayout.SOUTH)
 
         return centerWithBottom
     }
@@ -613,7 +824,7 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
         if (primary) p1PointsVal = pointsVal else p2PointsVal = pointsVal
 
         // "Point for Player" button (duplicates top actions) — toggle to reflect pressed state (Task 4.11)
-        val pointBtn = JToggleButton("Point for $name")
+        val pointBtn = JToggleButton("Point for $name   " + if (primary) "[Q]" else "[E]")
         pointBtn.isFocusPainted = false
         pointBtn.foreground = if (primary) Color(0x42, 0xA5, 0xF5) else Color(0xEF, 0x53, 0x50)
         pointBtn.background = Color(0x26, 0x26, 0x26)
@@ -621,6 +832,11 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
             BorderFactory.createLineBorder(Color(0x48, 0x48, 0x47, 0x33), 1),
             EmptyBorder(6, 10, 6, 10)
         )
+        try {
+            pointBtn.name = if (primary) "p1-point" else "p2-point"
+            pointBtn.accessibleContext.accessibleName = if (primary) "Point for Player 1" else "Point for Player 2"
+            pointBtn.toolTipText = if (primary) "Q — Point for Player 1" else "E — Point for Player 2"
+        } catch (_: Throwable) {}
         pointBtn.addActionListener {
             setOutcomeForSelected(if (primary) Outcome.P1 else Outcome.P2)
         }
@@ -647,14 +863,28 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
             val v = JLabel("0")
             v.foreground = Color.WHITE
             v.font = v.font.deriveFont(Font.BOLD, 24f)
-            val btn = JToggleButton(buttonText)
-            btn.isEnabled = false // read-only indicator per 4.7 decisions
-            btn.foreground = accent
-            btn.background = Color(0x26, 0x26, 0x26)
+            val btn = object : JToggleButton(buttonText) {
+                override fun processMouseEvent(e: java.awt.event.MouseEvent) { /* block mouse to keep read-only */ }
+                override fun processKeyEvent(e: java.awt.event.KeyEvent) { /* block keyboard activation */ }
+            }
+            // Style to match mock: dark surface with thin border; keep enabled for proper colors
+            UiStyles.styleSecondary(btn)
+            // Keep as read-only indicator but preserve styling colors; leave enabled to avoid LAF greying
+            btn.isFocusable = false
+            btn.isRequestFocusEnabled = false
+            btn.isRolloverEnabled = false
+            btn.cursor = Cursor.getDefaultCursor()
+            // Slightly smaller padding to fit the compact stat card
             btn.border = BorderFactory.createCompoundBorder(
                 BorderFactory.createLineBorder(Color(0x48, 0x48, 0x47, 0x33), 1),
                 EmptyBorder(6, 8, 6, 8)
             )
+            try {
+                btn.name = (if (buttonText.contains("Game")) "game-won" else "set-won") + (if (primary) "-p1" else "-p2")
+                btn.accessibleContext.accessibleName = (if (buttonText.contains("Game")) "Game Won" else "Set Won") +
+                        if (primary) " — Player 1 (computed)" else " — Player 2 (computed)"
+                btn.toolTipText = "Computed automatically"
+            } catch (_: Throwable) {}
             t.alignmentX = 0.5f
             v.alignmentX = 0.5f
             btn.alignmentX = 0.5f
@@ -688,39 +918,6 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
         return panel
     }
 
-    private fun smallStatPanel(title: String, value: String, accent: Color, buttonText: String): JComponent {
-        val p = JPanel()
-        p.layout = BoxLayout(p, BoxLayout.Y_AXIS)
-        p.background = Color(0x10, 0x10, 0x10)
-        p.border = EmptyBorder(8, 8, 8, 8)
-
-        val t = JLabel(title)
-        t.foreground = Color(0xAD, 0xAA, 0xAA)
-        t.font = t.font.deriveFont(Font.BOLD, 10f)
-        val v = JLabel(value)
-        v.foreground = Color.WHITE
-        v.font = v.font.deriveFont(Font.BOLD, 24f)
-        val btn = JButton(buttonText)
-        btn.isEnabled = false // v0.1.0: read-only indicator
-        btn.foreground = accent
-        btn.background = Color(0x26, 0x26, 0x26)
-        btn.border = BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(Color(0x48, 0x48, 0x47, 0x33), 1),
-            EmptyBorder(6, 8, 6, 8)
-        )
-
-        t.alignmentX = 0.5f
-        v.alignmentX = 0.5f
-        btn.alignmentX = 0.5f
-
-        p.add(t)
-        p.add(Box.createVerticalStrut(4))
-        p.add(v)
-        p.add(Box.createVerticalStrut(6))
-        p.add(btn)
-        return p
-    }
-
     private fun buildCenterControls(): JComponent {
         val wrap = JPanel()
         wrap.layout = BoxLayout(wrap, BoxLayout.Y_AXIS)
@@ -743,21 +940,18 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
             )
             return b
         }
-        btnP1 = makeToggle("Point for Player 1   [A]")
-        btnNone = makeToggle("No Point   [N]")
-        btnP2 = makeToggle("Point for Player 2   [L]")
+        btnNone = makeToggle("No Point   [W]")
+        btnNone.name = "score-none"
+        btnNone.accessibleContext.accessibleName = "No Point"
+        btnNone.toolTipText = "W — No Point"
 
         // Make them act like radio buttons
         val group = ButtonGroup()
-        group.add(btnP1); group.add(btnNone); group.add(btnP2)
+        group.add(btnNone)
 
-        btnP1.addActionListener { setOutcomeForSelected(Outcome.P1) }
         btnNone.addActionListener { setOutcomeForSelected(Outcome.NONE) }
-        btnP2.addActionListener { setOutcomeForSelected(Outcome.P2) }
 
-        leftWrap.add(btnP1)
         centerWrap.add(btnNone)
-        rightWrap.add(btnP2)
         actionRow.add(leftWrap, BorderLayout.WEST)
         actionRow.add(centerWrap, BorderLayout.CENTER)
         actionRow.add(rightWrap, BorderLayout.EAST)
@@ -795,6 +989,12 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
         btnSeekBack1.toolTipText = "Left"
         btnSeekFwd1.toolTipText = "Right"
         btnSeekFwd10.toolTipText = "Shift+Right"
+        try {
+            btnSeekBack10.accessibleContext.accessibleName = "Seek back 10 seconds"
+            btnSeekBack1.accessibleContext.accessibleName = "Seek back 1 second"
+            btnSeekFwd1.accessibleContext.accessibleName = "Seek forward 1 second"
+            btnSeekFwd10.accessibleContext.accessibleName = "Seek forward 10 seconds"
+        } catch (_: Throwable) {}
         btnSeekBack10.horizontalTextPosition = SwingConstants.RIGHT
         btnSeekBack1.horizontalTextPosition = SwingConstants.RIGHT
         btnSeekFwd1.horizontalTextPosition = SwingConstants.LEFT
@@ -807,6 +1007,11 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
 
         // Square Play/Pause button
         btnPlayPause = UiStyles.squarePrimaryButton(UiStyles.playIcon(28)) { togglePlayPause() }
+        try {
+            btnPlayPause.name = "play-pause"
+            btnPlayPause.accessibleContext.accessibleName = "Play or Pause"
+            btnPlayPause.toolTipText = "SPACE — Play/Pause"
+        } catch (_: Throwable) {}
 
         // Assemble row similar to Markup
         transport.add(btnSeekBack10); transport.add(Box.createHorizontalStrut(6))
@@ -821,6 +1026,8 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
         val speeds = arrayOf("2×", "1×", "0.5×", "0.25×", "0.1×")
         speedCombo = JComboBox(speeds)
         speedCombo.isFocusable = true
+        speedCombo.name = "speed-dropdown"
+        try { speedCombo.accessibleContext.accessibleName = "Playback speed" } catch (_: Throwable) {}
         speedCombo.selectedIndex = SessionSettings.clampIndex(SessionSettings.playbackSpeedIndex)
         speedCombo.toolTipText = "Use ↑/↓ to change speed"
         // Apply current speed to player immediately (affects playback instantly)
@@ -922,12 +1129,12 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
             if (!isPlayerAreaFocus()) return@bind
             changeSpeedBy(1)
         }
-        // Scoring hotkeys: A = P1, N = No Point, L = P2 (Task 4.6)
-        bind("A", "scoreP1") { setOutcomeForSelected(Outcome.P1) }
-        bind("N", "scoreNone") { setOutcomeForSelected(Outcome.NONE) }
-        bind("L", "scoreP2") { setOutcomeForSelected(Outcome.P2) }
-        // Next Point navigation (Task 4.10): W advances to next index without auto-play
-        bind("W", "nextPoint") { advanceToNextPoint() }
+        // Scoring hotkeys: Q = P1, W = No Point, E = P2 (Task 4.6)
+        bind("Q", "scoreP1") { setOutcomeForSelected(Outcome.P1) }
+        bind("W", "scoreNone") { setOutcomeForSelected(Outcome.NONE) }
+        bind("E", "scoreP2") { setOutcomeForSelected(Outcome.P2) }
+        // Next Point navigation (Task 4.10): R advances to next index without auto-play
+        bind("R", "nextPoint") { advanceToNextPoint() }
     }
 
     private fun isSpeedComboFocus(): Boolean {
@@ -999,19 +1206,57 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
     private var statesAfterPoint: MutableList<MatchState> = mutableListOf()
     private var setHistoryAfterPoint: MutableList<List<SetScore>> = mutableListOf()
 
-    // ===== Task 4.9 — Persistence helpers (score.json with debounce) =====
+    // ===== Task 4.13 — Persistence helpers (score.json, save immediately) =====
     private fun scheduleScoreAutosave() {
-        try { autosaveTimer.restart() } catch (_: Throwable) { }
+        // Save immediately on change (no debounce) per 4.13
+        autosaveNow()
     }
     private fun autosaveNow() {
         try {
             val dir = projectDir ?: return
             val map = LinkedHashMap(outcomesByPointId) // snapshot
-            ScoreIO.writeForProjectDir(dir, ScoreV1(outcomes = map, version = 1))
+            val s1 = player1Name
+            val s2 = player2Name
+            ScoreIO.writeForProjectDir(dir, ScoreV1(outcomes = map, version = 1, player1Name = s1, player2Name = s2))
         } catch (t: Throwable) {
             // Non-fatal; show error similarly to Markup autosave
             try { SwingDialogUtils.showError(this, t, "Autosave failed") } catch (_: Throwable) { }
         }
+    }
+    fun saveNow() { // exposed for File -> Save All
+        try { autosaveNow() } catch (_: Throwable) { }
+    }
+
+    // ===== Task 4.17 — Dynamic labels for scoring buttons based on player names =====
+    private fun displayNameP1(): String = player1Name.ifBlank { "Player 1" }
+    private fun displayNameP2(): String = player2Name.ifBlank { "Player 2" }
+
+    private fun refreshNameDependentUi() {
+        val name1 = displayNameP1()
+        val name2 = displayNameP2()
+        try {
+            if (::p1PointBtn.isInitialized) {
+                p1PointBtn.text = "Point for $name1   [Q]"
+                p1PointBtn.toolTipText = "Q — Point for $name1"
+                try { p1PointBtn.accessibleContext.accessibleName = "Point for $name1" } catch (_: Throwable) {}
+            }
+            if (::p2PointBtn.isInitialized) {
+                p2PointBtn.text = "Point for $name2   [E]"
+                p2PointBtn.toolTipText = "E — Point for $name2"
+                try { p2PointBtn.accessibleContext.accessibleName = "Point for $name2" } catch (_: Throwable) {}
+            }
+            if (::btnP1.isInitialized) {
+                btnP1.text = "Point for $name1   [Q]"
+                btnP1.toolTipText = "Q — Point for $name1"
+                try { btnP1.accessibleContext.accessibleName = "Point for $name1" } catch (_: Throwable) {}
+            }
+            if (::btnP2.isInitialized) {
+                btnP2.text = "Point for $name2   [E]"
+                btnP2.toolTipText = "E — Point for $name2"
+                try { btnP2.accessibleContext.accessibleName = "Point for $name2" } catch (_: Throwable) {}
+            }
+        } catch (_: Throwable) { }
+        // Update any other UI that might display names later (e.g., overlay in v0.2.0)
     }
 
     private fun recomputeFrom(index: Int) {
@@ -1162,71 +1407,8 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
 
     // ===== Task 4.12: Overlay scoreboard above the video =====
     private fun updateOverlay(state: MatchState, completedSets: List<SetScore>) {
-        if (!::overlayPanel.isInitialized) return
-        // Build dynamic center content: two rows (P1/P2), columns = completed sets + current set + points
-        fun label(text: String, fg: Color, bold: Boolean = false, size: Float = 12f): JLabel {
-            val l = JLabel(text)
-            l.foreground = fg
-            l.font = if (bold) l.font.deriveFont(Font.BOLD, size) else l.font.deriveFont(size)
-            return l
-        }
-        fun cell(text: String, alignLeft: Boolean = false, accent: Color? = null): JComponent {
-            val l = JLabel(text)
-            l.foreground = Color.WHITE
-            if (accent != null) l.foreground = accent
-            l.border = EmptyBorder(0, 6, 0, 6)
-            l.horizontalAlignment = if (alignLeft) SwingConstants.LEFT else SwingConstants.CENTER
-            return l
-        }
-        fun displayPointVal(forP1: Boolean): String {
-            val mine = if (forP1) state.p1Pts else state.p2Pts
-            val other = if (forP1) state.p2Pts else state.p1Pts
-            if (state.isTiebreak) return mine.toString()
-            val base = arrayOf("0", "15", "30", "40")
-            if (mine < 4 && other < 4) return base[mine.coerceIn(0, 3)]
-            return if (mine == other) "40" else if (mine > other) "Ad" else "40"
-        }
-
-        val center = JPanel(GridBagLayout())
-        center.isOpaque = false
-        val gbc = GridBagConstraints().apply {
-            insets = Insets(2, 4, 2, 4)
-            anchor = GridBagConstraints.WEST
-        }
-
-        // Names column
-        gbc.gridx = 0; gbc.gridy = 0
-        center.add(label("Player 1", Color.WHITE, bold = true, size = 12f), gbc)
-        gbc.gridy = 1
-        center.add(label("Player 2", Color(0xDD, 0xDD, 0xDD), bold = true, size = 12f), gbc)
-
-        // Add completed set columns
-        var col = 1
-        completedSets.forEach { s ->
-            gbc.gridx = col; gbc.gridy = 0
-            center.add(cell(s.p1.toString()), gbc)
-            gbc.gridy = 1
-            center.add(cell(s.p2.toString()), gbc)
-            col++
-        }
-        // Current set column (games so far)
-        gbc.gridx = col; gbc.gridy = 0
-        center.add(cell(state.gamesP1.toString(), accent = Color(0xA1, 0xFE, 0x00)), gbc)
-        gbc.gridy = 1
-        center.add(cell(state.gamesP2.toString(), accent = Color(0xA1, 0xFE, 0x00)), gbc)
-        col++
-        // Current game points column
-        gbc.gridx = col; gbc.gridy = 0
-        center.add(cell(displayPointVal(true), alignLeft = false), gbc)
-        gbc.gridy = 1
-        center.add(cell(displayPointVal(false), alignLeft = false), gbc)
-
-        // Replace center of overlayPanel
-        val prev = if (overlayPanel.componentCount >= 2) overlayPanel.getComponent(1) else null
-        if (prev != null) overlayPanel.remove(prev)
-        overlayPanel.add(center, BorderLayout.CENTER)
-        overlayPanel.revalidate()
-        overlayPanel.repaint()
+        // Overlay temporarily disabled in v0.1.0 pending proper implementation in v0.2.0.
+        return
     }
 
     private fun circleButton(text: String): JComponent {
@@ -1254,6 +1436,18 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
         )
         return b
     }
+
+    // ===== Overlay window hosting (keep overlay above VLCJ Canvas) =====
+    override fun addNotify() {
+        super.addNotify()
+    }
+    override fun removeNotify() {
+        super.removeNotify()
+    }
+    private fun ensureOverlayWindow() { }
+    private fun updateOverlayWindowBounds() { }
+
+    private fun scheduleOverlayBoundsRetry() { }
 
     /**
      * Simple panel that preserves the provided aspect ratio by letterboxing.

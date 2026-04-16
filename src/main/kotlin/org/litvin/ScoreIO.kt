@@ -22,6 +22,8 @@ enum class Outcome { P1, P2, NONE }
 data class ScoreV1(
     val outcomes: Map<String, Outcome> = emptyMap(),
     val version: Int = 1,
+    val player1Name: String = "Player 1",
+    val player2Name: String = "Player 2",
 )
 
 object ScoreIO {
@@ -42,7 +44,7 @@ object ScoreIO {
     /** Read ScoreV1 from the given file path; returns empty ScoreV1 if file does not exist. */
     fun read(scoreFilePath: String): ScoreV1 {
         val f = File(scoreFilePath)
-        if (!f.exists()) return ScoreV1(emptyMap(), 1)
+        if (!f.exists()) return ScoreV1()
         return mapper.readValue(f)
     }
 

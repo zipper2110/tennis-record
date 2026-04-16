@@ -13,6 +13,13 @@ import javax.swing.border.EmptyBorder
  * FFmpegCommandBuilder and RenderQueueManager. Shows live progress with Cancel.
  */
 class SwingExportPanel : JPanel(BorderLayout()) {
+    fun onActivated() {
+        // Ensure Completed list reflects latest persisted items (global across projects)
+        try { refreshCompletedFromStore() } catch (_: Throwable) { }
+        // Refresh EDL info and button gating on activation to reflect current project context
+        try { updateEdlInfo() } catch (_: Throwable) { }
+        try { updateInitButtonState() } catch (_: Throwable) { }
+    }
     // Project context (manifest path) — optional; user can still pick output file.
     private var manifestPath: String? = null
     // Keep last observed snapshot to expose Details dialog
@@ -23,6 +30,9 @@ class SwingExportPanel : JPanel(BorderLayout()) {
     private val presetCombo = JComboBox(presets.map { it.label }.toTypedArray())
     private val resCombo = JComboBox(arrayOf("1920x1080", "3840x2160"))
     private val idleTrimCheck = JCheckBox("Remove idle time (use EDL keeps)", true)
+    private val scoreboardCheck = JCheckBox("Include Scoreboard", false).apply {
+        toolTipText = "Burn in a simple scoreboard overlay that updates after each point. Uses current Scoring data; fixed English labels in v0.1.0."
+    }
     private data class EncoderItem(val label: String, val id: String) { override fun toString(): String = label }
     private val encoderCombo = JComboBox<EncoderItem>()
     private val encoderHintLabel = JLabel("")
@@ -41,8 +51,8 @@ class SwingExportPanel : JPanel(BorderLayout()) {
     private var lastFailureJob: RenderJob? = null
 
     private val completedPanel = JPanel()
-    private val completedListModel = DefaultListModel<String>()
-    private val completedList = JList(completedListModel)
+    private val completedListModel = DefaultListModel<CompletedRender>()
+    private val completedList: JList<CompletedRender> = JList(completedListModel)
 
     // Theming — reuse UiStyles palette
     private val DARK_BG = UiStyles.DARK_BG
@@ -115,6 +125,8 @@ class SwingExportPanel : JPanel(BorderLayout()) {
         // Idle-trim + EDL info
         stylePrimary(idleTrimCheck)
         left.add(idleTrimCheck)
+        stylePrimary(scoreboardCheck)
+        left.add(scoreboardCheck)
         styleHelper(edlInfoLabel)
         left.add(edlInfoLabel)
         left.add(Box.createRigidArea(Dimension(0, 12)))
@@ -174,6 +186,9 @@ class SwingExportPanel : JPanel(BorderLayout()) {
 
         // Active card
         val nameLabel = JLabel("No active job")
+        val jobIdLabel = JLabel("")
+        styleMono(jobIdLabel)
+        jobIdLabel.foreground = FG_SECONDARY
         val stats = JPanel(BorderLayout())
         stats.background = CARD_BG
         stats.add(progressLabel, BorderLayout.WEST)
@@ -209,7 +224,7 @@ class SwingExportPanel : JPanel(BorderLayout()) {
         val activeBody = JPanel()
         activeBody.layout = BoxLayout(activeBody, BoxLayout.Y_AXIS)
         activeBody.background = CARD_BG
-        listOf(nameLabel, Box.createRigidArea(Dimension(0,6)), progressBar, Box.createRigidArea(Dimension(0,6)), stats).forEach { activeBody.add(it) }
+        listOf(nameLabel, jobIdLabel, Box.createRigidArea(Dimension(0,6)), progressBar, Box.createRigidArea(Dimension(0,6)), stats).forEach { activeBody.add(it) }
 
         val activeCardPanel = card("Active Processing", activeBody)
         right.add(activeCardPanel)
@@ -221,10 +236,19 @@ class SwingExportPanel : JPanel(BorderLayout()) {
                 val c = super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus)
                 c.background = if (isSelected) CARD_BG.brighter() else CARD_BG
                 c.foreground = FG_PRIMARY
+                if (c is JLabel) {
+                    val item = value as? CompletedRender
+                    c.text = if (item != null) formatCompletedItem(item) else (value?.toString() ?: "")
+                }
                 return c
             }
         }
         completedList.cellRenderer = completedListRenderer
+        // Load persisted completed renders (Task 3.11)
+        try {
+            val persisted = CompletedRendersStore.loadAll()
+            persisted.forEach { completedListModel.addElement(it) }
+        } catch (_: Throwable) { }
         val completedScroll = JScrollPane(completedList)
         completedScroll.background = CARD_BG
         completedScroll.border = BorderFactory.createEmptyBorder()
@@ -232,8 +256,44 @@ class SwingExportPanel : JPanel(BorderLayout()) {
         val completedBody = JPanel(BorderLayout())
         completedBody.background = CARD_BG
         completedBody.add(completedScroll, BorderLayout.CENTER)
+        // Buttons: Open folder, Clear Finished
+        val completedButtons = JPanel(FlowLayout(FlowLayout.RIGHT, 8, 4))
+        completedButtons.background = CARD_BG
+        val openFolderBtn = JButton("Open folder")
+        UiStyles.styleSecondary(openFolderBtn)
+        openFolderBtn.addActionListener {
+            val sel = completedList.selectedValue
+            if (sel != null) {
+                try {
+                    val f = java.io.File(sel.outputPath)
+                    val dir = f.parentFile ?: return@addActionListener
+                    try {
+                        java.awt.Desktop.getDesktop().open(dir)
+                    } catch (_: Throwable) {
+                        Runtime.getRuntime().exec(arrayOf("explorer.exe", dir.absolutePath))
+                    }
+                } catch (t: Throwable) {
+                    SwingDialogUtils.showError(this@SwingExportPanel, t, "Failed to open folder")
+                }
+            }
+        }
+        val clearBtn = JButton("Clear Finished")
+        UiStyles.styleSecondary(clearBtn)
+        clearBtn.addActionListener {
+            val r = JOptionPane.showConfirmDialog(this@SwingExportPanel, "Clear all completed entries?", "Confirm", JOptionPane.YES_NO_OPTION)
+            if (r == JOptionPane.YES_OPTION) {
+                try { CompletedRendersStore.clear() } catch (_: Throwable) { }
+                completedListModel.removeAllElements()
+            }
+        }
+        completedButtons.add(openFolderBtn)
+        completedButtons.add(clearBtn)
+        completedBody.add(completedButtons, BorderLayout.SOUTH)
         val completedCardPanel = card("Completed Renders", completedBody)
         right.add(completedCardPanel)
+
+        // Load persisted completed renders initially
+        refreshCompletedFromStore()
 
         val center = JPanel(BorderLayout())
         center.background = DARK_BG
@@ -304,7 +364,10 @@ class SwingExportPanel : JPanel(BorderLayout()) {
         }
         resCombo.addActionListener { updateResolutionPreview() }
         encoderCombo.addActionListener { updateEncoderSummary() }
-        idleTrimCheck.addActionListener { updateEdlInfo() }
+        idleTrimCheck.addActionListener { 
+            updateEdlInfo()
+            try { updateInitButtonState() } catch (_: Throwable) { }
+        }
 
         // Observe queue updates to refresh UI
         RenderQueueManager.addObserver { snap ->
@@ -313,13 +376,16 @@ class SwingExportPanel : JPanel(BorderLayout()) {
                 val cur = snap.current
                 if (cur == null) {
                     nameLabel.text = "No active job"
+                    jobIdLabel.text = ""
                     progressBar.value = 0
                     progressBar.string = ""
                     progressLabel.text = "Idle"
                     cancelButton.isEnabled = false
                     detailsButton.isEnabled = false
                 } else {
-                    nameLabel.text = File(cur.outputPath).name
+                    val sbFlag = if (cur.includeScoreboard) "  ·  Scoreboard" else ""
+                    nameLabel.text = File(cur.outputPath).name + sbFlag
+                    jobIdLabel.text = "Job ID: ${cur.id}"
                     progressBar.value = (cur.progress * 100).toInt()
                     progressBar.string = "${(cur.progress * 100).toInt()}%"
                     val eta = cur.etaSeconds?.let { formatEta(it) } ?: "--"
@@ -360,6 +426,21 @@ class SwingExportPanel : JPanel(BorderLayout()) {
     fun setProjectManifest(path: String?) {
         manifestPath = path
         try { updateEdlInfo() } catch (_: Throwable) { }
+        try { updateInitButtonState() } catch (_: Throwable) { }
+        // Task 3.17 — default Scoreboard checkbox based on project scoring snapshot
+        try {
+            val mp = manifestPath
+            val projectDir = if (!mp.isNullOrBlank()) EdlIO.projectDirFromManifest(mp) else null
+            if (projectDir != null) {
+                val score = ScoreIO.readForProjectDir(projectDir)
+                val anyWon = score.outcomes.values.any { it == Outcome.P1 || it == Outcome.P2 }
+                scoreboardCheck.isSelected = anyWon
+            } else {
+                scoreboardCheck.isSelected = false
+            }
+        } catch (_: Throwable) {
+            scoreboardCheck.isSelected = false
+        }
     }
 
     private fun onInitializeRender() {
@@ -379,7 +460,8 @@ class SwingExportPanel : JPanel(BorderLayout()) {
 
         val projectDir = if (manifestPath != null) EdlIO.projectDirFromManifest(manifestPath) else null
         val edl = try { if (projectDir != null) EdlIO.readForProjectDir(projectDir) else null } catch (_: Throwable) { null }
-        val keeps = if (idleTrimCheck.isSelected) validateEdl(edl) else emptyList()
+        val validated = validateEdl(edl)
+        val keeps = if (idleTrimCheck.isSelected) validated else emptyList()
         if (idleTrimCheck.isSelected && keeps.isEmpty()) {
             val r = JOptionPane.showConfirmDialog(this, "EDL is empty or invalid. Continue with full render?", "EDL warning", JOptionPane.YES_NO_OPTION)
             if (r != JOptionPane.YES_OPTION) return
@@ -407,8 +489,27 @@ class SwingExportPanel : JPanel(BorderLayout()) {
         val encItem = (encoderCombo.selectedItem as? EncoderItem)
         val encoderLabel = (encItem?.label ?: "H.264 (libx264) — software").substringBefore(" — ")
 
+        // Build overlay timeline if requested
+        val includeSb = scoreboardCheck.isSelected
+        val overlayTimeline = if (includeSb) {
+            try {
+                val score = if (projectDir != null) ScoreIO.readForProjectDir(projectDir) else ScoreV1()
+                val edlPoints = validated.ifEmpty { edl?.points ?: emptyList() }
+                ScoreboardTimelineBuilder.build(
+                    edlPoints,
+                    score.outcomes,
+                    idleTrimCheck.isSelected,
+                    score.player1Name,
+                    score.player2Name
+                )
+            } catch (_: Throwable) {
+                emptyList()
+            }
+        } else emptyList()
+
         val job = RenderJob(
             projectId = manifest?.id,
+            projectName = manifest?.name,
             sourcePath = source,
             edlSnapshot = if (idleTrimCheck.isSelected) keeps else emptyList(),
             presetId = selPreset.id,
@@ -416,6 +517,8 @@ class SwingExportPanel : JPanel(BorderLayout()) {
             outHeight = h,
             encoderLabel = encoderLabel,
             idleTrim = idleTrimCheck.isSelected,
+            includeScoreboard = includeSb,
+            overlayTimeline = overlayTimeline,
             outputPath = out.absolutePath,
         )
 
@@ -475,8 +578,37 @@ class SwingExportPanel : JPanel(BorderLayout()) {
     }
 
     private fun addCompleted(job: RenderJob) {
-        val size = formatSize(job.bytesWritten)
-        completedListModel.addElement("${File(job.outputPath).name}  —  ${job.outWidth}x${job.outHeight} / ${job.encoderLabel}  —  $size")
+        val item = CompletedRender(
+            id = job.id,
+            projectId = job.projectId,
+            projectName = job.projectName,
+            outputPath = job.outputPath,
+            fileName = File(job.outputPath).name,
+            encoderLabel = job.encoderLabel,
+            outWidth = job.outWidth,
+            outHeight = job.outHeight,
+            bytesWritten = job.bytesWritten,
+            includeScoreboard = job.includeScoreboard,
+            createdAtEpochMs = System.currentTimeMillis(),
+        )
+        completedListModel.addElement(item)
+    }
+
+    private fun refreshCompletedFromStore() {
+        try {
+            val items = CompletedRendersStore.loadAll()
+            completedListModel.removeAllElements()
+            items.forEach { completedListModel.addElement(it) }
+        } catch (_: Throwable) { }
+    }
+
+    private fun formatCompletedItem(item: CompletedRender): String {
+        val size = formatSize(item.bytesWritten)
+        val sb = if (item.includeScoreboard) "  ·  Scoreboard" else ""
+        val res = if (item.outHeight >= 2160 || item.outWidth >= 3840) "4K" else "1080p"
+        val proj = item.projectName?.takeIf { it.isNotBlank() }
+        val left = if (proj != null) "[$proj] ${item.fileName}" else item.fileName
+        return "$left$sb  —  ${item.encoderLabel} / $res  —  $size"
     }
 
     private fun formatEta(secs: Long): String {
@@ -566,5 +698,43 @@ class SwingExportPanel : JPanel(BorderLayout()) {
         val m = remain / 60_000; remain %= 60_000
         val s = remain / 1000; val mm = remain % 1000
         return String.format("%d:%02d:%02d.%03d", h, m, s, mm)
+    }
+
+    // Task 3.15 — Gate Initialize button based on project context and prerequisites
+    private fun updateInitButtonState() {
+        try {
+            val mp = manifestPath
+            // Default: disabled until proven OK
+            var enabled = false
+            var reason: String? = null
+            if (mp.isNullOrBlank()) {
+                reason = "Open a project first (Projects → Open)."
+            } else {
+                val manifest = try { ManifestIO.read(mp) } catch (t: Throwable) { null }
+                val sourcePath = manifest?.sourceVideo
+                if (sourcePath.isNullOrBlank() || !File(sourcePath).exists()) {
+                    reason = "Source video not found. Set it in Projects/Markup."
+                } else {
+                    if (idleTrimCheck.isSelected) {
+                        val projectDir = EdlIO.projectDirFromManifest(mp)
+                        val edl = try { EdlIO.readForProjectDir(projectDir) } catch (_: Throwable) { null }
+                        val keeps = validateEdl(edl)
+                        if (keeps.isEmpty()) {
+                            reason = "EDL is empty/invalid while Idle‑trim is ON. Add keep intervals or turn Idle‑trim OFF."
+                        } else {
+                            enabled = true
+                        }
+                    } else {
+                        // Full render with no EDL requirements
+                        enabled = true
+                    }
+                }
+            }
+            initButton.isEnabled = enabled
+            initButton.toolTipText = if (enabled) null else reason
+        } catch (_: Throwable) {
+            initButton.isEnabled = false
+            initButton.toolTipText = "Initialization unavailable due to an unexpected error."
+        }
     }
 }

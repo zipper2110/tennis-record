@@ -894,6 +894,11 @@ class SwingMarkupPanel : JPanel(BorderLayout()) {
         try { player.dispose() } catch (_: Throwable) {}
     }
 
+    // Expose manual save for File -> Save All integration
+    fun saveNow() {
+        try { autosaveNow() } catch (_: Throwable) { }
+    }
+
     // Renderer for the Action column: shows a small primary "Go" button
     private inner class ActionButtonRenderer : TableCellRenderer {
         private val button: JButton = UiStyles.primarySmallButton("Go") {}
