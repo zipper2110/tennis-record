@@ -234,3 +234,21 @@ General findings & scope notes (review)
     - Ensure no regression to Markup controls’ sizing due to added sidebar; media viewer should resize accordingly.
 
 
+
+
+- [x] 2.16 — Unique IDs for points (creation and persistence)
+  - Description: Ensure each point has a globally unique, stable `id` generated at creation time and preserved across edits and saves.
+  - Acceptance Criteria:
+    - On creating a new point (see 2.4), the point receives a unique `id` that never collides with existing points in the EDL.
+    - The `id` is stable: editing Start/End/Label/Notes or resorting never changes the `id`.
+    - Loading older projects that lack `id` values backfills unique ids for all points and persists them on the next autosave.
+    - Duplicate ids (if encountered) are detected and repaired automatically (regenerate for the later-loaded/conflicting items) with a user-visible, non-blocking notice.
+  - Implementation Guide:
+    - Prefer ULID (time-sortable) or UUIDv4 for `id`; store as a lowercase string field `id` in `PointV1`.
+    - Assign the `id` when the pending Start row is created (not on End) so the row has identity immediately.
+    - On EDL load, scan for missing/duplicate ids; generate ids for missing entries and repair duplicates deterministically.
+    - Add a lightweight uniqueness check before save to guard against regressions.
+  - Review notes:
+    - Chosen format: UUIDv4, stored lowercase. Backfill and duplicate‑repair are performed on load and verified again before save; a non‑blocking console notice is emitted.
+    - Extend tests under 2.10 to cover: round-trip with `id`, backfill for legacy points, and duplicate-repair behavior.
+    - Document the chosen `id` format in the EDL v1 schema notes for tooling interoperability.

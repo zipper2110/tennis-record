@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "points": [
+    {"id":"g1p1","startMs":0,"endMs":1000},
+    {"id":"g1p2","startMs":1000,"endMs":2000},
+    {"id":"g1p3","startMs":2000,"endMs":3000},
+    {"id":"g1p4","startMs":3000,"endMs":4000},
+
+    {"id":"g2p1","startMs":4000,"endMs":5000},
+    {"id":"g2p2","startMs":5000,"endMs":6000},
+    {"id":"g2p3","startMs":6000,"endMs":7000},
+    {"id":"g2p4","startMs":7000,"endMs":8000},
+
+    {"id":"g3p1","startMs":8000,"endMs":9000},
+    {"id":"g3p2","startMs":9000,"endMs":10000},
+    {"id":"g3p3","startMs":10000,"endMs":11000},
+    {"id":"g3p4","startMs":11000,"endMs":12000},
+
+    {"id":"g4p1","startMs":12000,"endMs":13000},
+    {"id":"g4p2","startMs":13000,"endMs":14000},
+    {"id":"g4p3","startMs":14000,"endMs":15000},
+    {"id":"g4p4","startMs":15000,"endMs":16000},
+    {"id":"g4p5","startMs":16000,"endMs":17000},
+    {"id":"g4p6","startMs":17000,"endMs":18000}
+  ]
+}

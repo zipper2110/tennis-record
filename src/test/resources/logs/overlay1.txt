@@ -1,0 +1,3 @@
+frame=   42 fps=60 q=-1.0 size=    512kB time=00:00:00.70 bitrate=5988.8kbits/s speed=2.40x
+[Parsed_subtitles_2 @ 000001a2c3] Using font provider libass
+[Parsed_subtitles_2 @ 000001a2c3] fontselect: (Arial, 400, 0) -> ArialMT, 0, ArialMT

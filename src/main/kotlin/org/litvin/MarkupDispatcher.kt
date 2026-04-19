@@ -12,6 +12,7 @@ class MarkupDispatcher {
 
     private val points = mutableListOf<PointV1>()
     private var pendingStartMs: Int? = null
+    private var pendingId: String? = null
     private var userMessage: String? = null
 
     /** Callback invoked whenever completed points collection changes (create/delete/replace/clear). */
@@ -70,8 +71,12 @@ class MarkupDispatcher {
             notifyUser("Cannot place Start at ${t} ms: it's inside an existing point interval")
             return
         }
+        // Assign a stable id at the moment pending row is created (2.16). If pending exists, keep the same id.
+        if (pendingStartMs == null) {
+            pendingId = EdlIO.generateId()
+        }
         pendingStartMs = t
-        println("[MARKUP] Pending Start set at $pendingStartMs ms")
+        println("[MARKUP] Pending Start set at $pendingStartMs ms (id=${pendingId})")
         // Notify UI so it can render/update the pending row immediately
         onPointsChanged?.invoke()
     }
@@ -106,12 +111,13 @@ class MarkupDispatcher {
             notifyUser("Overlap blocked for [$s, $e). Adjust boundaries to avoid overlaps.")
             return
         }
-        val id = "PT_${points.size + 1}"
+        val id = pendingId ?: EdlIO.generateId()
         points.add(PointV1(id = id, startMs = s, endMs = e))
         // Keep list sorted by start time to satisfy 2.4/2.6 acceptance
         points.sortBy { it.startMs }
         // Clear pending after successful creation
         pendingStartMs = null
+        pendingId = null
         println("[MARKUP] Point created: $id [$s, $e]")
         onPointsChanged?.invoke()
     }
@@ -140,6 +146,7 @@ class MarkupDispatcher {
     fun clearAll() {
         points.clear()
         pendingStartMs = null
+        pendingId = null
         onPointsChanged?.invoke()
     }
 
@@ -147,6 +154,7 @@ class MarkupDispatcher {
     fun clearPending() {
         if (pendingStartMs != null) {
             pendingStartMs = null
+            pendingId = null
             onPointsChanged?.invoke()
         }
     }
