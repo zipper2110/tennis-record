@@ -13,6 +13,17 @@ data class OverlaySpan(
     val text: String,
     val p1Name: String? = null,
     val p2Name: String? = null,
+    // 3.21 — Tiebreak support fields (optional; fall back to parsing text when absent)
+    val isTiebreak: Boolean = false,
+    val tbP1: Int = 0,
+    val tbP2: Int = 0,
+    val p1Pts: Int = 0,
+    val p2Pts: Int = 0,
+    val gamesP1: Int = 0,
+    val gamesP2: Int = 0,
+    val setsP1: Int = 0,
+    val setsP2: Int = 0,
+    val completedSets: List<Pair<Int, Int>> = emptyList(),
 )
 
 object ScoreboardTimelineBuilder {
@@ -40,99 +51,60 @@ object ScoreboardTimelineBuilder {
             }
         }
 
-        // Scoring state
-        var p1Pts = 0
-        var p2Pts = 0
-        var gamesP1 = 0
-        var gamesP2 = 0
-        var setsP1 = 0
-        var setsP2 = 0
-        val completedSets = mutableListOf<Pair<Int, Int>>()
+        // Produce unified scoring snapshots (Task 3.21 — includes tiebreak support)
+        val snaps = ScoringRules.computeSnapshotsBefore(ordered, outcomes)
 
-        fun displayPoints(forP1: Boolean): String {
-            val mine = if (forP1) p1Pts else p2Pts
-            val other = if (forP1) p2Pts else p1Pts
+        fun displayPoints(pMine: Int, pOther: Int): String {
             val base = arrayOf("0", "15", "30", "40")
-            return if (mine < 4 && other < 4) base[mine.coerceIn(0, 3)]
-            else if (mine == other) "40" else if (mine > other) "Ad" else "40"
-        }
-
-        fun stateText(): String {
-            val setsBrief = if (completedSets.isEmpty()) "" else completedSets.joinToString(
-                prefix = " [", postfix = "]", separator = ","
-            ) { "${it.first}-${it.second}" }
-            return buildString {
-                append("Player 1: ")
-                append("pts ").append(displayPoints(true))
-                append(", games ").append(gamesP1)
-                append(", sets ").append(setsP1)
-                append("  |  ")
-                append("Player 2: ")
-                append("pts ").append(displayPoints(false))
-                append(", games ").append(gamesP2)
-                append(", sets ").append(setsP2)
-                if (setsBrief.isNotEmpty()) append(setsBrief)
-            }
-        }
-
-        fun applyOutcome(o: Outcome?) {
-            when (o) {
-                Outcome.P1 -> p1Pts += 1
-                Outcome.P2 -> p2Pts += 1
-                else -> return // NONE or null → carry-forward
-            }
-            // Check game win (no tiebreaks in v0.1.x)
-            fun maybeWinGame(): Int? {
-                if (p1Pts >= 4 && p1Pts - p2Pts >= 2) return 1
-                if (p2Pts >= 4 && p2Pts - p1Pts >= 2) return 2
-                return null
-            }
-            when (maybeWinGame()) {
-                1 -> {
-                    gamesP1 += 1
-                    p1Pts = 0; p2Pts = 0
-                }
-                2 -> {
-                    gamesP2 += 1
-                    p1Pts = 0; p2Pts = 0
-                }
-                else -> {}
-            }
-            // Check set win (no tiebreaks)
-            fun maybeWinSet(): Int? {
-                if (gamesP1 >= 6 && gamesP1 - gamesP2 >= 2) return 1
-                if (gamesP2 >= 6 && gamesP2 - gamesP1 >= 2) return 2
-                return null
-            }
-            when (maybeWinSet()) {
-                1 -> {
-                    setsP1 += 1
-                    completedSets += gamesP1 to gamesP2
-                    gamesP1 = 0; gamesP2 = 0
-                }
-                2 -> {
-                    setsP2 += 1
-                    completedSets += gamesP1 to gamesP2
-                    gamesP1 = 0; gamesP2 = 0
-                }
-                else -> {}
-            }
+            return if (pMine < 4 && pOther < 4) base[pMine.coerceIn(0, 3)]
+            else if (pMine == pOther) "40" else if (pMine > pOther) "Ad" else "40"
         }
 
         val out = ArrayList<OverlaySpan>(ordered.size)
         val n1 = player1Name.ifBlank { "Player 1" }
         val n2 = player2Name.ifBlank { "Player 2" }
-        // Initial state applies during the FIRST point interval (advance after point completes)
         for (i in ordered.indices) {
             val start = startsOut[i]
             val end = endsOut[i]
             if (end <= start) continue
-            val text = stateText()
-            out += OverlaySpan(startMs = start, endMs = end, text = text, p1Name = n1, p2Name = n2)
-            // Then apply the outcome of the point i to advance state for the next interval
-            val pid = ordered[i].id
-            val o = outcomes[pid]
-            applyOutcome(o)
+            val st = snaps.getOrNull(i)
+            val completedSets = st?.completedSets ?: emptyList()
+            val setsBrief = if (completedSets.isEmpty()) "" else completedSets.joinToString(prefix = " [", postfix = "]", separator = ",") { "${'$'}{it.first}-${'$'}{it.second}" }
+            val text = buildString {
+                append("Player 1: ")
+                append("pts ")
+                append(displayPoints(st?.p1Pts ?: 0, st?.p2Pts ?: 0))
+                append(", games ")
+                append(st?.gamesP1 ?: 0)
+                append(", sets ")
+                append(st?.setsP1 ?: 0)
+                append("  |  ")
+                append("Player 2: ")
+                append("pts ")
+                append(displayPoints(st?.p2Pts ?: 0, st?.p1Pts ?: 0))
+                append(", games ")
+                append(st?.gamesP2 ?: 0)
+                append(", sets ")
+                append(st?.setsP2 ?: 0)
+                if (setsBrief.isNotEmpty()) append(setsBrief)
+            }
+            out += OverlaySpan(
+                startMs = start,
+                endMs = end,
+                text = text,
+                p1Name = n1,
+                p2Name = n2,
+                isTiebreak = st?.isTiebreak ?: false,
+                tbP1 = st?.tbP1 ?: 0,
+                tbP2 = st?.tbP2 ?: 0,
+                p1Pts = st?.p1Pts ?: 0,
+                p2Pts = st?.p2Pts ?: 0,
+                gamesP1 = st?.gamesP1 ?: 0,
+                gamesP2 = st?.gamesP2 ?: 0,
+                setsP1 = st?.setsP1 ?: 0,
+                setsP2 = st?.setsP2 ?: 0,
+                completedSets = completedSets,
+            )
         }
         return out
     }

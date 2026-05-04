@@ -156,7 +156,7 @@ Decisions incorporated in this spec (answers provided):
     - Match format config: Store match format (default best‑of‑3) in `score.json` (v1). No per‑match overrides in v0.1.0; may be added later.
     - No‑ad scoring: Not implemented in v0.1.0. Design the engine for future extension (a parameter to switch ad/no‑ad) in later versions.
     - Long deuce handling: Support extended deuce/advantage sequences with a practical cap of 100 points within a single game. Unit tests should include long sequences up to this cap.
-- [ ]  4.9 — Persistence model for scoring (ScoreV1)
+- [moved] 4.9 — Persistence model for scoring (ScoreV1) (moved to v0.2.0/scoring.md on 2026-04-21)
 
   - Description: Define storage for outcomes and optional metadata separate from EDL.
   - Acceptance Criteria:
@@ -172,7 +172,7 @@ Decisions incorporated in this spec (answers provided):
     - File location and naming: Use `score.json` alongside `edl.json` in the project root; no versioned filenames (no `score.v1.json`).
     - Schema shape: Keep it simple — `Map<PointId, Outcome>` only; no extra metadata for `NONE` in v0.1.0.
     - Orphans and migrations: Ignore for now — on load, silently ignore outcomes whose `pointId` no longer exists (no notice).
-- [ ]  4.10 — Next Point navigation and hotkeys
+- [moved] 4.10 — Next Point navigation and hotkeys (moved to v0.2.0/scoring.md on 2026-04-21)
 
   - Description: Implement a compact "Next Point" button at the bottom of the list and a W hotkey that advances to the next point.
   - Acceptance Criteria:
@@ -185,7 +185,7 @@ Decisions incorporated in this spec (answers provided):
     - No auto-advance anywhere; W follows strict next-index selection and does not skip scored points.
   - Open questions:
     - None at this time.
-- [ ]  4.11 — Selecting a scored point restores pressed state
+- [moved] 4.11 — Selecting a scored point restores pressed state (moved to v0.2.0/scoring.md on 2026-04-21)
 
   - Description: When the user selects a point that already has an outcome, the corresponding action button shows as pressed/selected.
   - Acceptance Criteria:
@@ -194,7 +194,7 @@ Decisions incorporated in this spec (answers provided):
   - Decisions — Answers to previously open questions:
     - Visual cohesion: Snap immediately to the stored outcome; no animations in v0.1.0 (keep it simple).
     - Conflicts/stale state: Show the last known local cache while async IO completes; update to persisted state once loaded. No special neutral/loading state in v0.1.0.
-- [ ]  4.12 — Overlay scoreboard above the video
+- [moved] 4.12 — Overlay scoreboard above the video (moved to v0.2.0/scoring.md on 2026-04-21)
 
   - Description: Render a compact scoreboard overlay (players, sets/games/points) positioned as in the mock (`design/scoring.html`).
   - Acceptance Criteria:
@@ -210,7 +210,7 @@ Decisions incorporated in this spec (answers provided):
     - Player/league labels: use static placeholder strings in v0.1.0.
   - Open questions:
     - Overlay visibility toggle: Do we need a quick “show/hide overlay” toggle for preview (for v0.1.0)? If yes, where should it live? Answer: no, no need for such toggle.
-- [ ]  4.13 — Autosave and project integration
+- [moved] 4.13 — Autosave and project integration (moved to v0.2.0/scoring.md on 2026-04-21)
 
   - Description: Persist scoring outcomes shortly after changes and reload them on project open.
   - Acceptance Criteria:
@@ -221,7 +221,7 @@ Decisions incorporated in this spec (answers provided):
   - Decisions — Answers to previously open questions:
     - Debounce window: Save immediately on change (no debounce). No visual saving indicator in v0.1.0 (follow Markup’s approach; out of scope).
     - Save scope: Save score independently. On the Scoring tab, only score data changes; save it separately from EDL/other data.
-- [ ]  4.14 — Tests: rules engine and persistence
+- [moved] 4.14 — Tests: rules engine and persistence (moved to v0.2.0/scoring.md on 2026-04-21)
 
   - Description: Add unit tests for the rules engine (points → games → sets) and for `ScoreV1` read/write.
   - Acceptance Criteria:
@@ -232,7 +232,7 @@ Decisions incorporated in this spec (answers provided):
   - Decisions — Answers to previously open questions:
     - Test coverage minima: Yes. Include extended 6–6 sets including a standard 7‑point (win‑by‑2) tiebreak, long deuce/advantage sequences up to the 100‑point practical cap, and a test that flips an early outcome and verifies correct recomputation from that point onward.
     - Golden files: Yes. Include a small golden `edl.json` + `score.json` pair to validate end‑to‑end load/apply behavior in tests.
-- [ ]  4.15 — Accessibility and focus management
+- [moved] 4.15 — Accessibility and focus management (moved to v0.2.0/scoring.md on 2026-04-21)
 
   - Description: Ensure keyboard usage mirrors Markup behavior and controls are accessible.
   - Acceptance Criteria:
@@ -243,7 +243,7 @@ Decisions incorporated in this spec (answers provided):
     - Screen reader specifics are out of scope for v0.1.0; provide reasonable component names only.
   - Decisions — Answers to previously open questions:
     - Keyboard focus map / tab order: No explicit tab order; follow Swing/toolkit defaults.
-- [ ]  4.16 — Empty state and edge cases
+- [moved] 4.16 — Empty state and edge cases (moved to v0.2.0/scoring.md on 2026-04-21)
 
   - Description: Handle projects with no points and other edge cases.
   - Acceptance Criteria:
@@ -274,7 +274,7 @@ Update — 2026-04-15
 - Manual Marker and Scoreboard Settings buttons are temporarily disabled in the Scoring tab UI until their functionality is implemented. This is intentional for v0.1.0.
 - Scoreboard overlay in the Scoring tab is temporarily disabled for v0.1.0. A proper, reliable overlay will be implemented in v0.2.0.
 
-- [ ]  4.17 — Player names inputs and dynamic labels
+- [moved] 4.17 — Player names inputs and dynamic labels (moved to v0.2.0/scoring.md on 2026-04-21)
 
   - Description: Add two text inputs under the left points list: "Player 1 name" and "Player 2 name" with default values "Player 1" and "Player 2". Persist names to `score.json` (ScoreV1) and use them to dynamically label scoring buttons and overlays on this tab.
   - Acceptance Criteria:

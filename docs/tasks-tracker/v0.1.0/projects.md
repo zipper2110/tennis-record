@@ -55,7 +55,7 @@
     - After saving `lastOpenedAt`, refresh the Recents list by rescanning manifests, then navigate to Step 1 or Step 2 depending on `sourceVideo` presence.
     - On failure: show error dialog with options to view file, retry, or learn more.
 
-- [ ] 0.5 — Recent Projects list (MRU)
+- [moved] 0.5 — Recent Projects list (MRU) (moved to v0.2.0/projects.md on 2026-04-21)
   - Description: Build the Most-Recently-Used list at app launch by scanning the Projects directory and reading each project's manifest (path, name, lastOpenedAt). Render it in the Projects tab with click-to-open and remove-from-list. Above the list, display the currently open project; if none is open, show "no open project".
   - Acceptance Criteria:
     - Projects are shown in a paginated list of 12 items per page, sorted by `lastOpenedAt` desc (shows all projects via pagination).
@@ -69,7 +69,7 @@
     - Render list in `ProjectsTab` with pagination controls (Prev/Next) at 12 items per page; clicking an item calls the same open flow with the stored path.
     - Add a small header above the list that shows the current project name (or "no open project").
 
-- [ ] 0.6 — Project lifecycle and switching
+- [moved] 0.6 — Project lifecycle and switching (moved to v0.2.0/projects.md on 2026-04-21)
   - Description: Handle loading/unloading of a project context, with a prompt to save if there are unsaved changes when switching projects or exiting.
   - Acceptance Criteria:
     - Switching between projects via Open/Recents unloads the previous project safely.
@@ -80,7 +80,7 @@
     - On `load`, close media/resources from previous project, then initialize new context and emit an event.
     - Subscribe views to project-changed events to refresh UI safely.
 
-- [ ] 0.7 — Autosave (manifest only, initial)
+- [moved] 0.7 — Autosave (manifest only, initial) (moved to v0.2.0/projects.md on 2026-04-21)
   - Description: Implement a lightweight autosave that updates the manifest on key changes (e.g., project rename, source video selection in Step 1).
   - Acceptance Criteria:
     - Autosave writes within 2 seconds of a change and debounces rapid updates.

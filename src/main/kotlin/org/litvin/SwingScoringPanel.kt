@@ -151,6 +151,8 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
         try {
             try { namesSaveTimer.stop() } catch (_: Throwable) { }
             this.projectDir = File(path).parentFile.absolutePath
+            // Load adjustments for this project into the central store
+            try { AdjustmentsStore.load(projectDir!!) } catch (_: Throwable) { }
             // Load points from EDL (sorted by startMs)
             val edl = EdlIO.readForProjectDir(projectDir!!)
             points = edl.points.sortedBy { it.startMs }
@@ -717,11 +719,25 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
         vf.layout = null // absolute for overlay position managed by AspectPanel.doLayout
         videoFrame = vf
 
-        // Add media player component (stretched to full area by AspectPanel.doLayout)
+        // Add media player component wrapped into geometry viewport (stretched by AspectPanel)
         val videoComponent = player.component
-        videoComponent.name = "video"
         try { videoComponent.accessibleContext.accessibleName = "Video player" } catch (_: Throwable) {}
-        vf.add(videoComponent)
+        val viewport = GeometryViewportPanel(videoComponent)
+        viewport.name = "video"
+        vf.add(viewport)
+        // Subscribe to central adjustments store to live-apply color and geometry (Tasks 5.3/5.4)
+        try {
+            val unsub = AdjustmentsStore.subscribe { adj ->
+                try { player.applyColorAdjustments(adj) } catch (_: Throwable) { }
+                try { player.applyGeometryAdjustments(adj) } catch (_: Throwable) { }
+            }
+            // Apply current state immediately
+            val currentAdj = try { AdjustmentsStore.get() } catch (_: Throwable) { AdjustmentsV1() }
+            try { player.applyColorAdjustments(currentAdj) } catch (_: Throwable) { }
+            try { player.applyGeometryAdjustments(currentAdj) } catch (_: Throwable) { }
+            // Store unsubscribe handle on the frame for potential cleanup
+            vf.putClientProperty("adj_unsub", unsub)
+        } catch (_: Throwable) { }
 
         // Overlay temporarily removed in v0.1.0. A proper implementation will be added in v0.2.0.
         // No overlay panel/window is created here.
@@ -1442,6 +1458,11 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
         super.addNotify()
     }
     override fun removeNotify() {
+        try {
+            val unsub = try { videoFrame?.getClientProperty("adj_unsub") } catch (_: Throwable) { null } as? (() -> Unit)
+            unsub?.invoke()
+            try { videoFrame?.putClientProperty("adj_unsub", null) } catch (_: Throwable) { }
+        } catch (_: Throwable) { }
         super.removeNotify()
     }
     private fun ensureOverlayWindow() { }

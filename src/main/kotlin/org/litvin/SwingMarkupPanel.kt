@@ -26,6 +26,9 @@ import kotlin.math.max
  */
 class SwingMarkupPanel : JPanel(BorderLayout()) {
 
+    // Geometry viewport wrapper for VLC component (Task 5.4)
+    private lateinit var geometryViewport: GeometryViewportPanel
+
     // Lifecycle hooks controlled by navigation
     fun onActivated() {
         try { player.pause() } catch (_: Throwable) {}
@@ -227,6 +230,12 @@ class SwingMarkupPanel : JPanel(BorderLayout()) {
 
     override fun removeNotify() {
         try { KeyboardFocusManager.getCurrentKeyboardFocusManager().removeKeyEventDispatcher(spaceDispatcher) } catch (_: Throwable) { }
+        // Unsubscribe from adjustments bus if subscribed
+        try {
+            val unsub = geometryViewport.getClientProperty("adj_unsub") as? (() -> Unit)
+            unsub?.invoke()
+            geometryViewport.putClientProperty("adj_unsub", null)
+        } catch (_: Throwable) { }
         super.removeNotify()
     }
 
@@ -321,10 +330,27 @@ class SwingMarkupPanel : JPanel(BorderLayout()) {
         center.resizeWeight = 1.0
         val leftColumn = JPanel(BorderLayout())
         leftColumn.isOpaque = false
-        leftColumn.add(player.component, BorderLayout.CENTER)
+        // Wrap VLC component with geometry viewport for live zoom/pan (Task 5.4)
+        geometryViewport = GeometryViewportPanel(player.component)
+        leftColumn.add(geometryViewport, BorderLayout.CENTER)
         leftColumn.add(bottom, BorderLayout.SOUTH)
         leftColumn.minimumSize = Dimension(320, 0)
         center.leftComponent = leftColumn
+        // Subscribe to central adjustments store to live-apply color and geometry
+        try {
+            val unsub = AdjustmentsStore.subscribe { adj ->
+                try { player.applyColorAdjustments(adj) } catch (_: Throwable) { }
+                try { player.applyGeometryAdjustments(adj) } catch (_: Throwable) { }
+            }
+            // Apply current state immediately
+            try {
+                val cur = AdjustmentsStore.get()
+                try { player.applyColorAdjustments(cur) } catch (_: Throwable) { }
+                try { player.applyGeometryAdjustments(cur) } catch (_: Throwable) { }
+            } catch (_: Throwable) { }
+            // Store unsubscribe handle on the component for cleanup on removal
+            geometryViewport.putClientProperty("adj_unsub", unsub)
+        } catch (_: Throwable) { }
 
         val rightPanel = JPanel(BorderLayout())
         rightPanel.minimumSize = Dimension(RIGHT_PANEL_WIDTH, 0)
@@ -491,6 +517,8 @@ class SwingMarkupPanel : JPanel(BorderLayout()) {
     fun setProjectManifest(path: String) {
         manifestPath = path
         projectDir = File(path).parentFile.absolutePath
+        // Load adjustments for this project into the central store
+        try { AdjustmentsStore.load(projectDir!!) } catch (_: Throwable) { }
         // Load manifest and media
         try {
             val manifest = ManifestIO.read(path)

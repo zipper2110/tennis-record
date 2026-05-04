@@ -127,3 +127,14 @@ Dependencies and integration notes
 - Depends on: v0.1.0 2.13 (base timeline rendering), 2.5 (keyboard focus rules), 2.2 (seek/play APIs).
 - Ensure MARKS interactions from 2.13 continue to function at all zoom levels.
 - Validation/EDL logic (2.7, 2.8, 2.12, 2.14) is unaffected by view scale; only UI mapping changes.
+
+
+- [ ] 3.10 — Playback reflects Adjustments
+  - Description: The Markup tab video preview reflects current project Adjustments (color and geometry) live as the user changes them on the Adjustments tab, without requiring full re-render.
+  - Acceptance Criteria:
+    - Subscribes to a shared adjustments state/service and applies updates immediately while respecting keyboard focus rules. 
+    - Color: brightness/contrast/saturation (and WB approximation) mapped to libVLC adjust filter or equivalent.
+    - Geometry: zoom/pan/rotation applied as a preview transform (libVLC or UI-layer fallback); timeline logic remains unaffected.
+    - Reset on project switch; defaults to identity when no `adjustments.json` exists.
+    - Performance target: smooth at 30–60 FPS on 1080p sources; slider throttling avoids stutter.
+  - Cross-reference: See Adjustments v0.2.0 epic (5.3/5.4) in `docs/tasks-tracker/v0.2.0/adjustments.md`.

@@ -25,7 +25,7 @@ General findings & scope notes (review)
 - Overlaps policy: Adjacent points that touch at boundaries are allowed; overlaps are rejected (2.7). Boundary tie‑break rules are defined under 2.12.
 - Out of scope reaffirmed: cropping/rendering is excluded here; wiring to Export comes later.
 
-- [ ] 2.1 — Markup tab shell (UI scaffolding)
+- [moved] 2.1 — Markup tab shell (UI scaffolding) (moved to v0.2.0/markup.md on 2026-04-21)
   - Description: Implement the Markup tab per `design/markup.html` with a video preview, transport controls, two point controls (Point Start, Point End), and a Points list area.
   - Acceptance Criteria:
     - The Markup tab is reachable and matches the draft layout.

@@ -1,37 +1,44 @@
-# v0.2.0 — Scoring tab: Points list shows Set/Game and in‑game score — Tasks
+# v0.2.0 — Scoring — Tasks
 
-Context
+Notes
+- This file collects Scoring work deferred from v0.1.0 and continues the scoring UX and persistence.
+- Builds on v0.1.0 Scoring 4.1–4.8 (shell, list, playback, transport, speed, actions, panels, rules engine).
 
-- Builds on v0.1.0 Scoring tab (4.x series), rules engine (4.8), and persistence (ScoreV1).
-- This task refines the left points list to show compact match context per point.
+Carried over from v0.1.0
 
-5.1 — Points list: show current Set/Game and in‑game score for each point
+- [ ] 4.9 — Persistence model for scoring (ScoreV1)
+  - Description: Define storage for outcomes and optional metadata separate from EDL in `score.json` (schema v1). Map `pointId -> outcome` and optional audit fields; keep unknown fields on read if possible. Autosave on change with small debounce. Names for players are persisted as well.
 
-- Description: In the Scoring tab’s left points list, each point row should display the match context at that point: current set index, current game index within the set, and the current score within that game, formatted as: "set {S} game {G} P1-P2". Example: "set 1 game 2 40-0".
+- [ ] 4.10 — Next Point navigation and hotkeys
+  - Description: Add a compact "Next Point" button at the bottom of the list and a W hotkey that advances to the next point (no auto-advance otherwise).
 
-- Acceptance Criteria:
-  - Each point row includes a right‑aligned (or otherwise secondary text) label with: "set {S} game {G} {P1}-{P2}".
-  - The score within the game is shown with Player 1 first, then Player 2, e.g., "40-15", "30-30", "Ad-40".
-  - The values represent the state BEFORE applying that point’s outcome (i.e., the state at the start of the point segment).
-  - Unscored points still show a correct context derived from prior outcomes.
-  - Tiebreaks:
-    - At 6–6 (win‑by‑2 tiebreak), the game label remains "game {G}" (tiebreak counts as a game), and the in‑game score shows numeric tiebreak points (e.g., "5-4").
-  - If the point immediately completes a game or set, the label still reflects the pre‑point state (no special suffixes in the label).
-  - Formatting is exactly: lowercase words, single spaces, no punctuation: "set {S} game {G} {P1}-{P2}".
+- [ ] 4.11 — Selecting a scored point restores pressed state
+  - Description: Selecting a scored point restores the pressed/selected state for outcome actions consistently across all action areas.
 
-- Implementation Guide:
-  - Source state from the existing rules engine timeline (v0.1.0 4.8). For each point i, compute the state at i (before applying point i), not at i+1.
-  - Map regular game points using the same labels used elsewhere (0, 15, 30, 40, Ad). For pre‑deuce sequences, use numeric labels accordingly.
-  - During tiebreak, display raw numeric points for P1 and P2.
-  - Integrate with the existing list cell renderer used in Scoring; keep layout compact (fit within 140 px list width context—may truncate on small windows with an end ellipsis if needed).
-  - Recompute and update labels live when outcomes change (same recomputation triggers as 4.8 and 4.11). Cache interim results to avoid O(n²) recomputation while typing or bulk edits.
-  - Respect player name ordering but do not include names in this compact label; the score order is strictly P1 first, then P2.
+- [ ] 4.12 — Overlay scoreboard above the video
+  - Description: Render a compact scoreboard overlay (players, sets/games/points) positioned as in the mock; updates after the selected point.
 
-- Open Questions:
-  - Localization: For v0.2.0, keep English lowercase "set" and "game" literals; future versions may localize.
-  - Very long matches: If game index exceeds two digits, allow natural wrapping or truncation per standard list cell behavior; no special compacting in v0.2.0.
+- [ ] 4.13 — Autosave and project integration
+  - Description: Persist outcomes shortly after changes; reload on project open; reuse AutosaveScheduler pattern.
 
-- Out of Scope for this task:
-  - Any changes to the scoreboard overlay (covered by v0.2.0 overlay task).
-  - Changes to persistence format.
-  - Hotkeys or navigation behavior.
+- [ ] 4.14 — Tests: rules engine and persistence
+  - Description: Unit tests for rules engine (points→games→sets) and `ScoreV1` read/write including tiebreak and long deuce sequences; include a small golden `edl.json` + `score.json` pair.
+
+- [ ] 4.15 — Accessibility and focus management
+  - Description: Ensure keyboard usage mirrors Markup behavior; add accessible names/labels; keep locale/time helpers consistent.
+
+- [ ] 4.16 — Empty state and edge cases
+  - Description: Handle no-points projects (empty state guidance) and malformed zero-duration segments (disable actions; inline error) gracefully.
+
+- [ ] 4.17 — Player names inputs and dynamic labels
+  - Description: Two text inputs (Player 1/2 name) persisted to `score.json` (v1). Actions/buttons and overlays reflect names live as the user types.
+
+- [ ] 4.18 — Playback reflects Adjustments
+  - Description: The Scoring tab video preview reflects current project Adjustments (color and geometry) live as the user changes them on the Adjustments tab, without requiring full re-render.
+  - Acceptance Criteria:
+    - Subscribes to the shared adjustments state/service and applies updates immediately.
+    - Color: brightness/contrast/saturation (and WB approximation) mapped to libVLC adjust filter or equivalent.
+    - Geometry: zoom/pan/rotation applied as a preview transform (libVLC or UI-layer fallback).
+    - Resets on project switch; defaults to identity when `adjustments.json` is absent.
+    - Smooth at 30–60 FPS on 1080p sources where feasible.
+  - Cross-reference: See Adjustments v0.2.0 epic (5.3/5.4) in `docs/tasks-tracker/v0.2.0/adjustments.md`.

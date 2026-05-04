@@ -82,8 +82,36 @@ object AssOverlayWriter {
                 if (s.endMs <= s.startMs) continue
                 val start = toAssTs(s.startMs)
                 val end = toAssTs(s.endMs)
-                // Parse scoreboard state from text
-                val st = parseState(s.text)
+
+                // Prefer structured fields from OverlaySpan (3.21); fallback to text parsing for backward data
+                val st = if (s.isTiebreak || s.p1Pts != 0 || s.p2Pts != 0 || s.gamesP1 != 0 || s.gamesP2 != 0 || s.setsP1 != 0 || s.setsP2 != 0 || s.completedSets.isNotEmpty()) {
+                    State2(
+                        p1Pts = s.p1Pts,
+                        p2Pts = s.p2Pts,
+                        gamesP1 = if (s.isTiebreak) 6 else s.gamesP1,
+                        gamesP2 = if (s.isTiebreak) 6 else s.gamesP2,
+                        setsP1 = s.setsP1,
+                        setsP2 = s.setsP2,
+                        completedSets = s.completedSets,
+                        isTiebreak = s.isTiebreak,
+                        tbP1 = s.tbP1,
+                        tbP2 = s.tbP2,
+                    )
+                } else {
+                    val p = parseState(s.text)
+                    State2(
+                        p1Pts = p.p1Pts,
+                        p2Pts = p.p2Pts,
+                        gamesP1 = p.gamesP1,
+                        gamesP2 = p.gamesP2,
+                        setsP1 = p.setsP1,
+                        setsP2 = p.setsP2,
+                        completedSets = p.completedSets,
+                        isTiebreak = false,
+                        tbP1 = 0,
+                        tbP2 = 0,
+                    )
+                }
 
                 // Panel background (simple rectangle; rounded/shadow omitted in MVP)
                 val px = marginTL
@@ -141,22 +169,29 @@ object AssOverlayWriter {
                     cx += cellW + cellGap
                 }
 
-                // Current games per set (ongoing set) shown as additional cells
-                w.appendLine("Dialogue: 2,$start,$end,Cell,,0,0,0,,{\\an7} {\\pos(${cx},${row1Y})}${st.gamesP1}")
-                w.appendLine("Dialogue: 2,$start,$end,Cell,,0,0,0,,{\\an7} {\\pos(${cx},${row2Y})}${st.gamesP2}")
+                // Current games per set (ongoing set) shown as additional cells; during tiebreak show 6–6 per spec
+                val g1 = if (st.isTiebreak) 6 else st.gamesP1
+                val g2 = if (st.isTiebreak) 6 else st.gamesP2
+                w.appendLine("Dialogue: 2,$start,$end,Cell,,0,0,0,,{\\an7} {\\pos(${cx},${row1Y})}${g1}")
+                w.appendLine("Dialogue: 2,$start,$end,Cell,,0,0,0,,{\\an7} {\\pos(${cx},${row2Y})}${g2}")
                 cx += cellW + cellGap
 
                 // Big point score at the right (top-right aligned, anchored to panel right pad)
                 val scoreX = scoreRightX
                 val scoreY1 = row1Y - 4
                 val scoreY2 = row2Y - 4
-                val p1Lead = isP1Leading(st)
-                val p1PtsTxt = pointsLabel(st.p1Pts, st.p2Pts)
-                val p2PtsTxt = pointsLabel(st.p2Pts, st.p1Pts)
+                val p1Lead = if (st.isTiebreak) st.tbP1 > st.tbP2 else isP1LeadingLegacy(st.p1Pts, st.p2Pts)
                 val style1 = if (p1Lead) "BigScore" else "BigScoreDim"
                 val style2 = if (p1Lead) "BigScoreDim" else "BigScore"
-                w.appendLine("Dialogue: 3,$start,$end,$style1,,0,0,0,,{\\an9} {\\pos(${scoreX},${scoreY1})}${p1PtsTxt}")
-                w.appendLine("Dialogue: 3,$start,$end,$style2,,0,0,0,,{\\an9} {\\pos(${scoreX},${scoreY2})}${p2PtsTxt}")
+                if (st.isTiebreak) {
+                    w.appendLine("Dialogue: 3,$start,$end,$style1,,0,0,0,,{\\an9} {\\pos(${scoreX},${scoreY1})}${st.tbP1}")
+                    w.appendLine("Dialogue: 3,$start,$end,$style2,,0,0,0,,{\\an9} {\\pos(${scoreX},${scoreY2})}${st.tbP2}")
+                } else {
+                    val p1PtsTxt = pointsLabel(st.p1Pts, st.p2Pts)
+                    val p2PtsTxt = pointsLabel(st.p2Pts, st.p1Pts)
+                    w.appendLine("Dialogue: 3,$start,$end,$style1,,0,0,0,,{\\an9} {\\pos(${scoreX},${scoreY1})}${p1PtsTxt}")
+                    w.appendLine("Dialogue: 3,$start,$end,$style2,,0,0,0,,{\\an9} {\\pos(${scoreX},${scoreY2})}${p2PtsTxt}")
+                }
             }
         }
     }
@@ -167,6 +202,20 @@ object AssOverlayWriter {
         val gamesP1: Int, val gamesP2: Int,
         val setsP1: Int, val setsP2: Int,
         val completedSets: List<Pair<Int, Int>>,
+    )
+
+    // 3.21 — Structured state for overlay rendering with tiebreak support
+    private data class State2(
+        val p1Pts: Int,
+        val p2Pts: Int,
+        val gamesP1: Int,
+        val gamesP2: Int,
+        val setsP1: Int,
+        val setsP2: Int,
+        val completedSets: List<Pair<Int, Int>>,
+        val isTiebreak: Boolean,
+        val tbP1: Int,
+        val tbP2: Int,
     )
 
     private fun parseState(text: String): State {
@@ -215,13 +264,11 @@ object AssOverlayWriter {
         return State(p1Pts, p2Pts, g1, g2, s1, s2, sets)
     }
 
-    private fun isP1Leading(s: State): Boolean {
-        // Determine leading by point score first; tie → no lead
-        val pMap = fun(pts: Int): Int = when {
-            pts >= 4 -> 4 else -> pts
-        }
-        val p1 = pMap(s.p1Pts)
-        val p2 = pMap(s.p2Pts)
+    private fun isP1LeadingLegacy(p1Pts: Int, p2Pts: Int): Boolean {
+        // Legacy mapping consistent with 0/15/30/40/Ad display
+        val pMap = fun(pts: Int): Int = if (pts >= 4) 4 else pts
+        val p1 = pMap(p1Pts)
+        val p2 = pMap(p2Pts)
         if (p1 != p2) return p1 > p2
         return false
     }

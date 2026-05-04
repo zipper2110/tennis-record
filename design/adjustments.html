@@ -150,13 +150,13 @@
     </div>
 </aside>
 <!-- Main Content Area -->
-<main class="ml-20 flex h-screen">
+<main class="flex h-screen w-[calc(100vw-5rem)] ml-20">
     <!-- Center Workspace: Video Player -->
     <div class="flex-grow flex flex-col bg-surface-container-lowest relative overflow-hidden">
         <!-- Canvas -->
         <div class="flex-grow flex items-center justify-center p-8">
-            <div class="aspect-video w-full max-w-5xl bg-surface-container shadow-2xl relative group ring-1 ring-outline-variant/10">
-                <video id="video" class="w-full h-full object-cover" preload="metadata" playsinline poster="https://lh3.googleusercontent.com/aida-public/AB6AXuDpajsfqJWQOGTp76IrwkyO9shhZZGsmWy9xUcxmvVwObXOriP2jbUi4Jr719B64bKGu7AFVmG0MN8JIWyzopKmGBSaEoU5PvvCHOeKRwyHFWJ8MWJ20VdoGaqc_k2an8OKLTG7VITygwyT4zw9WbkdbRNz1FU8Fp3BjZgRgDs767v3KfM6nzyyEkXTBmI4nG3FFLEwBzMfS9j3XKnF1T9QA4m1hEC4ig1SR4AdjWhzw3v1sGwjzDIMifVhZvmC0LHTVI6CPL4zn4ct">
+            <div class="w-full max-w-5xl bg-surface-container shadow-2xl relative group ring-1 ring-outline-variant/10" style="aspect-ratio: 16 / 9;">
+                <video id="video" class="w-full h-full object-contain" preload="metadata" playsinline controls controlslist="nodownload noplaybackrate" poster="https://lh3.googleusercontent.com/aida-public/AB6AXuDpajsfqJWQOGTp76IrwkyO9shhZZGsmWy9xUcxmvVwObXOriP2jbUi4Jr719B64bKGu7AFVmG0MN8JIWyzopKmGBSaEoU5PvvCHOeKRwyHFWJ8MWJ20VdoGaqc_k2an8OKLTG7VITygwyT4zw9WbkdbRNz1FU8Fp3BjZgRgDs767v3KfM6nzyyEkXTBmI4nG3FFLEwBzMfS9j3XKnF1T9QA4m1hEC4ig1SR4AdjWhzw3v1sGwjzDIMifVhZvmC0LHTVI6CPL4zn4ct">
                     <source src="https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4" type="video/mp4" />
                     Your browser does not support the HTML5 video tag.
                 </video>

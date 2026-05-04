@@ -136,11 +136,9 @@ General findings & scope notes (review)
   - Description: Ensure navigation to Export is consistent; initialize with current project manifest/EDL when present.
   - Acceptance Criteria:
     - From Projects/Markup, navigating to Export reflects current project context and enables Initialize button only if prerequisites are met (source exists, EDL valid when idle-trim ON).
-- [ ]  3.16 — Minimal logging hooks
+- [moved] 3.16 — Minimal logging hooks (moved to v0.2.0/export.md on 2026-04-21)
 
-  - Description: Add lightweight logging for queue lifecycle, command execution, state transitions, and errors.
-  - Acceptance Criteria:
-    - Logs are on by default at INFO; ffmpeg command lines logged at DEBUG.
+  - Note: This task has been moved to the v0.2.0 planning file. Scope unchanged.
 Design reference — Scoreboard overlay visual
 
 - Canonical image: design/scoreboard-design.png (Windows absolute: C:\w\tennis-record\design\scoreboard-design.png). All visual requirements in 3.17–3.20 reference this image.
@@ -242,3 +240,65 @@ Out of scope for v0.1.0 → v0.2.0 candidates
     - Sanitize/control max visual length (e.g., ellipsis) to avoid layout overflow; do not truncate in persistence.
   - Decisions:
     - Language remains fixed-English; only names are user-provided. Fonts/weights per 3.19 visual requirements.
+
+
+Update — 2026-04-19
+
+- Clarification and scope change: The scoreboard overlay in Export must correctly handle tiebreaks to match the Scoring tab state. This update supersedes earlier notes in 3.18 and the Decisions block that said “no tiebreaks in v0.1.x”. The lack of tiebreak handling caused a mismatch where a tiebreak was displayed/accumulated as a normal game during export.
+
+- Impacted areas: 3.18 (timeline generation) and 3.19/3.20 (overlay composition and tests). The new task 3.21 below defines the required behavior and tests.
+
+- Cross‑reference: Follow Scoring spec 4.8 for rule semantics (start tiebreak at 6–6, standard 7‑point win‑by‑2; set result 7–6 for the winner). Use the scoring engine’s authoritative state.
+
+- Backward compatibility: Non‑tiebreak matches are unaffected.
+
+- Acceptance: A match containing a 6–6 tiebreak must render with correct per‑point overlay updates and final set score 7–6; no phantom extra games appear in the overlay or export summary.
+
+- [moved] 3.21 — Scoreboard overlay: Tiebreak rules support (bugfix) — moved to v0.2.0/export.md on 2026-04-21
+
+  - Problem summary: When a set reaches 6–6, the Export overlay timeline currently treats subsequent points as regular game points. This results in incorrect in‑progress display and an extra game being counted instead of a tiebreak, producing a mismatch vs the Scoring tab (which handles tiebreaks per 4.8).
+
+  - Description: Detect tiebreak state from scoring data and represent it distinctly in the overlay timeline and visuals. During tiebreak:
+    - Show numeric tiebreak points per player (e.g., 3–2, 6–6, 8–7), not 15/30/40/Ad.
+    - Do not increment the current set’s game counters while the tiebreak is in progress.
+    - On tiebreak completion, finalize the set as 7–6 for the winner, then reset to a new set at 0–0.
+
+  - Acceptance Criteria:
+    - Timeline generation:
+      - At 6–6 in games, subsequent scored points are mapped to tiebreak numeric points using win‑by‑2 logic. The IR produced for overlay includes an explicit `isTiebreak=true` flag or equivalent, and `tbPointsP1/P2` counters for each interval.
+      - For Idle‑trim ON: overlay updates align exactly with concatenated point boundaries; for Idle‑trim OFF: overlay updates at original source times. No drift.
+      - Carry‑forward: If some points inside or before the tiebreak are unscored, the last known overlay state is shown until the next scored point.
+    - Visuals (1080p reference):
+      - While `isTiebreak=true`, the rightmost “current point score” cell shows numeric tiebreak scores for both players (e.g., “P1 6  |  6 P2”), with the leader emphasized per existing style. The normal 0/15/30/40/Ad representation is not used during tiebreak.
+      - Per‑set game cells show 6–6 until the tiebreak completes; after completion, the set cell shows 7–6 for the winner, and a new set column begins at 0–0.
+      - No extra game is ever added due to the tiebreak; the completed set is always finalized as 7–6 (winner indicated by the 7 in their row).
+    - Parity with Scoring tab:
+      - Given the same `ScoreV1` outcomes, the Export overlay states match Scoring tab’s computed state at every scored point boundary, including start of tiebreak, progression, and set closure.
+    - Summary and defaults:
+      - The Completed Renders card and any job summaries that show set scores reflect 7–6 for tiebreak sets.
+      - The “Include Scoreboard” checkbox default logic remains unchanged; only the overlay content changes when enabled.
+
+  - Unified rules engine:
+    - A single reusable scoring rules engine is the sole source of truth for score computation (points→games→sets, including tiebreaks).
+    - Both Scoring (4.8) and Export (3.18–3.21) must consume this shared engine API; Export must not re‑implement or fork scoring logic.
+    - Given the same `ScoreV1` inputs, Scoring and Export must produce identical score states at each scored point boundary.
+  - Implementation Guide:
+    - Use the rules engine used by Scoring (see 4.8) as the single source of truth. Extend or expose state signals required by Export timeline generation: `isTiebreak`, `tbPointsP1`, `tbPointsP2`, and clear transitions into/out of tiebreak.
+    - In 3.18’s timeline builder, carry the tiebreak state into the IR. Avoid attempting to infer tiebreak from games alone; rely on `ScoreV1`→rules computation.
+    - In 3.19’s composition path, switch the text/content mapping when `isTiebreak=true`:
+      - Replace the 40/Ad mapping with numeric TB points for both players in the current score cell.
+      - Keep per‑set game cells at 6–6 while TB is in progress; on completion, write 7–6 and roll over to a new set column.
+    - Ensure ordering with scale/concat filters remains correct; no changes required to positioning/skin, only texts.
+    - Edge cases: very long tiebreaks (win‑by‑2) must be supported; numeric display continues beyond 7 (e.g., 10–9).
+
+  - Tests and Fixtures:
+    - Extend 3.20 tests or add a dedicated 3.21 test suite:
+      - Golden timeline: a synthetic set that reaches 6–6 and resolves via tiebreak; verify output‑time IR emits correct `isTiebreak` segments and numeric TB points until completion, then 7–6 set finalization.
+      - Command augmentation: when `includeScoreboard=true`, verify the filtergraph selects the tiebreak numeric layout during `isTiebreak` intervals and the normal layout elsewhere.
+      - Visual golden: generate one short sample frame for an in‑progress tiebreak state and compare by size/hash against a golden asset.
+      - Regression: include a non‑tiebreak match to verify no behavior change.
+
+  - Decisions:
+    - Numeric display is used only during tiebreak. Outside tiebreak, the standard 0/15/30/40/Ad display remains.
+    - Serving order remains ignored in v0.1.0, including during tiebreak.
+    - Accessibility and legibility requirements from 3.19 still apply; reuse fonts/colors.
