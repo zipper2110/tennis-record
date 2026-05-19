@@ -8,6 +8,8 @@ import uk.co.caprica.vlcj.player.embedded.EmbeddedMediaPlayer
 import uk.co.caprica.vlcj.player.component.EmbeddedMediaPlayerComponent
 import java.awt.Component
 import java.io.File
+import java.awt.image.BufferedImage
+import javax.imageio.ImageIO
 
 /**
  * Swing variant of VLCJ-backed media player using EmbeddedMediaPlayerComponent (AWT Canvas).
@@ -15,6 +17,7 @@ import java.io.File
  * Note: We intentionally do NOT implement AppMediaPlayer here because that interface is bound to JavaFX Node.
  * This class mirrors the API and can be adapted by a thin layer later in migration.
  */
+import org.litvin.adjustments.AdjustmentsV1
 class VlcjSwingMediaPlayerAdapter {
     // For Phase 0 we stick to defaults; options can be tuned later if needed.
     private val embeddedComponent = EmbeddedMediaPlayerComponent()
@@ -24,6 +27,12 @@ class VlcjSwingMediaPlayerAdapter {
     val component: Component get() = embeddedComponent
 
     private var durationMs: Long = 0L
+
+    // Some VLC snapshot implementations return an upside-down image (origin at bottom-left).
+    // Flip snapshots vertically by default; can be disabled via -Dtennis.vlc.snap.flipY=false
+    private val flipSnapshots: Boolean = try {
+        java.lang.Boolean.parseBoolean(System.getProperty("tennis.vlc.snap.flipY", "true"))
+    } catch (_: Throwable) { true }
 
     var onReady: (() -> Unit)? = null
     var onStatusChanged: ((PlayerStatus) -> Unit)? = null
@@ -81,7 +90,7 @@ class VlcjSwingMediaPlayerAdapter {
     }
 
     /** Try to apply geometry via VLC crop; returns true if applied/scheduled, false if not supported. */
-    fun applyGeometryAdjustments(adj: org.litvin.AdjustmentsV1): Boolean {
+    fun applyGeometryAdjustments(adj: AdjustmentsV1): Boolean {
         // Stash and schedule apply; we always schedule and return true — if video dims are unknown, we'll retry next tick
         pendingZoom = adj.zoom.coerceIn(0.1f, 4.0f)
         pendingPanX = adj.panX.coerceIn(-1.0f, 1.0f)
@@ -120,7 +129,7 @@ class VlcjSwingMediaPlayerAdapter {
      * Apply color adjustments to VLC preview without pausing (coalesced, ≤120 Hz).
      * Maps brightness/contrast/saturation directly; approximates white balance via hue/gamma and a slight sat shift.
      */
-    fun applyColorAdjustments(adj: org.litvin.AdjustmentsV1) {
+    fun applyColorAdjustments(adj: AdjustmentsV1) {
         // Map model → VLC values
         var b = adj.brightness.coerceIn(-1.0f, 1.0f)
         var c = adj.contrast.coerceIn(0.0f, 3.0f)
@@ -190,6 +199,113 @@ class VlcjSwingMediaPlayerAdapter {
         State.OPENING, State.BUFFERING -> PlayerStatus.READY
         State.ERROR -> PlayerStatus.ERROR
         else -> PlayerStatus.UNKNOWN
+    }
+
+    fun captureFrame(): BufferedImage? {
+        fun maybeFlip(img: BufferedImage?): BufferedImage? {
+            if (img == null) return null
+            if (!flipSnapshots) return img
+            return try { flipVertically(img) } catch (_: Throwable) { img }
+        }
+        // Try direct BufferedImage snapshot first (fast path)
+        try {
+            val bi = mediaPlayer.snapshots().get()
+            if (bi != null) return maybeFlip(bi)
+        } catch (_: Throwable) { }
+        // Fallback: save to a temp file via VLCJ and read it back
+        try {
+            val tmp = kotlin.io.path.createTempFile("vlc_snap_", ".png").toFile()
+            tmp.deleteOnExit()
+            val saved = try { mediaPlayer.snapshots().save(tmp) } catch (_: Throwable) { false }
+            if (saved && tmp.exists()) {
+                val img = try { ImageIO.read(tmp) } catch (_: Throwable) { null }
+                try { tmp.delete() } catch (_: Throwable) { }
+                val rs = maybeFlip(img)
+                if (rs != null) return rs
+            } else {
+                try { tmp.delete() } catch (_: Throwable) { }
+            }
+        } catch (_: Throwable) { }
+        // Last resort APIs (older vlcj): video().snapshot() that returns a BufferedImage
+        try {
+            val m = mediaPlayer.video()::class.java.methods.firstOrNull { it.name == "snapshot" && it.parameterCount == 0 }
+            val r = m?.invoke(mediaPlayer.video()) as? BufferedImage
+            if (r != null) return maybeFlip(r)
+        } catch (_: Throwable) { }
+        return null
+    }
+
+    private fun flipVertically(src: BufferedImage): BufferedImage {
+        val w = src.width
+        val h = src.height
+        val dst = BufferedImage(w, h, src.type.takeIf { it != 0 } ?: BufferedImage.TYPE_INT_ARGB)
+        val g = dst.createGraphics()
+        try {
+            val at = java.awt.geom.AffineTransform(1.0, 0.0, 0.0, -1.0, 0.0, h.toDouble())
+            g.drawImage(src, at, null)
+        } finally {
+            try { g.dispose() } catch (_: Throwable) { }
+        }
+        return dst
+    }
+
+    fun captureFrameAt(targetMs: Long, timeoutMs: Long = 600, pollMs: Long = 25): BufferedImage? {
+        val wallStart = System.currentTimeMillis()
+        fun timedOut(): Boolean = (System.currentTimeMillis() - wallStart) > timeoutMs
+        fun left(): Long = timeoutMs - (System.currentTimeMillis() - wallStart)
+        println("[ADJ_SEEK] adapter.captureFrameAt start targetMs=$targetMs")
+        try { pause() } catch (_: Throwable) { }
+        try { seek(targetMs.coerceAtLeast(0L)) } catch (_: Throwable) { }
+        // Avoid strict time-gating while paused; instead, nudge decode with a very short play/pause
+        try {
+            val playBudget = 120L
+            val playStart = System.currentTimeMillis()
+            mediaPlayer.controls().play()
+            var lastT = -1L
+            while (!timedOut() && System.currentTimeMillis() - playStart < playBudget) {
+                try { lastT = currentTimeMs() } catch (_: Throwable) { }
+                if (lastT >= targetMs) break
+                try { Thread.sleep(pollMs.coerceAtLeast(10)) } catch (_: Throwable) { break }
+            }
+        } catch (_: Throwable) { }
+        finally { try { mediaPlayer.controls().setPause(true) } catch (_: Throwable) { } }
+        if (timedOut()) { println("[ADJ_SEEK] adapter.captureFrameAt timeout before snapshot"); return null }
+        // Snapshot attempts: prefer save(tmp) first (often more reliable), then get(), then reflection
+        fun trySnapshotOnce(): BufferedImage? {
+            // save(tmp)
+            try {
+                val tmp = kotlin.io.path.createTempFile("vlc_snap_", ".png").toFile()
+                tmp.deleteOnExit()
+                val saved = try { mediaPlayer.snapshots().save(tmp) } catch (_: Throwable) { false }
+                if (saved && tmp.exists()) {
+                    val img = try { ImageIO.read(tmp) } catch (_: Throwable) { null }
+                    try { tmp.delete() } catch (_: Throwable) { }
+                    val rs = try { if (flipSnapshots) flipVertically(img!!) else img } catch (_: Throwable) { img }
+                    if (rs != null) return rs
+                } else {
+                    try { tmp.delete() } catch (_: Throwable) { }
+                }
+            } catch (_: Throwable) { }
+            // get()
+            try {
+                val bi = mediaPlayer.snapshots().get()
+                if (bi != null) return if (flipSnapshots) try { flipVertically(bi) } catch (_: Throwable) { bi } else bi
+            } catch (_: Throwable) { }
+            // reflection fallback
+            try {
+                val m = mediaPlayer.video()::class.java.methods.firstOrNull { it.name == "snapshot" && it.parameterCount == 0 }
+                val r = m?.invoke(mediaPlayer.video()) as? BufferedImage
+                if (r != null) return if (flipSnapshots) try { flipVertically(r) } catch (_: Throwable) { r } else r
+            } catch (_: Throwable) { }
+            return null
+        }
+        var img: BufferedImage? = trySnapshotOnce()
+        if (img == null && !timedOut()) {
+            try { Thread.sleep(60) } catch (_: Throwable) { }
+            if (!timedOut()) img = trySnapshotOnce()
+        }
+        if (img == null && timedOut()) println("[ADJ_SEEK] adapter.captureFrameAt timeout (no image)")
+        return img
     }
 
     fun dispose() {

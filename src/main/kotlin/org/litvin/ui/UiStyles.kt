@@ -1,7 +1,25 @@
-package org.litvin
+package org.litvin.ui
 
-import java.awt.*
-import javax.swing.*
+import java.awt.BasicStroke
+import java.awt.BorderLayout
+import java.awt.Color
+import java.awt.Component
+import java.awt.Cursor
+import java.awt.Dimension
+import java.awt.Font
+import java.awt.GradientPaint
+import java.awt.Graphics
+import java.awt.Graphics2D
+import java.awt.Polygon
+import java.awt.RenderingHints
+import javax.swing.AbstractButton
+import javax.swing.BorderFactory
+import javax.swing.BoxLayout
+import javax.swing.Icon
+import javax.swing.JButton
+import javax.swing.JComponent
+import javax.swing.JLabel
+import javax.swing.JPanel
 
 /**
  * Shared Swing UI styles to match the mock (projects.html):
@@ -171,12 +189,19 @@ object UiStyles {
                 val w = width; val h = height
                 val r = 18
                 val grad = GradientPaint(0f, 0f, GRADIENT_START, 0f, h.toFloat(), GRADIENT_END)
-                g2.paint = if (model.isRollover) GradientPaint(0f,0f,GRADIENT_START_HOVER,0f,h.toFloat(),GRADIENT_END_HOVER) else grad
+                g2.paint = if (model.isRollover) GradientPaint(
+                    0f,
+                    0f,
+                    GRADIENT_START_HOVER,
+                    0f,
+                    h.toFloat(),
+                    GRADIENT_END_HOVER
+                ) else grad
                 g2.fillRoundRect(0,0,w,h,r,r)
                 // icon
                 this.icon.paintIcon(this, g2, (w - this.icon.iconWidth)/2, (h - this.icon.iconHeight)/2)
                 // subtle inner shadow
-                g2.color = Color(0,0,0,40)
+                g2.color = Color(0, 0, 0, 40)
                 g2.drawRoundRect(0,0,w-1,h-1,r,r)
             }
         }
@@ -201,9 +226,9 @@ object UiStyles {
         init {
             this.icon = icon
             // Center icon and place text under the icon
-            horizontalAlignment = SwingConstants.CENTER
-            horizontalTextPosition = SwingConstants.CENTER
-            verticalTextPosition = SwingConstants.BOTTOM
+            horizontalAlignment = CENTER
+            horizontalTextPosition = CENTER
+            verticalTextPosition = BOTTOM
             iconTextGap = 6
             isContentAreaFilled = false
             isBorderPainted = false
@@ -262,7 +287,7 @@ object UiStyles {
             val g2 = g as Graphics2D
             g2.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE)
             g2.color = LIME
-            g2.stroke = BasicStroke((size/8f))
+            g2.stroke = BasicStroke((size / 8f))
             val w = size; val h = size
             g2.drawLine(x + w/5, y + h/4, x + w - w/5, y + h/4)
             g2.drawLine(x + w/5, y + h/2, x + w - w/5, y + h/2)
@@ -380,5 +405,56 @@ object UiStyles {
             g2.fillRoundRect(cx - len / 2, cy - bar / 2, len, bar, bar, bar)
             g2.fillRoundRect(cx - bar / 2, cy - len / 2, bar, len, bar, bar)
         }
+    }
+
+    /**
+     * Apply secondary/tertiary text style for labels and helper texts on card-like surfaces.
+     * - Foreground: FG_SECONDARY
+     * - Background: CARD_BG
+     * - Slightly reduce font size to de-emphasize
+     */
+    fun styleHelper(c: JComponent) {
+        c.foreground = FG_SECONDARY
+        c.background = CARD_BG
+        try {
+            val f = c.font
+            if (f != null) c.font = f.deriveFont((f.size2D - 1f).coerceAtLeast(11f))
+        } catch (_: Throwable) { }
+    }
+
+    /** Primary text style on card-like surfaces: FG_PRIMARY on CARD_BG. */
+    fun stylePrimary(c: JComponent) {
+        c.foreground = FG_PRIMARY
+        c.background = CARD_BG
+    }
+
+    /** Monospace variant of [styleHelper] using Consolas when available. */
+    fun styleMono(c: JComponent) {
+        styleHelper(c)
+        try {
+            c.font = Font("Consolas", Font.PLAIN, c.font.size)
+        } catch (_: Throwable) { }
+    }
+
+    /**
+     * Simple card container with title header and body.
+     * - Background: CARD_BG, Foreground: FG_PRIMARY
+     * - Thin rounded border with CARD_BORDER
+     * - 12px internal padding
+     */
+    fun card(title: String, body: JComponent): JPanel {
+        val container = JPanel(BorderLayout())
+        container.background = CARD_BG
+        container.foreground = FG_PRIMARY
+        container.border = BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(CARD_BORDER),
+            BorderFactory.createEmptyBorder(12, 12, 12, 12)
+        )
+        val header = JLabel(title)
+        header.font = header.font.deriveFont(Font.BOLD)
+        header.foreground = FG_PRIMARY
+        container.add(header, BorderLayout.NORTH)
+        container.add(body, BorderLayout.CENTER)
+        return container
     }
 }

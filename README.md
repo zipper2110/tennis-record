@@ -38,8 +38,22 @@ Rationale, trade‑offs, and module plan are explained in the [solution outline]
 mvn -DskipTests package
 ```
 
+### Tests
+- Run full test suite:
+  ```bash
+  mvn test
+  ```
+- Quick run for architecture dependency hygiene only:
+  ```bash
+  mvn -q -Dtest=ArchitectureDependencyHygieneTest test
+  ```
+
 ### Run (temporary)
 A proper desktop entrypoint (Compose Desktop) will be added with dependencies and packaging. For now, the skeleton app is minimal and only for verifying the toolchain.
+
+## CI
+- GitHub Actions workflow runs `mvn test` on pushes and pull requests to `main`/`master`.
+- The architecture dependency hygiene test (`org.litvin.ArchitectureDependencyHygieneTest`) is part of the suite and will fail the build on violations.
 
 ## High‑level architecture
 See: [docs/solution-outline.md](docs/solution-outline.md)

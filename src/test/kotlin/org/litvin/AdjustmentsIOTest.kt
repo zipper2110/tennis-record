@@ -1,5 +1,8 @@
 package org.litvin
 
+import org.litvin.adjustments.AdjustmentsIO
+import org.litvin.adjustments.AdjustmentsV1
+import org.litvin.adjustments.WhiteBalanceV1
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue

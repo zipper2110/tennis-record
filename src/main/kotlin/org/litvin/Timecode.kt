@@ -1,4 +1,4 @@
-package org.litvin
+package org.litvin.shared.util
 
 /**
  * Time formatting/parsing helpers for consistent display and editing.
@@ -59,12 +59,4 @@ object Timecode {
         return totalMs
     }
 
-    /** Sum of durations across completed points. */
-    fun totalDuration(points: List<PointV1>): Long {
-        var sum = 0L
-        for (p in points) {
-            sum += (p.endMs - p.startMs).coerceAtLeast(0)
-        }
-        return sum
-    }
 }

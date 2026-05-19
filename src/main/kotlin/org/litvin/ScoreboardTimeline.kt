@@ -1,5 +1,9 @@
 package org.litvin
 
+import org.litvin.markup.PointV1
+import org.litvin.scoring.Outcome
+import org.litvin.scoring.ScoringRules
+
 /**
  * Task 3.18 — Scoreboard overlay: timeline generation
  *

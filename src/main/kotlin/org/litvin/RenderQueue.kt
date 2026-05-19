@@ -1,5 +1,6 @@
 package org.litvin
 
+import org.litvin.markup.PointV1
 import java.util.UUID
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.LinkedBlockingQueue

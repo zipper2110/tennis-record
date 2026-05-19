@@ -1,5 +1,6 @@
 package org.litvin
 
+import org.litvin.adjustments.AdjustmentsV1
 import java.awt.*
 import javax.swing.*
 import kotlin.math.roundToInt

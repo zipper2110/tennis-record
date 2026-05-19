@@ -1,5 +1,7 @@
 package org.litvin
 
+import org.litvin.scoring.Outcome
+
 /**
  * Pure tennis rules engine used by Scoring (Task 4.8) and covered by tests in Task 4.14.
  *

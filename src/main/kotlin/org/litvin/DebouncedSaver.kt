@@ -1,4 +1,4 @@
-package org.litvin
+package org.litvin.shared.util
 
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService

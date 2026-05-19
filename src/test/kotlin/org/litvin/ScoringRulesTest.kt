@@ -1,5 +1,6 @@
 package org.litvin
 
+import org.litvin.scoring.Outcome
 import kotlin.test.Test
 import kotlin.test.assertEquals
 

@@ -1,9 +1,16 @@
 package org.litvin
 
 import com.formdev.flatlaf.FlatLightLaf
+import org.litvin.ui.UiStyles
 import java.awt.*
 import java.util.prefs.Preferences
 import javax.swing.*
+import org.litvin.ui.commons.Dialogs
+import org.litvin.ui.tabs.projects.SwingProjectsPanel
+import org.litvin.ui.tabs.markup.SwingMarkupPanel
+import org.litvin.ui.tabs.scoring.SwingScoringPanel
+import org.litvin.ui.tabs.export.SwingExportPanel
+import org.litvin.ui.tabs.adjustments.SwingAdjustmentsPanel
 
 
 /**
@@ -16,7 +23,7 @@ object SwingMainApp {
     private const val CARD_MARKUP = "markup"
     private const val CARD_EXPORT = "export"
     private const val CARD_SCORING = "scoring"
-    private const val CARD_ADJUST = "adjustments"
+    private const val CARD_ADJUSTMENTS = "adjustments"
 
     @JvmStatic
     fun main(args: Array<String>) {
@@ -95,7 +102,7 @@ object SwingMainApp {
                 // Global Swing uncaught error handler → show friendly dialog
                 Thread.setDefaultUncaughtExceptionHandler { _, e ->
                     e.printStackTrace()
-                    SwingDialogUtils.showError(null, e, "Unexpected error")
+                    Dialogs.showError(null, e, "Unexpected error")
                 }
 
                 // Try to hint Windows to use the High Performance GPU for Java/this app
@@ -122,9 +129,9 @@ object SwingMainApp {
                 // Buttons with lime icons
                 lateinit var btnProjects: UiStyles.SidebarButton
                 lateinit var btnMarkup: UiStyles.SidebarButton
+                lateinit var btnAdjustments: UiStyles.SidebarButton
                 lateinit var btnScoring: UiStyles.SidebarButton
                 lateinit var btnExport: UiStyles.SidebarButton
-                lateinit var btnAdjust: UiStyles.SidebarButton
 
                 fun addItem(b: UiStyles.SidebarButton) {
                     b.alignmentX = 0f
@@ -143,17 +150,17 @@ object SwingMainApp {
                 // Projects screen (Swing Phase 2) and Markup (Phase 3)
                 var setActive: (String) -> Unit = {}
                 val markupPanel = SwingMarkupPanel()
+                val adjustmentsPanel = SwingAdjustmentsPanel()
                 val scoringPanel = SwingScoringPanel()
                 val exportPanel = SwingExportPanel()
-                val adjustPanel = SwingAdjustmentsPanel()
                 val projectsPanel = SwingProjectsPanel().apply {
                     onProjectOpened = { path ->
                         try {
                             currentManifestPath = path
                             markupPanel.setProjectManifest(path)
+                            adjustmentsPanel.setProjectManifest(path)
                             scoringPanel.setProjectManifest(path)
                             exportPanel.setProjectManifest(path)
-                            adjustPanel.setProjectManifest(path)
                             frame.title = "Tennis Record — Markup (Swing)"
                             cl.show(cards, CARD_MARKUP)
                             setActive(CARD_MARKUP)
@@ -164,9 +171,9 @@ object SwingMainApp {
 
                 cards.add(projectsPanel, CARD_PROJECTS)
                 cards.add(markupPanel, CARD_MARKUP)
+                cards.add(adjustmentsPanel, CARD_ADJUSTMENTS)
                 cards.add(scoringPanel, CARD_SCORING)
                 cards.add(exportPanel, CARD_EXPORT)
-                cards.add(adjustPanel, CARD_ADJUST)
 
                 // Navigation helper with lifecycle wiring
                 var currentCard: String? = null
@@ -175,8 +182,8 @@ object SwingMainApp {
                         // Pause media on panels being left
                         when (currentCard) {
                             CARD_MARKUP -> try { markupPanel.onDeactivated() } catch (_: Throwable) {}
+                            CARD_ADJUSTMENTS -> try { adjustmentsPanel.onDeactivated() } catch (_: Throwable) {}
                             CARD_SCORING -> try { scoringPanel.onDeactivated() } catch (_: Throwable) {}
-                            CARD_ADJUST -> try { adjustPanel.onDeactivated() } catch (_: Throwable) {}
                         }
                         // Show target card
                         cl.show(cards, card)
@@ -185,9 +192,9 @@ object SwingMainApp {
                         // Activate the new panel (no autoplay)
                         when (card) {
                             CARD_MARKUP -> try { markupPanel.onActivated() } catch (_: Throwable) {}
+                            CARD_ADJUSTMENTS -> try { adjustmentsPanel.onActivated() } catch (_: Throwable) {}
                             CARD_SCORING -> try { scoringPanel.onActivated() } catch (_: Throwable) {}
                             CARD_EXPORT -> try { exportPanel.onActivated() } catch (_: Throwable) {}
-                            CARD_ADJUST -> try { adjustPanel.onActivated() } catch (_: Throwable) {}
                         }
                         currentCard = card
                     } catch (_: Throwable) { }
@@ -206,6 +213,12 @@ object SwingMainApp {
                 }
                 addItem(btnMarkup)
 
+                btnAdjustments = UiStyles.sidebarButton("Adjustments", UiStyles.pencilIcon()) {
+                    frame.title = "Tennis Record — Adjustments (Swing)"
+                    goTo(CARD_ADJUSTMENTS)
+                }
+                addItem(btnAdjustments)
+
                 btnScoring = UiStyles.sidebarButton("Scoring", UiStyles.targetIcon()) {
                     frame.title = "Tennis Record — Scoring (Swing)"
                     goTo(CARD_SCORING)
@@ -218,19 +231,13 @@ object SwingMainApp {
                 }
                 addItem(btnExport)
 
-                btnAdjust = UiStyles.sidebarButton("Adjustments", UiStyles.slidersIcon()) {
-                    frame.title = "Tennis Record — Adjustments (Swing)"
-                    goTo(CARD_ADJUST)
-                }
-                addItem(btnAdjust)
-
                 // Now that buttons exist, wire active-state updater
                 setActive = { card ->
                     btnProjects.active = card == CARD_PROJECTS
                     btnMarkup.active = card == CARD_MARKUP
+                    btnAdjustments.active = card == CARD_ADJUSTMENTS
                     btnScoring.active = card == CARD_SCORING
                     btnExport.active = card == CARD_EXPORT
-                    btnAdjust.active = card == CARD_ADJUST
                 }
 
                 // Menu bar with File (Save All) and View navigation
@@ -242,7 +249,6 @@ object SwingMainApp {
                 miSaveAll.addActionListener {
                     try { markupPanel.saveNow() } catch (_: Throwable) { }
                     try { scoringPanel.saveNow() } catch (_: Throwable) { }
-                    try { adjustPanel.saveNow() } catch (_: Throwable) { }
                 }
                 fileMenu.add(miSaveAll)
                 menuBar.add(fileMenu)
@@ -250,19 +256,19 @@ object SwingMainApp {
                 val viewMenu = JMenu("View")
                 val miProjects = JMenuItem("Projects")
                 val miMarkup = JMenuItem("Markup")
+                val miAdjustments = JMenuItem("Adjustments")
                 val miScoring = JMenuItem("Scoring")
                 val miExport = JMenuItem("Export")
                 miProjects.addActionListener { btnProjects.doClick() }
                 miMarkup.addActionListener { btnMarkup.doClick() }
+                miAdjustments.addActionListener { btnAdjustments.doClick() }
                 miScoring.addActionListener { btnScoring.doClick() }
                 miExport.addActionListener { btnExport.doClick() }
-                val miAdjust = JMenuItem("Adjustments")
-                miAdjust.addActionListener { btnAdjust.doClick() }
                 viewMenu.add(miProjects)
                 viewMenu.add(miMarkup)
+                viewMenu.add(miAdjustments)
                 viewMenu.add(miScoring)
                 viewMenu.add(miExport)
-                viewMenu.add(miAdjust)
                 menuBar.add(viewMenu)
                 frame.jMenuBar = menuBar
 

@@ -1,4 +1,4 @@
-package org.litvin
+package org.litvin.adjustments
 
 import com.fasterxml.jackson.annotation.JsonAnyGetter
 import com.fasterxml.jackson.annotation.JsonAnySetter

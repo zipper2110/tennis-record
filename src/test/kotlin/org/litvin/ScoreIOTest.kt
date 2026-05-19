@@ -1,5 +1,8 @@
 package org.litvin
 
+import org.litvin.scoring.Outcome
+import org.litvin.scoring.ScoreIO
+import org.litvin.scoring.ScoreV1
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import java.nio.file.Files

@@ -1,4 +1,4 @@
-package org.litvin
+package org.litvin.markup
 
 import com.fasterxml.jackson.annotation.JsonInclude
 import com.fasterxml.jackson.databind.DeserializationFeature

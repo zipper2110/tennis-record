@@ -1,5 +1,6 @@
-package org.litvin
+package org.litvin.adjustments
 
+import org.litvin.shared.util.DebouncedSaver
 import java.io.File
 import java.util.concurrent.CopyOnWriteArrayList
 import javax.swing.SwingUtilities
@@ -22,7 +23,8 @@ object AdjustmentsStore {
         try {
             val dir = projectDir ?: return@DebouncedSaver
             AdjustmentsIO.writeForProjectDir(dir, state)
-        } catch (_: Throwable) { }
+        } catch (_: Throwable) {
+        }
     }
 
     /** Current full state snapshot. */

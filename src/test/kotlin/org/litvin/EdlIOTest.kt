@@ -1,5 +1,8 @@
 package org.litvin
 
+import org.litvin.markup.EdlIO
+import org.litvin.markup.EdlV1
+import org.litvin.markup.PointV1
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import java.nio.file.Files

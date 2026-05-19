@@ -1,5 +1,7 @@
 package org.litvin
 
+import org.litvin.markup.PointV1
+
 /**
  * Task 3.7 — FFmpeg command builder (v1)
  *

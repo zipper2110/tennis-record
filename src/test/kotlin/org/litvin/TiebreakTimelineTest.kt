@@ -1,5 +1,7 @@
 package org.litvin
 
+import org.litvin.markup.PointV1
+import org.litvin.scoring.Outcome
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
