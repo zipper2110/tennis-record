@@ -1,11 +1,25 @@
-package org.litvin.ui.tabs.scoring
+package org.litvin.ui.tabs.scoring.ui
 
 import org.litvin.markup.PointV1
 import org.litvin.shared.util.Timecode
-import java.awt.*
+import org.litvin.ui.UiStyles
+import java.awt.BorderLayout
+import java.awt.Color
+import java.awt.Container
+import java.awt.Cursor
+import java.awt.Dimension
+import java.awt.FlowLayout
+import java.awt.Font
+import java.awt.Rectangle
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
-import javax.swing.*
+import javax.swing.BorderFactory
+import javax.swing.Box
+import javax.swing.BoxLayout
+import javax.swing.JComponent
+import javax.swing.JLabel
+import javax.swing.JPanel
+import javax.swing.JScrollPane
 import javax.swing.border.EmptyBorder
 import kotlin.math.max
 
@@ -47,8 +61,8 @@ class PointsListPanel : JPanel(BorderLayout()) {
 
         val counts = JPanel(FlowLayout(FlowLayout.RIGHT, 6, 0))
         counts.isOpaque = false
-        headerTotalBadge = smallBadge("0 Total", Color(0x26, 0x26, 0x26), Color(0xA1, 0xFE, 0x00))
-        headerScoredBadge = smallBadge("0 Scored", Color(0x26, 0x26, 0x26), Color(0xAD, 0xAA, 0xAA))
+        headerTotalBadge = UiStyles.smallBadge("0 Total", Color(0x26, 0x26, 0x26), Color(0xA1, 0xFE, 0x00))
+        headerScoredBadge = UiStyles.smallBadge("0 Scored", Color(0x26, 0x26, 0x26), Color(0xAD, 0xAA, 0xAA))
         counts.add(headerTotalBadge)
         counts.add(headerScoredBadge)
         header.add(counts, BorderLayout.EAST)
@@ -151,7 +165,11 @@ class PointsListPanel : JPanel(BorderLayout()) {
     }
 
     private fun decorateRowSelection(row: JComponent, selected: Boolean, scored: Boolean) {
-        row.background = if (selected) Color(0x2C, 0x2C, 0x2C) else if (scored) Color(0x24, 0x24, 0x24) else Color(0x1A, 0x1A, 0x1A)
+        row.background = if (selected) Color(0x2C, 0x2C, 0x2C) else if (scored) Color(0x24, 0x24, 0x24) else Color(
+            0x1A,
+            0x1A,
+            0x1A
+        )
         row.border = if (selected) {
             BorderFactory.createCompoundBorder(
                 BorderFactory.createMatteBorder(0, 3, 0, 0, Color(0xA1, 0xFE, 0x00)),
@@ -174,7 +192,7 @@ class PointsListPanel : JPanel(BorderLayout()) {
         row.add(center, BorderLayout.CENTER)
         if (scored) {
             val check = JLabel()
-            check.icon = scoredIcon(18)
+            check.icon = UiStyles.scoredIcon(18)
             row.add(check, BorderLayout.EAST)
         }
         val fixedH = 40
@@ -185,44 +203,4 @@ class PointsListPanel : JPanel(BorderLayout()) {
         return row
     }
 
-    private fun smallBadge(text: String, bg: Color, fg: Color): JLabel {
-        val l = JLabel(text)
-        l.isOpaque = true
-        l.background = bg
-        l.foreground = fg
-        l.border = EmptyBorder(2, 6, 2, 6)
-        l.font = l.font.deriveFont(10f)
-        return l
-    }
-
-    // Green circle with white checkmark icon for scored points
-    private fun scoredIcon(size: Int = 18): Icon {
-        return object : Icon {
-            override fun getIconWidth(): Int = size
-            override fun getIconHeight(): Int = size
-            override fun paintIcon(c: Component?, g: Graphics?, x: Int, y: Int) {
-                if (g == null) return
-                val g2 = (g.create() as Graphics2D)
-                try {
-                    g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
-                    val d = size
-                    val green = Color(0x71, 0xB4, 0x00)
-                    // Draw filled green circle
-                    g2.color = green
-                    g2.fillOval(x, y, d, d)
-                    // Draw white checkmark
-                    val s = d.toDouble()
-                    val p = java.awt.geom.Path2D.Double()
-                    p.moveTo(x + 0.28 * s, y + 0.55 * s)
-                    p.lineTo(x + 0.45 * s, y + 0.72 * s)
-                    p.lineTo(x + 0.75 * s, y + 0.35 * s)
-                    g2.color = Color.WHITE
-                    g2.stroke = BasicStroke((d * 0.12f), BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
-                    g2.draw(p)
-                } finally {
-                    g2.dispose()
-                }
-            }
-        }
-    }
 }

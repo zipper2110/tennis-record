@@ -29,6 +29,12 @@ import org.litvin.scoring.ScoreV1
 import org.litvin.markup.EdlIO
 import org.litvin.markup.PointV1
 import org.litvin.shared.util.Timecode
+import org.litvin.ui.tabs.scoring.ui.ControlsToolbar
+import org.litvin.ui.tabs.scoring.ui.ScoreEntryPanel
+import org.litvin.ui.tabs.scoring.ui.TimelineSection
+import org.litvin.ui.tabs.scoring.ui.HotkeysHelpPanel
+import org.litvin.ui.tabs.scoring.ui.MatchHeaderPanel
+import org.litvin.ui.tabs.scoring.ui.VideoSyncPanel
 
 /**
  * v0.1.0 — Scoring tab shell (Task 4.1)
@@ -41,8 +47,65 @@ import org.litvin.shared.util.Timecode
  *   and side player panels (P1 / P2)
  *
  * No data wiring or persistence yet. All actions are no-ops for v0.1.0 task 4.1.
+ *
+ * v0.3.0 — E-SC-001 (T1): Component map and contracts draft
+ * Componentization target (leaves composed by this container):
+ * - header/MatchHeaderPanel — match title/players, current set/game, serve indicator
+ * - entry/ScoreEntryPanel — primary scoring inputs (points, undo/redo)
+ * - toolbar/ControlsToolbar — top-level actions (reset/save/settings)
+ * - timeline/TimelineSection — wraps existing PointsListPanel
+ * - help/HotkeysHelpPanel — compact legend of scoring hotkeys
+ * - video/VideoSyncPanel — basic video/timecode sync controls for scoring
+ *
+ * Shared contracts for wiring (defined in `org.litvin.ui.tabs.scoring`):
+ * - `ScoringActions` — view-to-domain/container commands (pointWon, undo, redo, toggleServe, navigate, play/seek, save)
+ * - `ScoringViewState` — immutable snapshot consumed by leaves (names, serving, points/games/sets, selection, player status)
+ *
+ * SwingScoringPanel remains the container that composes leaves and binds them to domain services,
+ * while leaves depend only on the above contracts, per architecture rules.
  */
 class SwingScoringPanel : JPanel(BorderLayout()) {
+
+    // Actions adapter for leaf components (E-SC-001 contracts)
+    private val actions: ScoringActions = object : ScoringActions {
+        override fun pointWon(side: Side) {
+            try {
+                val outcome = if (side == Side.P1) Outcome.P1 else Outcome.P2
+                setOutcomeForSelected(outcome)
+            } catch (_: Throwable) { }
+        }
+        override fun undo() { /* TODO(E-SC-001/T4): hook up undo when available */ }
+        override fun redo() { /* TODO(E-SC-001/T4): hook up redo when available */ }
+        override fun finalizeGame(winner: Side) { /* TODO(E-SC-001/T4): implement when domain is ready */ }
+        override fun finalizeSet(winner: Side) { /* TODO(E-SC-001/T4): implement when domain is ready */ }
+        override fun toggleServe() { /* TODO(E-SC-001/T4): implement when domain is ready */ }
+
+        override fun navigateToPoint(index: Int) {
+            if (index in points.indices) setSelectedIndex(index, userInitiated = true)
+        }
+        override fun advanceToNextPoint() { this@SwingScoringPanel.advanceToNextPoint() }
+
+        override fun playPause() { togglePlayPause() }
+        override fun seekBy(milliseconds: Long) { this@SwingScoringPanel.seekBy(milliseconds) }
+        override fun setSpeedMultiplier(multiplier: Float) {
+            try {
+                // Choose closest preset
+                val presets = SessionSettings.speedPresets
+                var bestIdx = 0
+                var bestDiff = Float.MAX_VALUE
+                for (i in presets.indices) {
+                    val d = kotlin.math.abs(presets[i] - multiplier)
+                    if (d < bestDiff) { bestDiff = d; bestIdx = i }
+                }
+                SessionSettings.playbackSpeedIndex = SessionSettings.clampIndex(bestIdx)
+                if (::speedCombo.isInitialized) speedCombo.selectedIndex = SessionSettings.playbackSpeedIndex
+                else player.setRate(SessionSettings.toRate(SessionSettings.playbackSpeedIndex))
+            } catch (_: Throwable) { }
+        }
+
+        override fun saveScore() { try { saveNow() } catch (_: Throwable) { } }
+        override fun autosave() { try { autosaveNow() } catch (_: Throwable) { } }
+    }
 
     // Active state controlled by navigation
     private var isActive: Boolean = false
@@ -123,7 +186,7 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
     private lateinit var listScroll: JScrollPane
     private val rowComponents = mutableListOf<JComponent>()
     private var selectedIndex: Int = -1
-    private lateinit var pointsList: PointsListPanel
+    private lateinit var pointsList: TimelineSection
     private lateinit var nextPointBtn: JButton
 
     // Player names (Task 4.17)
@@ -150,6 +213,14 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
     private lateinit var btnP1: JToggleButton
     private lateinit var btnNone: JToggleButton
     private lateinit var btnP2: JToggleButton
+
+    // Extracted leaf: primary scoring inputs (E-SC-001 T4)
+    private var scoreEntryPanel: ScoreEntryPanel? = null
+
+    // Extracted leaves (E-SC-001): header, video sync, hotkeys help
+    private lateinit var headerPanel: MatchHeaderPanel
+    private lateinit var videoSyncPanel: VideoSyncPanel
+    private lateinit var hotkeysHelpPanel: HotkeysHelpPanel
 
     // Bottom panels — dynamic refs for Task 4.7
     private lateinit var p1PointsVal: JLabel
@@ -260,6 +331,10 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
         background = Color(0x1A, 0x1A, 0x1A)
         layout = BorderLayout()
 
+        // Top toolbar with global actions (E-SC-001 T3)
+        val toolbar = ControlsToolbar(actions)
+        add(toolbar, BorderLayout.NORTH)
+
         // Root content: left list (fixed width) + center content
         val leftListPanel = buildLeftListPanel()
         val centerPanel = buildCenterPanel()
@@ -300,7 +375,7 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
     // Rebuild left points list from current 'points' and 'scoredPointIds'
     private fun rebuildPointsList() {
         try {
-            pointsList.setData(points, scoredPointIds)
+            pointsList.setList(points, scoredPointIds)
             try { if (::nextPointBtn.isInitialized) nextPointBtn.isEnabled = points.isNotEmpty() } catch (_: Throwable) {}
         } catch (_: Throwable) { }
     }
@@ -373,6 +448,7 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
         try { if (::nextPointBtn.isInitialized) nextPointBtn.isEnabled = (selectedIndex + 1) in points.indices } catch (_: Throwable) {}
         // Recompute panels for current selection
         recomputeFrom(selectedIndex)
+        pushStateUpdate()
     }
 
     private fun scrollRowIntoView(index: Int) {
@@ -457,8 +533,7 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
         panel.preferredSize = Dimension(240, 0) // Fixed left list width per spec (was ~320 px)
 
         // Points list component
-        pointsList = PointsListPanel()
-        pointsList.onSelect = { idx, _ -> setSelectedIndex(idx, userInitiated = true) }
+        pointsList = TimelineSection(actions)
         panel.add(pointsList, BorderLayout.CENTER)
 
         // Footer buttons and Player Names (Task 4.17)
@@ -609,7 +684,7 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
         row.add(center, BorderLayout.CENTER)
         if (scored) {
             val check = JLabel()
-            check.icon = scoredIcon(18)
+            check.icon = org.litvin.ui.UiStyles.scoredIcon(18)
             row.add(check, BorderLayout.EAST)
         }
         val fixedH = 40
@@ -620,52 +695,16 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
         return row
     }
 
-    private fun smallBadge(text: String, bg: Color, fg: Color): JLabel {
-        val l = JLabel(text)
-        l.isOpaque = true
-        l.background = bg
-        l.foreground = fg
-        l.border = EmptyBorder(2, 6, 2, 6)
-        l.font = l.font.deriveFont(10f)
-        return l
-    }
-
-    // Green circle with white checkmark icon for scored points
-    private fun scoredIcon(size: Int = 18): Icon {
-        return object : Icon {
-            override fun getIconWidth(): Int = size
-            override fun getIconHeight(): Int = size
-            override fun paintIcon(c: Component?, g: Graphics?, x: Int, y: Int) {
-                if (g == null) return
-                val g2 = (g.create() as Graphics2D)
-                try {
-                    g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
-                    val d = size
-                    val green = Color(0x71, 0xB4, 0x00)
-                    // Draw filled green circle
-                    g2.color = green
-                    g2.fillOval(x, y, d, d)
-                    // Draw white checkmark
-                    val s = d.toDouble()
-                    val p = java.awt.geom.Path2D.Double()
-                    p.moveTo(x + 0.28 * s, y + 0.55 * s)
-                    p.lineTo(x + 0.45 * s, y + 0.72 * s)
-                    p.lineTo(x + 0.75 * s, y + 0.35 * s)
-                    g2.color = Color.WHITE
-                    g2.stroke = BasicStroke((d * 0.12f), BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
-                    g2.draw(p)
-                } finally {
-                    g2.dispose()
-                }
-            }
-        }
-    }
 
     private fun buildCenterPanel(): JComponent {
         val root = JPanel()
         root.layout = BorderLayout()
         root.isOpaque = true
         root.background = Color(0x0E, 0x0E, 0x0E)
+
+        // Header (E-SC-001 T2)
+        headerPanel = MatchHeaderPanel()
+        root.add(headerPanel, BorderLayout.NORTH)
 
         // Video area with overlay
         val videoWrap = JPanel(BorderLayout())
@@ -899,134 +938,34 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
         wrap.layout = BoxLayout(wrap, BoxLayout.Y_AXIS)
         wrap.isOpaque = false
 
-        // Top action row — left: P1, center: No Point, right: P2 (Task 4.6)
-        val actionRow = JPanel(BorderLayout())
-        actionRow.isOpaque = false
-        val leftWrap = JPanel(FlowLayout(FlowLayout.LEFT, 0, 0)).apply { isOpaque = false }
-        val rightWrap = JPanel(FlowLayout(FlowLayout.RIGHT, 0, 0)).apply { isOpaque = false }
-        val centerWrap = JPanel(FlowLayout(FlowLayout.CENTER, 0, 0)).apply { isOpaque = false }
-
-        fun makeToggle(text: String): JToggleButton {
-            val b = JToggleButton(text)
-            b.isFocusPainted = false
-            UiStyles.styleSecondary(b)
-            b.border = BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(Color(0x48, 0x48, 0x47, 0x33), 1),
-                EmptyBorder(6, 12, 6, 12)
-            )
-            return b
-        }
-        btnNone = makeToggle("No Point   [W]")
-        btnNone.name = "score-none"
-        btnNone.accessibleContext.accessibleName = "No Point"
-        btnNone.toolTipText = "W — No Point"
-
-        // Make them act like radio buttons
-        val group = ButtonGroup()
-        group.add(btnNone)
-
-        btnNone.addActionListener { setOutcomeForSelected(Outcome.NONE) }
-
-        centerWrap.add(btnNone)
-        actionRow.add(leftWrap, BorderLayout.WEST)
-        actionRow.add(centerWrap, BorderLayout.CENTER)
-        actionRow.add(rightWrap, BorderLayout.EAST)
-        // Initially disabled until a valid selection is made
-        updateActionButtonsState(enable = false, selectedOutcome = null)
-
-        // Transport controls — match Markup screen (−10s, −1s, Play, +1s, +10s)
-        val transport = JPanel()
-        transport.layout = BoxLayout(transport, BoxLayout.X_AXIS)
-        transport.isOpaque = false
-
-        fun styleSeek(b: JButton) {
-            UiStyles.styleSecondary(b)
-            b.iconTextGap = 6
-            b.preferredSize = Dimension(100, 44)
-            b.minimumSize = Dimension(100, 40)
-        }
-        fun styleSeekLarge(b: JButton) {
-            UiStyles.styleSecondary(b)
-            b.iconTextGap = 6
-            b.preferredSize = Dimension(150, 44)
-            b.minimumSize = Dimension(120, 40)
-        }
-
-        val btnSeekBack10 = JButton()
-        val btnSeekBack1 = JButton()
-        val btnSeekFwd1 = JButton()
-        val btnSeekFwd10 = JButton()
-        styleSeekLarge(btnSeekBack10); styleSeek(btnSeekBack1); styleSeek(btnSeekFwd1); styleSeekLarge(btnSeekFwd10)
-        btnSeekBack10.icon = UiStyles.seekIcon(false, 18); btnSeekBack10.text = "-10s [shift+←]"
-        btnSeekBack1.icon = UiStyles.seekIcon(false, 18); btnSeekBack1.text = "-1s [←]"
-        btnSeekFwd1.icon = UiStyles.seekIcon(true, 18); btnSeekFwd1.text = "+1s [→]"
-        btnSeekFwd10.icon = UiStyles.seekIcon(true, 18); btnSeekFwd10.text = "+10s [shift+→]"
-        btnSeekBack10.toolTipText = "Shift+Left"
-        btnSeekBack1.toolTipText = "Left"
-        btnSeekFwd1.toolTipText = "Right"
-        btnSeekFwd10.toolTipText = "Shift+Right"
-        try {
-            btnSeekBack10.accessibleContext.accessibleName = "Seek back 10 seconds"
-            btnSeekBack1.accessibleContext.accessibleName = "Seek back 1 second"
-            btnSeekFwd1.accessibleContext.accessibleName = "Seek forward 1 second"
-            btnSeekFwd10.accessibleContext.accessibleName = "Seek forward 10 seconds"
-        } catch (_: Throwable) {}
-        btnSeekBack10.horizontalTextPosition = SwingConstants.RIGHT
-        btnSeekBack1.horizontalTextPosition = SwingConstants.RIGHT
-        btnSeekFwd1.horizontalTextPosition = SwingConstants.LEFT
-        btnSeekFwd10.horizontalTextPosition = SwingConstants.LEFT
-        // Wire actions
-        btnSeekBack10.addActionListener { seekBy(-10_000); player.component.requestFocusInWindow() }
-        btnSeekBack1.addActionListener { seekBy(-1_000); player.component.requestFocusInWindow() }
-        btnSeekFwd1.addActionListener { seekBy(1_000); player.component.requestFocusInWindow() }
-        btnSeekFwd10.addActionListener { seekBy(10_000); player.component.requestFocusInWindow() }
-
-        // Square Play/Pause button
-        btnPlayPause = UiStyles.squarePrimaryButton(UiStyles.playIcon(28)) { togglePlayPause() }
-        try {
-            btnPlayPause.name = "play-pause"
-            btnPlayPause.accessibleContext.accessibleName = "Play or Pause"
-            btnPlayPause.toolTipText = "SPACE — Play/Pause"
-        } catch (_: Throwable) {}
-
-        // Assemble row similar to Markup
-        transport.add(btnSeekBack10); transport.add(Box.createHorizontalStrut(6))
-        transport.add(btnSeekBack1); transport.add(Box.createHorizontalStrut(12))
-        transport.add(btnPlayPause); transport.add(Box.createHorizontalStrut(12))
-        transport.add(btnSeekFwd1); transport.add(Box.createHorizontalStrut(6))
-        transport.add(btnSeekFwd10)
-
-        // Speed control with hint (kept per Scoring spec 4.5)
-        val speedRow = JPanel(FlowLayout(FlowLayout.CENTER, 8, 0))
-        speedRow.isOpaque = false
-        val speeds = arrayOf("2×", "1×", "0.5×", "0.25×", "0.1×")
-        speedCombo = JComboBox(speeds)
-        speedCombo.isFocusable = true
-        speedCombo.name = "speed-dropdown"
-        try { speedCombo.accessibleContext.accessibleName = "Playback speed" } catch (_: Throwable) {}
-        speedCombo.selectedIndex = SessionSettings.clampIndex(SessionSettings.playbackSpeedIndex)
-        speedCombo.toolTipText = "Use ↑/↓ to change speed"
-        // Apply current speed to player immediately (affects playback instantly)
-        player.setRate(SessionSettings.toRate(speedCombo.selectedIndex))
-        speedCombo.addActionListener {
-            val idx = speedCombo.selectedIndex
-            SessionSettings.playbackSpeedIndex = SessionSettings.clampIndex(idx)
-            player.setRate(SessionSettings.toRate(SessionSettings.playbackSpeedIndex))
-            // Keep focus on player for continued space/seek keys
-            EventQueue.invokeLater { player.component.requestFocusInWindow() }
-        }
-        speedRow.add(speedCombo)
-        speedRow.add(JLabel("↑ / ↓ speed").apply {
-            foreground = Color(0xAD, 0xAA, 0xAA)
-            font = font.deriveFont(10f)
-            toolTipText = "Use ↑/↓ to change speed"
-        })
-
-        wrap.add(actionRow)
+        // Center scoring entry (E-SC-001 T4)
+        val entry = ScoreEntryPanel(actions)
+        scoreEntryPanel = entry
+        try { entry.setPlayerNames(displayNameP1(), displayNameP2()) } catch (_: Throwable) { }
+        wrap.add(entry)
         wrap.add(Box.createVerticalStrut(6))
-        wrap.add(transport)
-        wrap.add(Box.createVerticalStrut(2))
-        wrap.add(speedRow)
+
+        // Video/timecode sync compact cluster (E-SC-001 T7)
+        videoSyncPanel = VideoSyncPanel(actions)
+        wrap.add(videoSyncPanel)
+        wrap.add(Box.createVerticalStrut(6))
+
+        // Hotkeys help (E-SC-001 T6)
+        val hotkeysSupplier = java.util.function.Supplier {
+            mapOf(
+                "Q" to "Point for ${'$'}{displayNameP1()}",
+                "W" to "No Point",
+                "E" to "Point for ${'$'}{displayNameP2()}",
+                "R" to "Next Point",
+                "SPACE" to "Play/Pause",
+                "← / →" to "Seek ±1s",
+                "Shift+← / Shift+→" to "Seek ±10s",
+                "↑ / ↓" to "Change speed"
+            )
+        }
+        hotkeysHelpPanel = HotkeysHelpPanel(hotkeysSupplier)
+        wrap.add(hotkeysHelpPanel)
+
         return wrap
     }
 
@@ -1039,12 +978,8 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
     }
 
     private fun updatePlayPauseButton() {
-        try {
-            val playing = player.status() == PlayerStatus.PLAYING
-            btnPlayPause.icon = if (playing) UiStyles.pauseIcon(28) else UiStyles.playIcon(28)
-            btnPlayPause.toolTipText = if (playing) "SPACE — Pause" else "SPACE — Play"
-            btnPlayPause.repaint()
-        } catch (_: Throwable) { }
+        // Delegate to leaf via state propagation
+        pushStateUpdate()
     }
 
     private fun togglePlayPause() {
@@ -1137,6 +1072,41 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
         }
     }
 
+    // ===== E-SC-001 T8: State assembly and propagation to leaves =====
+    private fun assembleScoringState(): ScoringViewState {
+        val idx = if (selectedIndex in points.indices) selectedIndex else -1
+        val st = if (idx >= 0 && idx < statesAfterPoint.size) statesAfterPoint[idx]
+                 else MatchState(0, 0, 0, 0, 0, 0, null, null, false)
+        val setsCompleted: List<SetScoreDto> = if (idx >= 0 && idx < setHistoryAfterPoint.size) {
+            setHistoryAfterPoint[idx].map { SetScoreDto(it.p1, it.p2, it.tiebreak) }
+        } else emptyList()
+        val speed = SessionSettings.toRate(SessionSettings.playbackSpeedIndex)
+        val isPlaying = try { player.status() == PlayerStatus.PLAYING } catch (_: Throwable) { false }
+        return ScoringViewState(
+            player1Name = displayNameP1(),
+            player2Name = displayNameP2(),
+            serving = null, // serving side TBD; not tracked yet in container
+            p1Points = st.p1Pts,
+            p2Points = st.p2Pts,
+            isTiebreak = st.isTiebreak,
+            sets = setsCompleted,
+            gamesP1 = st.gamesP1,
+            gamesP2 = st.gamesP2,
+            selectedPointIndex = if (idx >= 0) idx else null,
+            totalPoints = points.size,
+            isPlaying = isPlaying,
+            speedMultiplier = speed,
+        )
+    }
+    private fun pushStateUpdate() {
+        try {
+            val state = assembleScoringState()
+            try { headerPanel.render(state) } catch (_: Throwable) { }
+            try { videoSyncPanel.render(state) } catch (_: Throwable) { }
+            try { scoreEntryPanel?.render(state) } catch (_: Throwable) { }
+        } catch (_: Throwable) { }
+    }
+
     // ===== Task 4.6 helpers =====
     private fun updateActionButtonsState(enable: Boolean, selectedOutcome: Outcome?) {
         // Enable/disable all action controls
@@ -1145,6 +1115,8 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
         if (::btnP2.isInitialized) btnP2.isEnabled = enable
         if (::p1PointBtn.isInitialized) p1PointBtn.isEnabled = enable
         if (::p2PointBtn.isInitialized) p2PointBtn.isEnabled = enable
+        // Propagate to extracted ScoreEntryPanel
+        scoreEntryPanel?.setActionsEnabled(enable)
 
         // Reflect stored outcome as pressed/selected state (Task 4.11)
         val sel = selectedOutcome
@@ -1231,8 +1203,9 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
                 btnP2.toolTipText = "E — Point for $name2"
                 try { btnP2.accessibleContext.accessibleName = "Point for $name2" } catch (_: Throwable) {}
             }
+            scoreEntryPanel?.setPlayerNames(name1, name2)
         } catch (_: Throwable) { }
-        // Update any other UI that might display names later (e.g., overlay in v0.2.0)
+        pushStateUpdate()
     }
 
     private fun recomputeFrom(index: Int) {

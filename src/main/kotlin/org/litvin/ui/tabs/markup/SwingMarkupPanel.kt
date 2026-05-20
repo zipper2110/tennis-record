@@ -1,5 +1,6 @@
 package org.litvin.ui.tabs.markup
 import org.litvin.*
+import org.litvin.markup.components.MarkupDispatcher
 import org.litvin.adjustments.AdjustmentsStore
 import org.litvin.markup.EdlIO
 import org.litvin.markup.EdlV1
@@ -7,7 +8,13 @@ import org.litvin.markup.PointV1
 import org.litvin.ui.UiStyles
 import org.litvin.ui.commons.Dialogs
 import org.litvin.ui.commons.SwingTimelineComponent
-import org.litvin.ui.commons.TransportBar
+import org.litvin.ui.tabs.markup.ui.TransportControls
+import org.litvin.ui.tabs.markup.ui.MarkupToolbar
+import org.litvin.ui.tabs.markup.ui.EditPointDialog
+import org.litvin.ui.tabs.markup.components.Keybindings
+import org.litvin.ui.tabs.markup.components.MarkupKeyActions
+import org.litvin.ui.tabs.markup.ui.PointsCardsView
+import org.litvin.ui.tabs.markup.ui.PointsTableView
 
 import org.litvin.media.PlayerStatus
 import org.litvin.media.VlcjSwingMediaPlayerAdapter
@@ -18,10 +25,6 @@ import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
 import java.io.File
 import javax.swing.*
-import javax.swing.table.AbstractTableModel
-import javax.swing.table.TableCellRenderer
-import javax.swing.table.TableCellEditor
-import javax.swing.AbstractCellEditor
 import kotlin.math.max
 
 /**
@@ -33,6 +36,7 @@ import kotlin.math.max
  * - EDL interactions via MarkupDispatcher: Start(C)/End(V) auto-create, delete, inline edit via table
  * - Keyboard mappings: Space, C, V, Delete, Left/Right and Shift+Arrows; context menu on table rows
  * - Basic autosave of EDL (edl.json) with 300 ms debounce
+ *
  */
 class SwingMarkupPanel : JPanel(BorderLayout()) {
 
@@ -83,7 +87,8 @@ class SwingMarkupPanel : JPanel(BorderLayout()) {
     private var projectDir: String? = null
 
     // UI controls
-    private lateinit var transport: TransportBar
+    private lateinit var toolbar: MarkupToolbar
+    private lateinit var transport: TransportControls
     private val btnStart = JButton("Point Start [C]")
     private val btnEnd = JButton("Point End [V]")
     // Legacy fields kept for compile stability; no longer used after TransportBar extraction
@@ -94,52 +99,53 @@ class SwingMarkupPanel : JPanel(BorderLayout()) {
     @Suppress("unused") private val timeLabel = JLabel("00:00:00.000")
     private val countBadge = JLabel("0 MARKED")
 
-    private val pointsModel = PointsTableModel()
-    private val pointsTable = JTable(pointsModel) // legacy, no longer shown; kept for compile simplicity
     private var lastPreviewWasStart = true
 
-    // Cards list (replaces table view)
-    private val cardsListPanel = JPanel().apply {
-        layout = BoxLayout(this, BoxLayout.Y_AXIS)
-        isOpaque = false
-    }
-    private val cardsScroll = JScrollPane(cardsListPanel).apply {
-        border = BorderFactory.createEmptyBorder()
-        verticalScrollBar.unitIncrement = 16
-        verticalScrollBar.blockIncrement = 120
-        horizontalScrollBarPolicy = ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER
-        isOpaque = false
-        viewport.isOpaque = false
-    }
-    private val cardComponents: MutableList<JComponent> = mutableListOf()
-    private var selectedVisualIndex: Int = -1 // visual index within cards collection (pending at 0 when present)
+    // Cards/Table views (replaces legacy inline cards list/table)
+    private lateinit var cardsView: PointsCardsView
+    private lateinit var tableView: PointsTableView
+    private var selectedVisualIndex: Int = -1 // visual index within composed list (pending at 0 when present)
+
+    // Consolidated keybindings helper
+    private var keybindings: Keybindings? = null
 
     // Fixed sizing constants (right panel/cards)
     private val RIGHT_PANEL_WIDTH = 420
     private val CARD_H_MARGIN = 10 // equal left/right margin inside right panel
     private val CARD_WIDTH = RIGHT_PANEL_WIDTH - CARD_H_MARGIN * 2
     private val CARD_HEIGHT = 68
-    
-    // Renders pending row (row 0) in italic gray when a Start is set but End not yet (table legacy)
-    private val pendingRenderer = object : javax.swing.table.DefaultTableCellRenderer() {
-        override fun getTableCellRendererComponent(table: JTable?, value: Any?, isSelected: Boolean, hasFocus: Boolean, row: Int, column: Int): Component {
-            val c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column)
-            try {
-                val hasPending = dispatcher.getPendingStart() != null
-                if (hasPending && row == 0) {
-                    c.font = c.font.deriveFont(Font.ITALIC)
-                    if (!isSelected) {
-                        c.foreground = Color(0xAA, 0xAA, 0xAA)
-                    }
-                    if (c is JComponent) c.toolTipText = "Pending point — press V to set End"
-                } else {
-                    if (!isSelected) c.foreground = UIManager.getColor("Table.foreground")
-                    if (c is JComponent) c.toolTipText = null
-                }
-            } catch (_: Throwable) { }
-            return c
-        }
+
+    // Build a view snapshot for leaf components
+    private fun buildViewState(): MarkupViewState {
+        val playing = try { player.status() == org.litvin.media.PlayerStatus.PLAYING } catch (_: Throwable) { false }
+        val time = try { player.currentTimeMs() } catch (_: Throwable) { 0L }
+        val pending = try { dispatcher.getPendingStart()?.toLong() } catch (_: Throwable) { null }
+        val list = try { dispatcher.getCompletedPoints() } catch (_: Throwable) { emptyList() }
+        val dto = list.map { p -> PointDto(id = p.id, startMs = p.startMs.toLong(), endMs = p.endMs.toLong(), label = p.label, flags = emptySet()) }
+        val autos = try { AutosaveState(pending = autosave.isPending(), lastSavedAtMs = autosave.lastSavedAtMs) } catch (_: Throwable) { AutosaveState(pending = false, lastSavedAtMs = null) }
+        val sel = selectedVisualIndex.takeIf { it >= 0 }
+        return MarkupViewState(
+            isPlaying = playing,
+            currentTimeMs = time,
+            selectedVisualIndex = sel,
+            pendingDraftStartMs = pending,
+            points = dto,
+            autosave = autos,
+        )
     }
+
+    private fun pushCardsState() {
+        try { cardsView.setState(buildViewState()) } catch (_: Throwable) { }
+    }
+
+    private fun pushTableState() {
+        try { tableView.setState(buildViewState()) } catch (_: Throwable) { }
+    }
+
+    private fun pushToolbarState() {
+        try { toolbar.setState(buildViewState()) } catch (_: Throwable) { }
+    }
+    
 
     private val timeline = SwingTimelineComponent(
         timeProvider = { player.currentTimeMs() },
@@ -152,8 +158,24 @@ class SwingMarkupPanel : JPanel(BorderLayout()) {
         }
     )
 
-    // Autosave debounce timer (~300 ms)
-    private val autosaveTimer = Timer(300) { _ -> autosaveNow() }.apply { isRepeats = false }
+    // Autosave controller (debounced, off-EDT persistence)
+    private val autosave = AutosaveController(
+        debounceMs = 300,
+        saver = {
+            try {
+                val dir = projectDir ?: return@AutosaveController
+                val list = dispatcher.getCompletedPoints()
+                EdlIO.writeForProjectDir(dir, EdlV1(points = list, version = 1))
+            } catch (t: Throwable) {
+                // Surface error on EDT
+                EventQueue.invokeLater { Dialogs.showError(this, t, "Autosave failed") }
+            }
+        },
+        onStateChanged = { _ ->
+            // Reflect pending/lastSaved in toolbar indicator
+            try { pushToolbarState() } catch (_: Throwable) { }
+        }
+    )
 
     // Idle UI refresher to keep time label and timeline handle in sync when paused/seeking
     private val idleUiTimer = Timer(100) { _ ->
@@ -259,12 +281,13 @@ class SwingMarkupPanel : JPanel(BorderLayout()) {
 
     override fun addNotify() {
         super.addNotify()
-        try { KeyboardFocusManager.getCurrentKeyboardFocusManager().addKeyEventDispatcher(spaceDispatcher) } catch (_: Throwable) { }
+        // Keybindings are installed in init via helper; no global KeyEventDispatcher needed anymore
         try { SwingUtilities.invokeLater { ensurePlayerLoaded() } } catch (_: Throwable) { }
     }
 
     override fun removeNotify() {
-        try { KeyboardFocusManager.getCurrentKeyboardFocusManager().removeKeyEventDispatcher(spaceDispatcher) } catch (_: Throwable) { }
+        // Uninstall keybindings
+        try { keybindings?.uninstall() } catch (_: Throwable) { }
         // Unsubscribe from adjustments bus if subscribed
         try {
             val unsub = geometryViewport.getClientProperty("adj_unsub") as? (() -> Unit)
@@ -280,43 +303,32 @@ class SwingMarkupPanel : JPanel(BorderLayout()) {
         border = BorderFactory.createEmptyBorder(8, 8, 8, 8)
 
         // Bottom area: transport/mark controls above the timeline
-        // Shared transport bar with play/pause, seek and time label
-        transport = TransportBar(
-            onTogglePlayPause = { togglePlayPause() },
-            onSeek = { delta ->
-                val newTime = max(0, player.currentTimeMs() + delta)
+        // New TransportControls component: encapsulates Start/End/Jump + TransportBar
+        val transportActions = object : MarkupActions {
+            override fun togglePlayPause() { this@SwingMarkupPanel.togglePlayPause() }
+            override fun seekTo(ms: Long) { try { player.seek(ms); EventQueue.invokeLater { refreshUiAtCurrentTime(); player.component.requestFocusInWindow() } } catch (_: Throwable) { } }
+            override fun jumpToSelected() { this@SwingMarkupPanel.jumpToSelected() }
+            override fun setStartAtPlayhead() { this@SwingMarkupPanel.onStartAtPlayhead() }
+            override fun setEndAtPlayhead() { this@SwingMarkupPanel.onEndAtPlayhead() }
+            override fun createPointAt(ms: Long) { dispatcher.onPointStart(ms) }
+            override fun editPoint(id: String, patch: PointPatch) { /* not used here */ }
+            override fun deletePoint(id: String) { /* not used here */ }
+            override fun selectByVisualIndex(index: Int) { this@SwingMarkupPanel.setSelectedVisual(index) }
+            override fun saveNow() { this@SwingMarkupPanel.saveNow() }
+        }
+        toolbar = MarkupToolbar(transportActions)
+        transport = TransportControls(
+            actions = transportActions,
+            onNudge = { delta ->
+                val newTime = max(0L, player.currentTimeMs() + delta)
                 player.seek(newTime)
                 EventQueue.invokeLater { refreshUiAtCurrentTime(); player.component.requestFocusInWindow() }
             }
         )
 
-        // Point buttons styled and placed on the left
-        listOf(btnStart, btnEnd).forEach { UiStyles.styleSecondary(it) }
-        btnStart.addActionListener { onStartAtPlayhead() }
-        btnEnd.addActionListener { onEndAtPlayhead() }
-
-        val controls = JPanel()
-        controls.layout = BoxLayout(controls, BoxLayout.X_AXIS)
-        controls.isOpaque = false
-        // Left group: Start/End
-        controls.add(btnStart); controls.add(Box.createHorizontalStrut(8)); controls.add(btnEnd)
-        controls.add(Box.createHorizontalGlue())
-        // Middle group: shared transport bar
-        controls.add(transport)
-        controls.add(Box.createHorizontalGlue())
-
         val bottom = JPanel(BorderLayout())
         bottom.isOpaque = false
-        // Opaque dark controls bar container
-        val controlsBar = JPanel(BorderLayout())
-        controlsBar.isOpaque = true
-        controlsBar.background = UiStyles.SURFACE_HIGH
-        controlsBar.border = BorderFactory.createCompoundBorder(
-            BorderFactory.createMatteBorder(1, 0, 0, 0, UiStyles.CARD_BORDER),
-            BorderFactory.createEmptyBorder(8, 12, 8, 12)
-        )
-        controlsBar.add(controls, BorderLayout.CENTER)
-        bottom.add(controlsBar, BorderLayout.NORTH)
+        bottom.add(transport, BorderLayout.NORTH)
 
         // Center: video and points list side-by-side
         val center = JSplitPane(JSplitPane.HORIZONTAL_SPLIT)
@@ -369,75 +381,54 @@ class SwingMarkupPanel : JPanel(BorderLayout()) {
         header.add(countBadge, BorderLayout.EAST)
         rightPanel.add(header, BorderLayout.NORTH)
 
-        pointsTable.fillsViewportHeight = true
-        pointsTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION)
-        pointsTable.componentPopupMenu = buildTableContextMenu()
-        // Set column widths and install Action button renderer/editor
-        try {
-            val cm = pointsTable.columnModel
-            if (cm.columnCount >= 6) {
-                cm.getColumn(0).preferredWidth = 40
-                cm.getColumn(1).preferredWidth = 110
-                cm.getColumn(2).preferredWidth = 110
-                cm.getColumn(3).preferredWidth = 110
-                cm.getColumn(4).preferredWidth = 200
-                cm.getColumn(5).preferredWidth = 60
-                cm.getColumn(5).cellRenderer = ActionButtonRenderer()
-                cm.getColumn(5).cellEditor = ActionButtonEditor()
-            }
-        } catch (_: Throwable) { }
-        
-        // Install per-row mouse interactions (legacy table, kept for logic compatibility)
-        pointsTable.addMouseListener(object : MouseAdapter() {
-            override fun mouseClicked(e: MouseEvent) {
+        // Compose right panel content using extracted components
+        val cardsActions = object : MarkupActions {
+            override fun togglePlayPause() { togglePlayPause() }
+            override fun seekTo(ms: Long) { try { player.seek(ms) ; EventQueue.invokeLater { refreshUiAtCurrentTime() } } catch (_: Throwable) { } }
+            override fun jumpToSelected() { this@SwingMarkupPanel.jumpToSelected() }
+            override fun setStartAtPlayhead() { onStartAtPlayhead() }
+            override fun setEndAtPlayhead() { onEndAtPlayhead() }
+            override fun createPointAt(ms: Long) { dispatcher.onPointStart(ms) }
+            override fun editPoint(id: String, patch: PointPatch) { /* not used by cards */ }
+            override fun deletePoint(id: String) { dispatcher.deletePoint(id) }
+            override fun selectByVisualIndex(index: Int) { setSelectedVisual(index) }
+            override fun saveNow() { this@SwingMarkupPanel.saveNow() }
+        }
+        cardsView = PointsCardsView(cardsActions)
+        val tableActions = object : MarkupActions {
+            override fun togglePlayPause() { togglePlayPause() }
+            override fun seekTo(ms: Long) { try { player.seek(ms) ; EventQueue.invokeLater { refreshUiAtCurrentTime() } } catch (_: Throwable) { } }
+            override fun jumpToSelected() { this@SwingMarkupPanel.jumpToSelected() }
+            override fun setStartAtPlayhead() { onStartAtPlayhead() }
+            override fun setEndAtPlayhead() { onEndAtPlayhead() }
+            override fun createPointAt(ms: Long) { dispatcher.onPointStart(ms) }
+            override fun editPoint(id: String, patch: PointPatch) {
                 try {
-                    val row = pointsTable.rowAtPoint(e.point)
-                    val col = pointsTable.columnAtPoint(e.point)
-                    if (row < 0) return
-                    // Ignore pending row (visual row 0 when pending exists)
-                    if (dispatcher.getPendingStart() != null && row == 0) return
-                    // Double-click toggles quick preview between Start and End
-                    if (e.clickCount == 2 && SwingUtilities.isLeftMouseButton(e)) {
-                        val p = pointsModel.get(row)
-                        val target = if (lastPreviewWasStart) {
-                            // Seek near End (a bit before the end) to preview boundary
-                            val dur = (p.endMs - p.startMs).toLong()
-                            val back = minOf(250L, dur / 4)
-                            (p.endMs - back).toLong().coerceAtLeast(p.startMs.toLong())
-                        } else {
-                            p.startMs.toLong()
-                        }
-                        player.seek(target)
-                        lastPreviewWasStart = !lastPreviewWasStart
-                        EventQueue.invokeLater { refreshUiAtCurrentTime(); player.component.requestFocusInWindow() }
-                        return
-                    }
-                    // Single-click anywhere on the row seeks to Start, except on editable columns (Start/End/Label)
-                    if (e.clickCount == 1 && SwingUtilities.isLeftMouseButton(e)) {
-                        val header = pointsTable.tableHeader
-                        val labelColName = pointsModel.getColumnName(4)
-                        val startColName = pointsModel.getColumnName(1)
-                        val endColName = pointsModel.getColumnName(2)
-                        val clickedColName = pointsModel.getColumnName(col)
-                        val editable = clickedColName == labelColName || clickedColName == startColName || clickedColName == endColName
-                        if (!editable) {
-                            val p = pointsModel.get(row)
-                            player.seek(p.startMs.toLong())
-                            EventQueue.invokeLater { refreshUiAtCurrentTime(); player.component.requestFocusInWindow() }
-                        }
-                    }
+                    val ok = dispatcher.updatePoint(id, patch.startMs ?: 0L, patch.endMs ?: 0L, patch.label ?: "")
+                    if (!ok) maybeShowDispatcherHint()
                 } catch (_: Throwable) { }
             }
-        })
-
-        // Replace table with cards list
-        rightPanel.add(cardsScroll, BorderLayout.CENTER)
-        // Equal left/right margins for cards inside the right panel
-        try { cardsListPanel.border = BorderFactory.createEmptyBorder(0, CARD_H_MARGIN, 0, CARD_H_MARGIN) } catch (_: Throwable) { }
+            override fun deletePoint(id: String) { try { dispatcher.deletePoint(id) } catch (_: Throwable) { } }
+            override fun selectByVisualIndex(index: Int) { setSelectedVisual(index) }
+            override fun saveNow() { this@SwingMarkupPanel.saveNow() }
+        }
+        tableView = PointsTableView(tableActions)
+        val tabs = JTabbedPane().apply {
+            isOpaque = false
+            addTab("Cards", cardsView)
+            addTab("Table", tableView)
+        }
+        rightPanel.add(tabs, BorderLayout.CENTER)
+        // Push initial state to views
+        pushCardsState()
+        pushTableState()
         center.rightComponent = rightPanel
         center.resizeWeight = 1.0
         // Add bottom controls and center split
+        add(toolbar, BorderLayout.NORTH)
         add(center, BorderLayout.CENTER)
+        // Push initial toolbar state
+        pushToolbarState()
         // Keep right panel fixed width on first show and on resize
         try {
             val fixDivider: () -> Unit = {
@@ -462,52 +453,45 @@ class SwingMarkupPanel : JPanel(BorderLayout()) {
         // Start idle UI refresher
         try { idleUiTimer.start() } catch (_: Throwable) { }
 
-        // Apply pending-row renderer to all common column types
-        try {
-            pointsTable.setDefaultRenderer(java.lang.Object::class.java, pendingRenderer)
-            pointsTable.setDefaultRenderer(java.lang.String::class.java, pendingRenderer)
-            pointsTable.setDefaultRenderer(java.lang.Integer::class.java, pendingRenderer)
-        } catch (_: Throwable) { }
-
-        // Selection listener to cancel pending when user selects a completed row
-        pointsTable.selectionModel.addListSelectionListener {
-            if (!it.valueIsAdjusting) {
-                val sel = pointsTable.selectedRow
-                val hasPending = dispatcher.getPendingStart() != null
-                if (hasPending && sel > 0) {
-                    // Keep the same logical item selected after clearing pending
-                    val target = sel - 1
-                    dispatcher.clearPending()
-                    // pointsModel will refresh via onPointsChanged; delay selecting until after refresh
-                    EventQueue.invokeLater {
-                        val rc = pointsModel.rowCount
-                        if (target in 0 until rc) {
-                            pointsTable.selectionModel.setSelectionInterval(target, target)
-                            pointsTable.scrollRectToVisible(pointsTable.getCellRect(target, 0, true))
-                        }
-                    }
-                }
-            }
-        }
 
         // Player callbacks → update UI and repaint timeline on EDT
         player.onTimeChanged = { t -> EventQueue.invokeLater { updateTimeUI(t) ; timeline.repaint() ; autoActivatePoint(t) } }
         player.onReady = { EventQueue.invokeLater { updateTimeUI(player.currentTimeMs()) ; timeline.repaint() ; updatePlayPauseButton() } }
         player.onStatusChanged = { _ -> EventQueue.invokeLater { updatePlayPauseButton() ; refreshUiAtCurrentTime() } }
 
-        // Dispatcher callback to refresh UI
+        // Dispatcher callback to refresh UI for all leaf components
         dispatcher.onPointsChanged = {
             EventQueue.invokeLater {
                 val pts = dispatcher.getCompletedPoints()
-                pointsModel.setPoints(pts) // kept for potential table-related logic
                 countBadge.text = "${pts.size} MARKED"
-                rebuildCards()
+                pushCardsState()
+                pushTableState()
+                pushToolbarState()
                 timeline.repaint()
                 scheduleAutosave()
             }
         }
 
-        installKeyBindings()
+        // Consolidated keybindings helper
+        try {
+            keybindings = Keybindings(
+                this,
+                { isTextEditingFocus() },
+                object : MarkupKeyActions {
+                    override fun toggle() { togglePlayPause() }
+                    override fun startAtPlayhead() { onStartAtPlayhead() }
+                    override fun endAtPlayhead() { onEndAtPlayhead() }
+                    override fun deleteSelected() { deleteSelected() }
+                    override fun nudge(deltaMs: Long) {
+                        try {
+                            val newTime = kotlin.math.max(0L, player.currentTimeMs() + deltaMs)
+                            player.seek(newTime)
+                            EventQueue.invokeLater { refreshUiAtCurrentTime(); player.component.requestFocusInWindow() }
+                        } catch (_: Throwable) { }
+                    }
+                }
+            )
+        } catch (_: Throwable) { }
         rebuildCards()
     }
 
@@ -537,87 +521,14 @@ class SwingMarkupPanel : JPanel(BorderLayout()) {
         }
     }
 
-    private fun buildTableContextMenu(): JPopupMenu {
-        val menu = JPopupMenu()
-        val jump = JMenuItem("Go to start").apply { addActionListener { jumpToSelected() } }
-        val del = JMenuItem("Delete").apply { addActionListener { deleteSelected() } }
-        menu.add(jump)
-        menu.add(del)
-        return menu
-    }
 
     // Build cards list based on dispatcher state (pending + completed)
     private fun rebuildCards() {
-        try {
-            cardsListPanel.removeAll()
-            cardComponents.clear()
-            val hasPending = dispatcher.getPendingStart() != null
-            if (hasPending) {
-                val s = dispatcher.getPendingStart()!!.toLong()
-                val card = buildPendingCard(0, s)
-                cardComponents.add(card)
-                cardsListPanel.add(card)
-                cardsListPanel.add(Box.createVerticalStrut(10))
-            }
-            val points = dispatcher.getCompletedPoints()
-            points.forEachIndexed { i, p ->
-                val visual = i + (if (hasPending) 1 else 0)
-                val card = buildPointCard(visual, i, p)
-                cardComponents.add(card)
-                cardsListPanel.add(card)
-                cardsListPanel.add(Box.createVerticalStrut(10))
-            }
-            cardsListPanel.revalidate()
-            cardsListPanel.repaint()
-            // Ensure divider respects fixed RIGHT_PANEL_WIDTH on first rebuild as well
-            try {
-                val sp = (this.layout as BorderLayout).getLayoutComponent(BorderLayout.CENTER)
-                if (sp is JSplitPane) {
-                    SwingUtilities.invokeLater {
-                        val total = sp.size.width
-                        if (total > 0) {
-                            sp.setDividerLocation((total - RIGHT_PANEL_WIDTH).coerceAtLeast(0))
-                        }
-                    }
-                }
-            } catch (_: Throwable) { }
-        } catch (_: Throwable) { }
+        // Delegated to leaf components now
+        pushCardsState()
+        pushTableState()
     }
 
-    private fun buildPendingCard(visualIndex: Int, startMs: Long): JComponent {
-        val card = JPanel(BorderLayout())
-        card.isOpaque = true
-        card.background = UiStyles.SURFACE_HIGH
-        card.border = BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(UiStyles.CARD_BORDER, 1, true),
-            BorderFactory.createEmptyBorder(10, 12, 10, 12)
-        )
-        card.alignmentX = Component.LEFT_ALIGNMENT
-        // Fixed card size
-        run {
-            val sz = Dimension(CARD_WIDTH, CARD_HEIGHT)
-            card.minimumSize = sz
-            card.preferredSize = sz
-            card.maximumSize = sz
-        }
-        val content = JPanel()
-        content.isOpaque = false
-        content.layout = BoxLayout(content, BoxLayout.Y_AXIS)
-        content.add(JLabel("Pending…").apply { foreground = UiStyles.FG_SECONDARY; font = font.deriveFont(Font.BOLD) })
-        content.add(Box.createVerticalStrut(4))
-        content.add(JLabel(Timecode.format(startMs)).apply { foreground = UiStyles.FG_PRIMARY })
-        card.add(content, BorderLayout.CENTER)
-        // Highlight stripe similar to mock
-        card.add(object: JComponent(){
-            override fun getPreferredSize() = Dimension(4, 1)
-            override fun paintComponent(g: Graphics) { g.color = UiStyles.LIME; g.fillRect(0,0,width,height) }
-        }, BorderLayout.WEST)
-        // not interactive
-        card.toolTipText = "Pending point — press V to set End"
-        // Selection state
-        applyCardSelectionStyle(card, visualIndex == selectedVisualIndex)
-        return card
-    }
 
     private fun buildPointCard(visualIndex: Int, dataIndex: Int, p: PointV1): JComponent {
         val card = JPanel(BorderLayout())
@@ -696,41 +607,35 @@ class SwingMarkupPanel : JPanel(BorderLayout()) {
 
     private fun setSelectedVisual(visualIndex: Int) {
         selectedVisualIndex = visualIndex
-        // update styles only on actual card components (exclude spacers)
-        for (i in cardComponents.indices) {
-            val c = cardComponents[i]
-            applyCardSelectionStyle(c, i == selectedVisualIndex)
-        }
+        pushCardsState()
+        pushTableState()
         scrollCardIntoView(visualIndex)
     }
 
     private fun scrollCardIntoView(visualIndex: Int) {
         try {
-            if (visualIndex < 0 || visualIndex >= cardComponents.size) return
-            val comp = cardComponents[visualIndex]
-            val r = comp.bounds
-            cardsListPanel.scrollRectToVisible(r)
+            cardsView.scrollToVisualIndex(visualIndex)
         } catch (_: Throwable) { }
     }
 
     private fun showEditDialog(p: PointV1) {
-        val panel = JPanel(GridBagLayout())
-        val gc = GridBagConstraints().apply { insets = Insets(4,4,4,4); anchor = GridBagConstraints.WEST }
-        val tfStart = JTextField(Timecode.format(p.startMs.toLong()), 14)
-        val tfEnd = JTextField(Timecode.format(p.endMs.toLong()), 14)
-        val tfLabel = JTextField(p.label ?: "", 18)
-        fun addRow(y:Int, label:String, comp:JComponent){
-            gc.gridx=0; gc.gridy=y; panel.add(JLabel(label), gc)
-            gc.gridx=1; panel.add(comp, gc)
+        val dto = PointDto(id = p.id, startMs = p.startMs.toLong(), endMs = p.endMs.toLong(), label = p.label, flags = emptySet())
+        val actions = object : MarkupActions {
+            override fun togglePlayPause() { this@SwingMarkupPanel.togglePlayPause() }
+            override fun seekTo(ms: Long) { try { player.seek(ms); EventQueue.invokeLater { refreshUiAtCurrentTime() } } catch (_: Throwable) { } }
+            override fun jumpToSelected() { this@SwingMarkupPanel.jumpToSelected() }
+            override fun setStartAtPlayhead() { onStartAtPlayhead() }
+            override fun setEndAtPlayhead() { onEndAtPlayhead() }
+            override fun createPointAt(ms: Long) { dispatcher.onPointStart(ms) }
+            override fun editPoint(id: String, patch: PointPatch) {
+                val ok = dispatcher.updatePoint(id, patch.startMs ?: p.startMs.toLong(), patch.endMs ?: p.endMs.toLong(), patch.label ?: p.label ?: "")
+                if (!ok) maybeShowDispatcherHint()
+            }
+            override fun deletePoint(id: String) { dispatcher.deletePoint(id) }
+            override fun selectByVisualIndex(index: Int) { setSelectedVisual(index) }
+            override fun saveNow() { this@SwingMarkupPanel.saveNow() }
         }
-        addRow(0, "Start:", tfStart)
-        addRow(1, "End:", tfEnd)
-        addRow(2, "Label:", tfLabel)
-        val res = JOptionPane.showConfirmDialog(this, panel, "Edit point", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE)
-        if (res == JOptionPane.OK_OPTION) {
-            val ok = dispatcher.updatePoint(p.id, Timecode.parse(tfStart.text), Timecode.parse(tfEnd.text), tfLabel.text)
-            if (!ok) maybeShowDispatcherHint()
-        }
+        EditPointDialog.show(this, dto, actions)
     }
 
     private fun confirmDelete(p: PointV1) {
@@ -738,7 +643,8 @@ class SwingMarkupPanel : JPanel(BorderLayout()) {
         val res = JOptionPane.showConfirmDialog(this, "Delete marked point $name?", "Confirm delete", JOptionPane.OK_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE)
         if (res == JOptionPane.OK_OPTION) {
             if (dispatcher.deletePoint(p.id)) {
-                pointsModel.setPoints(dispatcher.getCompletedPoints())
+                pushCardsState()
+                pushTableState()
                 timeline.repaint()
                 scheduleAutosave()
             }
@@ -837,8 +743,7 @@ class SwingMarkupPanel : JPanel(BorderLayout()) {
                 val idx = pts.indexOfFirst { it.startMs == prevPending }
                 if (idx >= 0) {
                     val visual = idx // no pending row now
-                    pointsTable.selectionModel.setSelectionInterval(visual, visual)
-                    pointsTable.scrollRectToVisible(pointsTable.getCellRect(visual, 0, true))
+                    setSelectedVisual(visual)
                 }
             }
         }
@@ -850,18 +755,13 @@ class SwingMarkupPanel : JPanel(BorderLayout()) {
     }
 
     private fun scheduleAutosave() {
-        autosaveTimer.restart()
+        try { autosave.schedule() } catch (_: Throwable) { }
+        // Reflect pending autosave in toolbar indicator
+        try { pushToolbarState() } catch (_: Throwable) { }
     }
 
     private fun autosaveNow() {
-        try {
-            val dir = projectDir ?: return
-            val list = dispatcher.getCompletedPoints()
-            EdlIO.writeForProjectDir(dir, EdlV1(points = list, version = 1))
-        } catch (t: Throwable) {
-            // Show non-fatal error
-            Dialogs.showError(this, t, "Autosave failed")
-        }
+        try { autosave.autosaveNow() } catch (_: Throwable) { }
     }
 
     private fun isTextEditingFocus(): Boolean {
@@ -925,123 +825,6 @@ class SwingMarkupPanel : JPanel(BorderLayout()) {
         try { autosaveNow() } catch (_: Throwable) { }
     }
 
-    // Renderer for the Action column: shows a small primary "Go" button
-    private inner class ActionButtonRenderer : TableCellRenderer {
-        private val button: JButton = UiStyles.primarySmallButton("Go") {}
-        init {
-            button.toolTipText = "Go to marked point"
-        }
-        override fun getTableCellRendererComponent(table: JTable?, value: Any?, isSelected: Boolean, hasFocus: Boolean, row: Int, column: Int): Component {
-            try {
-                button.isEnabled = !(dispatcher.getPendingStart() != null && row == 0)
-            } catch (_: Throwable) { button.isEnabled = true }
-            return button
-        }
-    }
 
-    // Editor for the Action column: actual click handling
-    private inner class ActionButtonEditor : AbstractCellEditor(), TableCellEditor {
-        private var currentRow: Int = -1
-        private val button: JButton = UiStyles.primarySmallButton("Go") {
-            try {
-                val row = currentRow
-                if (row >= 0) {
-                    // Ignore pending row
-                    if (dispatcher.getPendingStart() != null && row == 0) {
-                        cancelCellEditing(); return@primarySmallButton
-                    }
-                    val p = pointsModel.get(row)
-                    player.seek(p.startMs.toLong())
-                    EventQueue.invokeLater { refreshUiAtCurrentTime(); player.component.requestFocusInWindow() }
-                }
-            } catch (_: Throwable) { }
-            stopCellEditing()
-        }.apply {
-            toolTipText = "Go to marked point"
-        }
-        override fun getTableCellEditorComponent(table: JTable?, value: Any?, isSelected: Boolean, row: Int, column: Int): Component {
-            currentRow = row
-            button.isEnabled = !(dispatcher.getPendingStart() != null && row == 0)
-            return button
-        }
-        override fun getCellEditorValue(): Any = "Go"
-    }
 
-    // Simple table model for points list with inline time editing (Start/End, Label)
-    private inner class PointsTableModel : AbstractTableModel() {
-        private var data: MutableList<PointV1> = mutableListOf()
-        private val COL_ORDER = 0
-        private val COL_START = 1
-        private val COL_END = 2
-        private val COL_DURATION = 3
-        private val COL_LABEL = 4
-        private val COL_ACTION = 5
-        private val cols = arrayOf("#", "Start", "End", "Duration", "Label", "")
-
-        private fun hasPending(): Boolean = dispatcher.getPendingStart() != null
-        fun isPendingRow(rowIndex: Int): Boolean = hasPending() && rowIndex == 0
-        private fun toDataIndex(rowIndex: Int): Int = if (hasPending()) rowIndex - 1 else rowIndex
-
-        override fun getRowCount(): Int = data.size + if (hasPending()) 1 else 0
-        override fun getColumnCount(): Int = cols.size
-        override fun getColumnName(column: Int): String = cols[column]
-        override fun isCellEditable(rowIndex: Int, columnIndex: Int): Boolean {
-            if (isPendingRow(rowIndex)) return false
-            return columnIndex == COL_START || columnIndex == COL_END || columnIndex == COL_LABEL || columnIndex == COL_ACTION
-        }
-
-        override fun getValueAt(rowIndex: Int, columnIndex: Int): Any {
-            if (isPendingRow(rowIndex)) {
-                val s = dispatcher.getPendingStart()?.toLong() ?: 0L
-                return when (columnIndex) {
-                    COL_ORDER -> "—"
-                    COL_START -> Timecode.format(s)
-                    COL_END -> "— no end yet"
-                    COL_DURATION -> "—"
-                    COL_LABEL -> ""
-                    COL_ACTION -> "Go"
-                    else -> ""
-                }
-            }
-            val di = toDataIndex(rowIndex)
-            val p = data[di]
-            return when (columnIndex) {
-                COL_ORDER -> di + 1
-                COL_START -> Timecode.format(p.startMs.toLong())
-                COL_END -> Timecode.format(p.endMs.toLong())
-                COL_DURATION -> Timecode.format((p.endMs - p.startMs).toLong())
-                COL_LABEL -> p.label ?: ""
-                COL_ACTION -> "Go"
-                else -> ""
-            }
-        }
-
-        override fun setValueAt(aValue: Any?, rowIndex: Int, columnIndex: Int) {
-            if (isPendingRow(rowIndex)) return // pending row not editable
-            val di = toDataIndex(rowIndex)
-            val p = data[di]
-            when (columnIndex) {
-                COL_START, COL_END, COL_LABEL -> {
-                    val newStart = if (columnIndex == COL_START) Timecode.parse(aValue?.toString() ?: "0") else p.startMs.toLong()
-                    val newEnd = if (columnIndex == COL_END) Timecode.parse(aValue?.toString() ?: "0") else p.endMs.toLong()
-                    val newLabel = if (columnIndex == COL_LABEL) (aValue?.toString()) else p.label
-                    val ok = dispatcher.updatePoint(p.id, newStart, newEnd, newLabel)
-                    if (!ok) maybeShowDispatcherHint() else setPoints(dispatcher.getCompletedPoints())
-                }
-                COL_ACTION -> {
-                    // handled by editor; no-op
-                }
-            }
-        }
-
-        fun setPoints(newData: List<PointV1>) {
-            data = newData.toMutableList()
-            fireTableDataChanged()
-        }
-
-        fun get(row: Int): PointV1 {
-            if (isPendingRow(row)) throw IllegalStateException("Pending row has no completed point")
-            return data[toDataIndex(row)]
-        }
-    }
 }

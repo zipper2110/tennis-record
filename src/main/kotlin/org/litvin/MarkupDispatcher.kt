@@ -1,4 +1,4 @@
-package org.litvin
+package org.litvin.markup.components
 
 import org.litvin.markup.EdlIO
 import org.litvin.markup.PointV1

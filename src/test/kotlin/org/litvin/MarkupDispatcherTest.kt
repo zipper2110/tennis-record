@@ -1,5 +1,7 @@
 package org.litvin
 
+import org.litvin.markup.components.MarkupDispatcher
+
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull

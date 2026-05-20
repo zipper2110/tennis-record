@@ -457,4 +457,37 @@ object UiStyles {
         container.add(body, BorderLayout.CENTER)
         return container
     }
+
+    /** Small badge label with custom background/foreground and compact padding. */
+    fun smallBadge(text: String, bg: Color, fg: Color): JLabel = JLabel(text).apply {
+        isOpaque = true
+        background = bg
+        foreground = fg
+        border = BorderFactory.createEmptyBorder(2, 6, 2, 6)
+        font = font.deriveFont(10f)
+    }
+
+    /** Green circle with white checkmark icon for scored points. */
+    fun scoredIcon(size: Int = 18): Icon = object : Icon {
+        override fun getIconWidth(): Int = size
+        override fun getIconHeight(): Int = size
+        override fun paintIcon(c: Component?, g: Graphics?, x: Int, y: Int) {
+            val g2 = g as Graphics2D
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+            val d = size
+            val green = Color(0x71, 0xB4, 0x00)
+            // Draw filled green circle
+            g2.color = green
+            g2.fillOval(x, y, d, d)
+            // Draw white checkmark
+            val s = d.toDouble()
+            val p = java.awt.geom.Path2D.Double()
+            p.moveTo(x + 0.28 * s, y + 0.55 * s)
+            p.lineTo(x + 0.45 * s, y + 0.72 * s)
+            p.lineTo(x + 0.75 * s, y + 0.35 * s)
+            g2.color = Color.WHITE
+            g2.stroke = BasicStroke((d * 0.12f), BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
+            g2.draw(p)
+        }
+    }
 }
