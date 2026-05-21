@@ -23,6 +23,7 @@ import javax.swing.border.EmptyBorder
  */
 class ControlsToolbar(
     private val actions: ScoringActions,
+    private val onHelp: (() -> Unit)? = null,
 ) : JPanel(BorderLayout()) {
 
     init {
@@ -69,7 +70,18 @@ class ControlsToolbar(
 
         left.add(btnSave)
         center.add(btnNext)
+        // Help button (right-aligned)
+        val btnHelp = JButton("Help  [F1]")
+        UiStyles.styleSecondary(btnHelp)
+        try {
+            btnHelp.name = "toolbar-help"
+            btnHelp.toolTipText = "F1 — Help"
+            btnHelp.accessibleContext.accessibleName = "Help"
+        } catch (_: Throwable) {}
+        btnHelp.addActionListener { onHelp?.invoke() }
+
         right.add(btnSettings)
+        right.add(btnHelp)
 
         add(left, BorderLayout.WEST)
         add(center, BorderLayout.CENTER)

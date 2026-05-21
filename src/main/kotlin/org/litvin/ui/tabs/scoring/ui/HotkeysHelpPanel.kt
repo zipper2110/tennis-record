@@ -35,7 +35,9 @@ import javax.swing.table.DefaultTableModel
  * TODO(E-SC-001 T6): Centralize hotkey definitions/config so both bindings and this panel use a single source of truth.
  */
 class HotkeysHelpPanel(
-    private val hotkeysSupplier: Supplier<Map<String, String>>,
+    private val hotkeysSupplier: Supplier<Map<String, String>>? = null,
+    private val orderedSupplier: Supplier<List<Pair<String, String>>>? = null,
+    private val titleText: String = "Hotkeys",
 ) : JPanel(BorderLayout()) {
 
     private val tableModel = object : DefaultTableModel(arrayOf("Key", "Action"), 0) {
@@ -48,7 +50,7 @@ class HotkeysHelpPanel(
         background = Color(0x14, 0x14, 0x14)
         border = EmptyBorder(6, 8, 6, 8)
 
-        val title = JLabel("Hotkeys")
+        val title = JLabel(titleText)
         title.font = title.font.deriveFont(Font.BOLD)
         title.foreground = Color(0xCC, 0xCC, 0xCC)
         title.border = EmptyBorder(0, 0, 4, 0)
@@ -100,11 +102,20 @@ class HotkeysHelpPanel(
 
     /** Re-read the hotkey mapping and update the table. */
     fun refresh() {
-        val map = hotkeysSupplier.get()
         tableModel.setRowCount(0)
-        // Keep a stable order: by key (case-insensitive)
-        map.entries.sortedBy { it.key.lowercase() }.forEach { (key, action) ->
-            tableModel.addRow(arrayOf(formatKey(key), action))
+        if (orderedSupplier != null) {
+            val list = try { orderedSupplier.get() } catch (_: Throwable) { emptyList() }
+            list.forEach { (key, action) ->
+                tableModel.addRow(arrayOf(formatKey(key), action))
+            }
+            return
+        }
+        if (hotkeysSupplier != null) {
+            val map = try { hotkeysSupplier.get() } catch (_: Throwable) { emptyMap() }
+            // Keep a stable order: by key (case-insensitive)
+            map.entries.sortedBy { it.key.lowercase() }.forEach { (key, action) ->
+                tableModel.addRow(arrayOf(formatKey(key), action))
+            }
         }
     }
 

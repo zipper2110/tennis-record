@@ -14,7 +14,6 @@ import org.litvin.ui.tabs.markup.ui.EditPointDialog
 import org.litvin.ui.tabs.markup.components.Keybindings
 import org.litvin.ui.tabs.markup.components.MarkupKeyActions
 import org.litvin.ui.tabs.markup.ui.PointsCardsView
-import org.litvin.ui.tabs.markup.ui.PointsTableView
 
 import org.litvin.media.PlayerStatus
 import org.litvin.media.VlcjSwingMediaPlayerAdapter
@@ -101,9 +100,8 @@ class SwingMarkupPanel : JPanel(BorderLayout()) {
 
     private var lastPreviewWasStart = true
 
-    // Cards/Table views (replaces legacy inline cards list/table)
+    // Cards view (replaces legacy inline cards list)
     private lateinit var cardsView: PointsCardsView
-    private lateinit var tableView: PointsTableView
     private var selectedVisualIndex: Int = -1 // visual index within composed list (pending at 0 when present)
 
     // Consolidated keybindings helper
@@ -136,10 +134,6 @@ class SwingMarkupPanel : JPanel(BorderLayout()) {
 
     private fun pushCardsState() {
         try { cardsView.setState(buildViewState()) } catch (_: Throwable) { }
-    }
-
-    private fun pushTableState() {
-        try { tableView.setState(buildViewState()) } catch (_: Throwable) { }
     }
 
     private fun pushToolbarState() {
@@ -395,33 +389,10 @@ class SwingMarkupPanel : JPanel(BorderLayout()) {
             override fun saveNow() { this@SwingMarkupPanel.saveNow() }
         }
         cardsView = PointsCardsView(cardsActions)
-        val tableActions = object : MarkupActions {
-            override fun togglePlayPause() { togglePlayPause() }
-            override fun seekTo(ms: Long) { try { player.seek(ms) ; EventQueue.invokeLater { refreshUiAtCurrentTime() } } catch (_: Throwable) { } }
-            override fun jumpToSelected() { this@SwingMarkupPanel.jumpToSelected() }
-            override fun setStartAtPlayhead() { onStartAtPlayhead() }
-            override fun setEndAtPlayhead() { onEndAtPlayhead() }
-            override fun createPointAt(ms: Long) { dispatcher.onPointStart(ms) }
-            override fun editPoint(id: String, patch: PointPatch) {
-                try {
-                    val ok = dispatcher.updatePoint(id, patch.startMs ?: 0L, patch.endMs ?: 0L, patch.label ?: "")
-                    if (!ok) maybeShowDispatcherHint()
-                } catch (_: Throwable) { }
-            }
-            override fun deletePoint(id: String) { try { dispatcher.deletePoint(id) } catch (_: Throwable) { } }
-            override fun selectByVisualIndex(index: Int) { setSelectedVisual(index) }
-            override fun saveNow() { this@SwingMarkupPanel.saveNow() }
-        }
-        tableView = PointsTableView(tableActions)
-        val tabs = JTabbedPane().apply {
-            isOpaque = false
-            addTab("Cards", cardsView)
-            addTab("Table", tableView)
-        }
-        rightPanel.add(tabs, BorderLayout.CENTER)
+        // Place cards view directly without a table/tab
+        rightPanel.add(cardsView, BorderLayout.CENTER)
         // Push initial state to views
         pushCardsState()
-        pushTableState()
         center.rightComponent = rightPanel
         center.resizeWeight = 1.0
         // Add bottom controls and center split
@@ -465,7 +436,6 @@ class SwingMarkupPanel : JPanel(BorderLayout()) {
                 val pts = dispatcher.getCompletedPoints()
                 countBadge.text = "${pts.size} MARKED"
                 pushCardsState()
-                pushTableState()
                 pushToolbarState()
                 timeline.repaint()
                 scheduleAutosave()
@@ -526,7 +496,6 @@ class SwingMarkupPanel : JPanel(BorderLayout()) {
     private fun rebuildCards() {
         // Delegated to leaf components now
         pushCardsState()
-        pushTableState()
     }
 
 
@@ -608,7 +577,6 @@ class SwingMarkupPanel : JPanel(BorderLayout()) {
     private fun setSelectedVisual(visualIndex: Int) {
         selectedVisualIndex = visualIndex
         pushCardsState()
-        pushTableState()
         scrollCardIntoView(visualIndex)
     }
 
@@ -644,7 +612,6 @@ class SwingMarkupPanel : JPanel(BorderLayout()) {
         if (res == JOptionPane.OK_OPTION) {
             if (dispatcher.deletePoint(p.id)) {
                 pushCardsState()
-                pushTableState()
                 timeline.repaint()
                 scheduleAutosave()
             }

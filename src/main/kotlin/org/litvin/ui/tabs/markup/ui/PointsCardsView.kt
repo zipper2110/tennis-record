@@ -175,6 +175,30 @@ class PointsCardsView(
         center.add(Box.createVerticalStrut(6))
         center.add(times)
         card.add(center, BorderLayout.CENTER)
+        // Right-side actions (Go, Edit, Delete)
+        run {
+            val actionsPanel = JPanel().apply {
+                isOpaque = false
+                layout = BoxLayout(this, BoxLayout.X_AXIS)
+            }
+            val goBtn = UiStyles.smallIconButton(UiStyles.targetIcon(), "Go to marked point") {
+                actions.seekTo(p.startMs)
+                actions.selectByVisualIndex(visualIndex)
+            }
+            val editBtn = UiStyles.smallIconButton(UiStyles.pencilIcon(), "Edit times/label") {
+                try { EditPointDialog.show(this@PointsCardsView, p, actions) } catch (_: Throwable) { }
+            }
+            val delBtn = UiStyles.smallIconButton(UiStyles.crossIcon(), "Delete point") {
+                actions.selectByVisualIndex(visualIndex)
+                try { actions.deletePoint(p.id) } catch (_: Throwable) { }
+            }
+            actionsPanel.add(goBtn)
+            actionsPanel.add(Box.createHorizontalStrut(8))
+            actionsPanel.add(editBtn)
+            actionsPanel.add(Box.createHorizontalStrut(8))
+            actionsPanel.add(delBtn)
+            card.add(actionsPanel, BorderLayout.EAST)
+        }
         // Click selects (and seeks to start)
         card.addMouseListener(object: MouseAdapter(){
             override fun mouseClicked(e: MouseEvent) {
