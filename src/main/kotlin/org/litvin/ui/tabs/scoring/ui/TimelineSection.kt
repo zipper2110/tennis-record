@@ -1,10 +1,8 @@
 package org.litvin.ui.tabs.scoring.ui
 
 import org.litvin.markup.PointV1
-import org.litvin.ui.tabs.scoring.ui.PointsListPanel
-import org.litvin.ui.tabs.scoring.ScoringActions
+import org.litvin.ui.tabs.scoring.NavigationActions
 import java.awt.BorderLayout
-import java.awt.Container
 import javax.swing.JPanel
 
 /**
@@ -20,7 +18,7 @@ import javax.swing.JPanel
  * - Selection changes initiated by the user are forwarded to [org.litvin.ui.tabs.scoring.ScoringActions.navigateToPoint].
  */
 class TimelineSection(
-    private val actions: ScoringActions,
+    private val actions: NavigationActions,
 ) : JPanel(BorderLayout()) {
 
     private val list = PointsListPanel()

@@ -3,6 +3,7 @@ package org.litvin.ui.tabs.scoring.ui
 import org.litvin.ui.UiStyles
 import org.litvin.ui.tabs.scoring.ScoringActions
 import org.litvin.ui.tabs.scoring.ScoringViewState
+import org.litvin.ui.tabs.scoring.VideoPlayerActions
 import java.awt.BorderLayout
 import java.awt.Color
 import java.awt.Container
@@ -31,14 +32,11 @@ import kotlin.math.abs
  * - Does not depend on domain/media services; styles are delegated to [org.litvin.ui.UiStyles].
  */
 class VideoSyncPanel(
-    private val actions: ScoringActions,
+    private val actions: VideoPlayerActions,
 ) : JPanel(BorderLayout()) {
 
     private val playPauseBtn: JButton
     private val speedCombo: JComboBox<String>
-
-    // Internal guard to avoid feedback loop when updating speed from state
-    private var updatingFromState: Boolean = false
 
     // Local presets kept in UI (do not couple to SessionSettings here)
     private val speedPresets: FloatArray = floatArrayOf(2.0f, 1.0f, 0.5f, 0.25f, 0.1f)
@@ -115,7 +113,6 @@ class VideoSyncPanel(
         try { speedCombo.accessibleContext.accessibleName = "Playback speed" } catch (_: Throwable) {}
         speedCombo.toolTipText = "Use ↑/↓ to change speed"
         speedCombo.addActionListener {
-            if (updatingFromState) return@addActionListener
             val idx = speedCombo.selectedIndex.coerceIn(0, speedPresets.lastIndex)
             actions.setSpeedMultiplier(speedPresets[idx])
         }
@@ -129,8 +126,9 @@ class VideoSyncPanel(
         val center = JPanel()
         center.layout = BoxLayout(center, BoxLayout.Y_AXIS)
         center.isOpaque = false
+        center.add(Box.createVerticalStrut(46))
         center.add(transport)
-        center.add(Box.createVerticalStrut(2))
+        center.add(Box.createVerticalStrut(8))
         center.add(speedRow)
 
         add(center, BorderLayout.CENTER)
@@ -141,24 +139,17 @@ class VideoSyncPanel(
      * - Sets play/pause icon and tooltip.
      * - Adjusts speed dropdown to the closest preset.
      */
-    fun render(state: ScoringViewState) {
-        try {
-            playPauseBtn.icon = if (state.isPlaying) UiStyles.pauseIcon(28) else UiStyles.playIcon(28)
-            playPauseBtn.toolTipText = if (state.isPlaying) "SPACE — Pause" else "SPACE — Play"
-        } catch (_: Throwable) {}
-        // Map multiplier to nearest preset index
-        val m = state.speedMultiplier
+    fun render(isPlaying: Boolean, speedMultiplier: Float) {
+        playPauseBtn.icon = if (isPlaying) UiStyles.pauseIcon(28) else UiStyles.playIcon(28)
+        playPauseBtn.toolTipText = if (isPlaying) "SPACE — Pause" else "SPACE — Play"
+
+        val m = speedMultiplier
         var best = 0
         var bestDiff = Float.MAX_VALUE
         for (i in speedPresets.indices) {
             val d = abs(speedPresets[i] - m)
             if (d < bestDiff) { bestDiff = d; best = i }
         }
-        try {
-            updatingFromState = true
-            speedCombo.selectedIndex = best
-        } catch (_: Throwable) { /* ignore */ } finally {
-            updatingFromState = false
-        }
+        speedCombo.selectedIndex = best
     }
 }

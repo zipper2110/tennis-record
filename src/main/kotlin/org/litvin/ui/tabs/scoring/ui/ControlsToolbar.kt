@@ -22,7 +22,6 @@ import javax.swing.border.EmptyBorder
  *   through `ScoringActions` provided by the container.
  */
 class ControlsToolbar(
-    private val actions: ScoringActions,
     private val onHelp: (() -> Unit)? = null,
 ) : JPanel(BorderLayout()) {
 
@@ -38,46 +37,21 @@ class ControlsToolbar(
         val right = JPanel(FlowLayout(FlowLayout.RIGHT, 8, 0))
         right.isOpaque = false
 
-        // Save button (top-level persistence)
-        val btnSave = JButton("Save")
-        UiStyles.styleSecondary(btnSave)
-        try {
-            btnSave.name = "save-score"
-            btnSave.toolTipText = "Save scoring data now"
-            btnSave.accessibleContext.accessibleName = "Save"
-        } catch (_: Throwable) {}
-        btnSave.addActionListener { actions.saveScore() }
-
-        // Next Point shortcut (mirrors left footer but exposed on toolbar as a top action)
-        val btnNext = JButton("Next Point  [R]")
-        UiStyles.styleSecondary(btnNext)
-        try {
-            btnNext.name = "toolbar-next-point"
-            btnNext.toolTipText = "R — Next Point"
-            btnNext.accessibleContext.accessibleName = "Next Point"
-        } catch (_: Throwable) {}
-        btnNext.addActionListener { actions.advanceToNextPoint() }
-
         // Settings placeholder (disabled for now, parity with current state)
         val btnSettings = JButton("Scoreboard Settings")
         UiStyles.styleSecondary(btnSettings)
         btnSettings.isEnabled = false
-        try {
-            btnSettings.name = "toolbar-scoreboard-settings"
-            btnSettings.toolTipText = "Temporarily disabled"
-            btnSettings.accessibleContext.accessibleName = "Scoreboard Settings"
-        } catch (_: Throwable) {}
 
-        left.add(btnSave)
-        center.add(btnNext)
+        btnSettings.name = "toolbar-scoreboard-settings"
+        btnSettings.toolTipText = "Temporarily disabled"
+
         // Help button (right-aligned)
-        val btnHelp = JButton("Help  [F1]")
+        val btnHelp = JButton("Help [F1]")
         UiStyles.styleSecondary(btnHelp)
-        try {
-            btnHelp.name = "toolbar-help"
-            btnHelp.toolTipText = "F1 — Help"
-            btnHelp.accessibleContext.accessibleName = "Help"
-        } catch (_: Throwable) {}
+
+        btnHelp.name = "toolbar-help"
+        btnHelp.toolTipText = "F1 — Help"
+
         btnHelp.addActionListener { onHelp?.invoke() }
 
         right.add(btnSettings)

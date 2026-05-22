@@ -24,18 +24,22 @@ interface ScoringActions {
     fun finalizeSet(winner: Side)
     fun toggleServe()
 
-    // Timeline / selection
-    fun navigateToPoint(index: Int)
-    fun advanceToNextPoint()
+    // Persistence / project
+    fun saveScore()
+    fun autosave()
+}
 
+interface VideoPlayerActions {
     // Video / timecode controls (subset used in Scoring tab)
     fun playPause()
     fun seekBy(milliseconds: Long)
     fun setSpeedMultiplier(multiplier: Float)
+}
 
-    // Persistence / project
-    fun saveScore()
-    fun autosave()
+interface NavigationActions {
+    // Timeline / selection
+    fun navigateToPoint(index: Int)
+    fun advanceToNextPoint()
 }
 
 /** Immutable snapshot of the Scoring tab state consumed by components. */
