@@ -1,41 +1,31 @@
 package org.litvin.ui.tabs.scoring
 
-import org.litvin.*
+import org.litvin.GeometryViewportPanel
+import org.litvin.ManifestIO
+import org.litvin.SessionSettings
 import org.litvin.adjustments.AdjustmentsStore
-import org.litvin.ui.commons.Dialogs
-import org.litvin.ui.UiStyles
-import org.litvin.ui.commons.AspectPanel
-import org.litvin.ui.commons.uiSafe
-
-import org.litvin.media.VlcjSwingMediaPlayerAdapter
+import org.litvin.markup.EdlIO
+import org.litvin.markup.PointV1
 import org.litvin.media.PlayerStatus
-import java.awt.*
-import java.awt.event.ActionEvent
-import java.io.File
-import javax.swing.*
-import javax.swing.border.EmptyBorder
-import javax.swing.event.ChangeListener
-import javax.swing.event.DocumentEvent
-import javax.swing.event.DocumentListener
-import javax.swing.text.AbstractDocument
-import javax.swing.text.AttributeSet
-import javax.swing.text.BadLocationException
-import javax.swing.text.DocumentFilter
-import javax.swing.SwingUtilities
+import org.litvin.media.VlcjSwingMediaPlayerAdapter
 import org.litvin.scoring.Outcome
 import org.litvin.scoring.ScoreIO
 import org.litvin.scoring.ScoreV1
 import org.litvin.scoring.ScoringEngine
 import org.litvin.scoring.ScoringEngine.MatchState
 import org.litvin.scoring.ScoringEngine.SetScore
-import org.litvin.markup.EdlIO
-import org.litvin.markup.PointV1
-import org.litvin.shared.util.Timecode
-import org.litvin.ui.tabs.scoring.ui.ControlsToolbar
-import org.litvin.ui.tabs.scoring.ui.TimelineSection
-import org.litvin.ui.tabs.scoring.ui.VideoSyncPanel
-import org.litvin.ui.tabs.scoring.ui.PlayerPanel
-import org.litvin.ui.tabs.scoring.ui.ScoringHelpDialog
+import org.litvin.ui.commons.AspectPanel
+import org.litvin.ui.commons.Dialogs
+import org.litvin.ui.commons.uiSafe
+import org.litvin.ui.tabs.scoring.ui.*
+import java.awt.BorderLayout
+import java.awt.Color
+import java.awt.EventQueue
+import java.awt.KeyboardFocusManager
+import java.awt.event.ActionEvent
+import java.io.File
+import javax.swing.*
+import javax.swing.border.EmptyBorder
 
 /**
  * v0.1.0 — Scoring tab shell (Task 4.1)
@@ -175,8 +165,6 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
     }
 
 
-    // Scrub interaction guard
-    private var isScrubUpdatingFromPlayer = false
 
     private var projectDir: String? = null
 
@@ -205,10 +193,7 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
     private var segmentEndMs: Long = 0L
 
     // Scrub/UI refs in center
-    private lateinit var segmentStartLabel: JLabel
-    private lateinit var segmentNowLabel: JLabel
-    private lateinit var scrubSlider: JSlider
-    private lateinit var segmentErrorLabel: JLabel
+    private lateinit var segmentScrub: ScrubPanel
     private lateinit var videoFrame: JComponent
 
     // Speed combo is now encapsulated within VideoSyncPanel; no direct reference here
@@ -369,11 +354,7 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
             // Reset scrub labels
             segmentStartMs = 0L
             segmentEndMs = 0L
-            segmentStartLabel.text = "00:00:00"
-            segmentNowLabel.text = "00:00:00  "
-            scrubSlider.value = 0
-            // Hide inline error on no selection
-            if (::segmentErrorLabel.isInitialized) segmentErrorLabel.isVisible = false
+            if (::segmentScrub.isInitialized) segmentScrub.reset()
             updateActionButtonsState(enable = false, selectedOutcome = null)
             // Disable Next on no selection or empty list
             if (::leftListPanel.isInitialized) leftListPanel.setNextEnabled(false)
@@ -387,8 +368,7 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
         segmentStartMs = p.startMs.toLong()
         segmentEndMs = p.endMs.toLong()
         // Update scrub panel to show segment start and end of the point
-        segmentStartLabel.text = Timecode.format(segmentStartMs).substring(0, 8)
-        segmentNowLabel.text = Timecode.format(segmentEndMs).substring(0, 8) + "  "
+        if (::segmentScrub.isInitialized) segmentScrub.setSegment(segmentStartMs, segmentEndMs)
         updateScrubUi(segmentStartMs)
         // Jump playback to start and pause; focus player when active
         player.pause()
@@ -405,8 +385,8 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
         val valid = segmentEndMs > segmentStartMs
         val existing = outcomesByPointId[p.id]
         updateActionButtonsState(enable = valid, selectedOutcome = existing)
-        // Inline error indicator for malformed/zero-duration segments (Task 4.16)
-        if (::segmentErrorLabel.isInitialized) segmentErrorLabel.isVisible = !valid
+        // Inline error indicator for zero-duration/malformed segment
+        if (::segmentScrub.isInitialized) segmentScrub.setErrorVisible(!valid)
         // Enable/disable Next based on whether a subsequent point exists
         if (::leftListPanel.isInitialized) leftListPanel.setNextEnabled((selectedPointIndex + 1) in points.indices)
         // Recompute panels for current selection
@@ -458,30 +438,8 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
     }
 
     private fun updateScrubUi(absMs: Long) {
-        if (segmentEndMs > segmentStartMs) {
-            val rel = (absMs - segmentStartMs).coerceAtLeast(0L)
-            val dur = (segmentEndMs - segmentStartMs).coerceAtLeast(1L)
-            val frac = (rel.toDouble() / dur.toDouble()).coerceIn(0.0, 0.999)
-            val sliderVal = (frac * 100).toInt().coerceIn(0, 100)
-            isScrubUpdatingFromPlayer = true
-            try {
-                scrubSlider.value = sliderVal
-            } finally {
-                isScrubUpdatingFromPlayer = false
-            }
-            // Show the ending time of the point on the right label (not the current playback position)
-            segmentNowLabel.text = Timecode.format(segmentEndMs).substring(0, 8) + "  "
-        } else {
-            isScrubUpdatingFromPlayer = true
-            try {
-                scrubSlider.value = 0
-            } finally {
-                isScrubUpdatingFromPlayer = false
-            }
-            segmentNowLabel.text = "00:00:00  "
-        }
+        segmentScrub.setPosition(absMs)
     }
-
 
     fun videoPanel(): JPanel {
         // Video area with overlay
@@ -503,62 +461,16 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
         return videoWrapper
     }
 
-    private fun scrubPanel() : JPanel {
-
-        val scrubPanel = JPanel(BorderLayout(8, 0))
-        scrubPanel.border = EmptyBorder(8, 16, 8, 16)
-        scrubPanel.background = Color(0x11, 0x11, 0x11)
-
-        segmentStartLabel = JLabel("00:00:00")
-        segmentStartLabel.font = Font(Font.MONOSPACED, Font.PLAIN, 10)
-        segmentStartLabel.foreground = Color(0xAD, 0xAA, 0xAA)
-
-        scrubSlider = JSlider(0, 100, 0)
-        scrubSlider.name = "scrub"
-        scrubSlider.toolTipText = "Scrub within the selected point segment"
-        scrubSlider.background = scrubPanel.background
-        scrubSlider.addChangeListener(ChangeListener {
-            if (isScrubUpdatingFromPlayer) return@ChangeListener
-            if (segmentEndMs <= segmentStartMs) return@ChangeListener
-            val frac = scrubSlider.value / 100.0
-            var target = segmentStartMs + ((segmentEndMs - segmentStartMs) * frac).toLong()
-            val maxPlayable = (segmentEndMs - 1).coerceAtLeast(segmentStartMs)
-            if (target > maxPlayable) target = maxPlayable
-            player.pause() // seeking pauses per Scoring 4.3 (no auto-advance)
-            player.seek(target)
-            updateScrubUi(target)
-        })
-
-        val segLbl = JLabel("Point segment")
-        segLbl.font = segLbl.font.deriveFont(9f)
-        segLbl.foreground = Color(150, 150, 150)
-
-        segmentNowLabel = JLabel("00:00:00  ")
-        segmentNowLabel.font = Font(Font.MONOSPACED, Font.PLAIN, 10)
-        segmentNowLabel.foreground = Color(0xAD, 0xAA, 0xAA)
-
-        val rightBox = JPanel(FlowLayout(FlowLayout.RIGHT, 8, 0))
-        rightBox.isOpaque = false
-        rightBox.add(segmentNowLabel)
-        rightBox.add(segLbl)
-        // Inline error for zero-duration/malformed segment (Task 4.16)
-        segmentErrorLabel = JLabel("Invalid point duration — fix on Markup tab")
-        segmentErrorLabel.foreground = Color(0xFF, 0x66, 0x66)
-        segmentErrorLabel.font = segLbl.font.deriveFont(Font.BOLD, 10f)
-        segmentErrorLabel.isVisible = false
-        rightBox.add(segmentErrorLabel)
-
-        scrubPanel.add(segmentStartLabel, BorderLayout.WEST)
-        scrubPanel.add(scrubSlider, BorderLayout.CENTER)
-        scrubPanel.add(rightBox, BorderLayout.EAST)
-        return scrubPanel
-    }
-
     private fun buildCenterPanel(): JComponent {
         val centerStack = JPanel()
         centerStack.layout = BorderLayout()
         centerStack.add(videoPanel(), BorderLayout.CENTER)
-        centerStack.add(scrubPanel(), BorderLayout.SOUTH)
+        segmentScrub = ScrubPanel { target ->
+            player.pause() // seeking pauses per Scoring 4.3 (no auto-advance)
+            player.seek(target)
+            updateScrubUi(target)
+        }
+        centerStack.add(segmentScrub, BorderLayout.SOUTH)
 
         val centerWithBottom = JPanel(BorderLayout())
         centerWithBottom.add(centerStack, BorderLayout.CENTER)

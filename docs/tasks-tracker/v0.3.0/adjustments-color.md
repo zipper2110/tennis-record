@@ -22,6 +22,7 @@ Constraints and invariants
 
 ## Tasks for implementation (granular)
 - T1 — Layout: split panel scaffolding (left player + right controls)
+  - [x] Done
   - Acceptance criteria
     - A container with two regions: Left (player stack) and Right (controls column), resizable; minimum sizes defined (Left ≥ 640×360; Right ≥ 280 px width).
     - Component IDs: `adj-color-root`, `adj-color-left`, `adj-color-right`.
@@ -29,6 +30,7 @@ Constraints and invariants
     - Use `JSplitPane` with divider ~68%/32%. Persist divider location in prefs.
 
 - T2 — Left player stack: header + viewport + transport bar
+  - [x] Done
   - Acceptance criteria
     - Stack contains: `header` row (title + Reset), `viewport` area (opaque), `transport` row with Play/Pause and seek slider and time labels.
     - Component IDs: `adj-color-left-header`, `adj-color-viewport`, `adj-color-transport`.
@@ -36,6 +38,7 @@ Constraints and invariants
     - `BorderLayout` within left region; transport at SOUTH, header at NORTH, viewport at CENTER.
 
 - T3 — Player integration and transport wiring
+  - [x] Done
   - Acceptance criteria
     - Video is fully playable/seekable; SPACE toggles play/pause; seek slider works; current/duration labels update.
     - Seek while dragging updates time label; final release seeks accurately.
@@ -43,6 +46,7 @@ Constraints and invariants
     - Use `VlcjSwingMediaPlayerAdapter`; mirror seek/transport patterns from Markup/Scoring where applicable.
 
 - T4 — Color controls panel: sliders and labels
+  - [x] Done
   - Acceptance criteria
     - Controls present with labels, tooltips, and IDs:
       - `adj-brightness`, `adj-contrast`, `adj-saturation`, `adj-wb-temp`, `adj-wb-tint`.
@@ -54,6 +58,7 @@ Constraints and invariants
     - Use `JSlider` + value readouts; tooltips show ranges/defaults; organize into collapsible sections if needed.
 
 - T5 — Live preview plumbing and capability detection
+  - [x] Done
   - Acceptance criteria
     - Adjusting color controls updates the preview in real time with low latency.
     - If a capability is unavailable, control remains functional for model persistence and shows a tooltip/notice.
@@ -61,6 +66,7 @@ Constraints and invariants
     - Apply via libVLC `adjust` filter; coalesce slider events to ≤120 Hz; last-value-wins.
 
 - T6 — Reset and persistence
+  - [x] Done
   - Acceptance criteria
     - Section Reset restores defaults; Global Reset All remains available.
     - Changes persist to `adjustments.json` with debounce 300–500 ms.
@@ -68,6 +74,7 @@ Constraints and invariants
     - Use `AdjustmentsStore` pub/sub to broadcast changes and update UI; guard against feedback loops.
 
 - T7 — Performance & UX
+  - [x] Done
   - Acceptance criteria
     - Playback is smooth at 1080p; color updates do not cause noticeable drops; seek responsiveness matches other panels.
   - Implementation guide

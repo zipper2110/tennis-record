@@ -94,17 +94,17 @@ object AdjustmentsStore {
     private fun clamp(m: AdjustmentsV1): AdjustmentsV1 {
         val wb = m.whiteBalance ?: WhiteBalanceV1()
         return m.copy(
-            brightness = m.brightness.coerceIn(-1.0f, 1.0f),
-            contrast = m.contrast.coerceIn(0.0f, 3.0f),
-            saturation = m.saturation.coerceIn(0.0f, 3.0f),
+            brightness = m.brightness,
+            contrast = m.contrast,
+            saturation = m.saturation,
             whiteBalance = WhiteBalanceV1(
-                temperature = wb.temperature.coerceIn(-1.0f, 1.0f),
-                tint = wb.tint.coerceIn(-1.0f, 1.0f)
+                temperature = wb.temperature,
+                tint = wb.tint
             ),
-            zoom = m.zoom.coerceIn(0.1f, 4.0f),
-            panX = m.panX.coerceIn(-1.0f, 1.0f),
-            panY = m.panY.coerceIn(-1.0f, 1.0f),
-            rotationDeg = m.rotationDeg.coerceIn(-180.0f, 180.0f)
+            zoom = m.zoom,
+            panX = m.panX,
+            panY = m.panY,
+            rotationDeg = m.rotationDeg
         )
     }
 
