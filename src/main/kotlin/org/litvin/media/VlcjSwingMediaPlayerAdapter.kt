@@ -232,9 +232,31 @@ class VlcjSwingMediaPlayerAdapter {
     fun pause() = mediaPlayer.controls().setPause(true)
     fun seek(ms: Long) = mediaPlayer.controls().setTime(ms.coerceAtLeast(0L))
 
+    /** Step forward by exactly one frame (requires paused state for deterministic stepping). */
+    fun stepFrameForward() {
+        try {
+            mediaPlayer.controls().nextFrame()
+        } catch (_: Throwable) {
+            // ignore; not all media support precise frame advancing
+        }
+    }
+
+    /** Approximate step backward by one frame. VLCJ does not provide a previousFrame, so we seek a bit back and then advance one frame. */
+    fun stepFrameBackward() {
+        try {
+            val backMs = 40L // ~1 frame at 25 fps; good compromise for sports footage
+            val target = (currentTimeMs() - backMs).coerceAtLeast(0L)
+            mediaPlayer.controls().setTime(target)
+            mediaPlayer.controls().nextFrame()
+        } catch (_: Throwable) {
+            // ignore
+        }
+    }
+    fun nextFrame() = try { mediaPlayer.controls().nextFrame() } catch (_: Throwable) { /* ignore */ }
+ 
     fun currentTimeMs(): Long = mediaPlayer.status().time()
     fun totalDurationMs(): Long = if (durationMs > 0) durationMs else mediaPlayer.status().length()
-
+ 
     fun status(): PlayerStatus = when (mediaPlayer.status().state()) {
         State.PLAYING -> PlayerStatus.PLAYING
         State.PAUSED -> PlayerStatus.PAUSED

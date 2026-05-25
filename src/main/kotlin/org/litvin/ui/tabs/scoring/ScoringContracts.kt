@@ -34,6 +34,8 @@ interface VideoPlayerActions {
     fun playPause()
     fun seekBy(milliseconds: Long)
     fun setSpeedMultiplier(multiplier: Float)
+    /** Toggle whether Left/Right step by a single frame when paused. */
+    fun setFrameStepEnabled(enabled: Boolean)
 }
 
 interface NavigationActions {

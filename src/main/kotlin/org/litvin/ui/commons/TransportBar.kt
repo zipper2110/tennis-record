@@ -24,7 +24,9 @@ class TransportBar(
     private val btnSeekBack1 = JButton()
     private val btnSeekFwd1 = JButton()
     private val btnSeekFwd10 = JButton()
-    private val btnPlayPause: JButton = UiStyles.squarePrimaryButton(UiStyles.playIcon(28)) { onTogglePlayPause() }
+    private val btnPlayPause = UiStyles.squarePrimaryButton(UiStyles.playIcon(28)) {
+        onTogglePlayPause()
+    }
 
     private val timeLabel = JLabel("00:00:00.000")
 
@@ -46,10 +48,10 @@ class TransportBar(
         }
         styleSeekLarge(btnSeekBack10); styleSeek(btnSeekBack1); styleSeek(btnSeekFwd1); styleSeekLarge(btnSeekFwd10)
 
-        btnSeekBack10.icon = UiStyles.seekIcon(false, 18); btnSeekBack10.text = "-10s [shift+←]"
+        btnSeekBack10.icon = UiStyles.seekIcon(false, 18); btnSeekBack10.text = "-5s [shift+←]"
         btnSeekBack1.icon = UiStyles.seekIcon(false, 18); btnSeekBack1.text = "-1s [←]"
         btnSeekFwd1.icon = UiStyles.seekIcon(true, 18); btnSeekFwd1.text = "+1s [→]"
-        btnSeekFwd10.icon = UiStyles.seekIcon(true, 18); btnSeekFwd10.text = "+10s [shift+→]"
+        btnSeekFwd10.icon = UiStyles.seekIcon(true, 18); btnSeekFwd10.text = "+5s [shift+→]"
 
         btnSeekBack10.toolTipText = "Shift+Left"
         btnSeekBack1.toolTipText = "Left"
@@ -61,10 +63,10 @@ class TransportBar(
         btnSeekFwd1.horizontalTextPosition = SwingConstants.LEFT
         btnSeekFwd10.horizontalTextPosition = SwingConstants.LEFT
 
-        btnSeekBack10.addActionListener(seekHandler(-10_000))
+        btnSeekBack10.addActionListener(seekHandler(-5_000))
         btnSeekBack1.addActionListener(seekHandler(-1_000))
         btnSeekFwd1.addActionListener(seekHandler(+1_000))
-        btnSeekFwd10.addActionListener(seekHandler(+10_000))
+        btnSeekFwd10.addActionListener(seekHandler(+5_000))
 
         // Middle group: seeks + play square button
         add(btnSeekBack10); add(Box.createHorizontalStrut(6))

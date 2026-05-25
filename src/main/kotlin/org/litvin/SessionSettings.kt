@@ -16,6 +16,13 @@ object SessionSettings {
     @JvmStatic
     val speedPresets: FloatArray = floatArrayOf(2.0f, 1.0f, 0.5f, 0.25f, 0.1f)
 
+    /**
+     * When enabled, and the player is paused, Left/Right arrows step by exactly one frame.
+     * Default is false (original behavior: ±1s regardless of paused state).
+     */
+    @JvmStatic
+    var frameStepWhenPaused: Boolean = false
+
     @JvmStatic
     fun clampIndex(i: Int): Int = when {
         i < 0 -> 0

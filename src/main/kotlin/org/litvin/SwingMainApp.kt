@@ -11,6 +11,7 @@ import org.litvin.ui.tabs.markup.SwingMarkupPanel
 import org.litvin.ui.tabs.scoring.SwingScoringPanel
 import org.litvin.ui.tabs.export.SwingExportPanel
 import org.litvin.ui.tabs.adjustments.SwingAdjustmentsPanel
+import org.litvin.ui.tabs.adjustments.SwingCropRotatePanel
 
 
 /**
@@ -24,6 +25,7 @@ object SwingMainApp {
     private const val CARD_EXPORT = "export"
     private const val CARD_SCORING = "scoring"
     private const val CARD_ADJUSTMENTS = "adjustments"
+    private const val CARD_ADJ_CROP_ROTATE = "adjustments-crop-rotate"
 
     @JvmStatic
     fun main(args: Array<String>) {
@@ -132,6 +134,7 @@ object SwingMainApp {
                 lateinit var btnAdjustments: UiStyles.SidebarButton
                 lateinit var btnScoring: UiStyles.SidebarButton
                 lateinit var btnExport: UiStyles.SidebarButton
+                lateinit var btnAdjCropRotate: UiStyles.SidebarButton
 
                 fun addItem(b: UiStyles.SidebarButton) {
                     b.alignmentX = 0f
@@ -151,6 +154,7 @@ object SwingMainApp {
                 var setActive: (String) -> Unit = {}
                 val markupPanel = SwingMarkupPanel()
                 val adjustmentsPanel = SwingAdjustmentsPanel()
+                val cropRotatePanel = SwingCropRotatePanel()
                 val scoringPanel = SwingScoringPanel()
                 val exportPanel = SwingExportPanel()
                 val projectsPanel = SwingProjectsPanel().apply {
@@ -172,6 +176,7 @@ object SwingMainApp {
                 cards.add(projectsPanel, CARD_PROJECTS)
                 cards.add(markupPanel, CARD_MARKUP)
                 cards.add(adjustmentsPanel, CARD_ADJUSTMENTS)
+                cards.add(cropRotatePanel, CARD_ADJ_CROP_ROTATE)
                 cards.add(scoringPanel, CARD_SCORING)
                 cards.add(exportPanel, CARD_EXPORT)
 
@@ -183,6 +188,7 @@ object SwingMainApp {
                         when (currentCard) {
                             CARD_MARKUP -> try { markupPanel.onDeactivated() } catch (_: Throwable) {}
                             CARD_ADJUSTMENTS -> try { adjustmentsPanel.onDeactivated() } catch (_: Throwable) {}
+                            CARD_ADJ_CROP_ROTATE -> { /* no-op for now; add lifecycle hooks later */ }
                             CARD_SCORING -> try { scoringPanel.onDeactivated() } catch (_: Throwable) {}
                         }
                         // Show target card
@@ -219,6 +225,12 @@ object SwingMainApp {
                 }
                 addItem(btnAdjustments)
 
+                btnAdjCropRotate = UiStyles.sidebarButton("Crop/Rotate", UiStyles.slidersIcon()) {
+                    frame.title = "Tennis Record — Adjustments: Crop/Rotate (Swing)"
+                    goTo(CARD_ADJ_CROP_ROTATE)
+                }
+                addItem(btnAdjCropRotate)
+
                 btnScoring = UiStyles.sidebarButton("Scoring", UiStyles.targetIcon()) {
                     frame.title = "Tennis Record — Scoring (Swing)"
                     goTo(CARD_SCORING)
@@ -236,6 +248,7 @@ object SwingMainApp {
                     btnProjects.active = card == CARD_PROJECTS
                     btnMarkup.active = card == CARD_MARKUP
                     btnAdjustments.active = card == CARD_ADJUSTMENTS
+                    btnAdjCropRotate.active = card == CARD_ADJ_CROP_ROTATE
                     btnScoring.active = card == CARD_SCORING
                     btnExport.active = card == CARD_EXPORT
                 }
@@ -257,16 +270,19 @@ object SwingMainApp {
                 val miProjects = JMenuItem("Projects")
                 val miMarkup = JMenuItem("Markup")
                 val miAdjustments = JMenuItem("Adjustments")
+                val miAdjCropRotate = JMenuItem("Crop/Rotate")
                 val miScoring = JMenuItem("Scoring")
                 val miExport = JMenuItem("Export")
                 miProjects.addActionListener { btnProjects.doClick() }
                 miMarkup.addActionListener { btnMarkup.doClick() }
                 miAdjustments.addActionListener { btnAdjustments.doClick() }
+                miAdjCropRotate.addActionListener { btnAdjCropRotate.doClick() }
                 miScoring.addActionListener { btnScoring.doClick() }
                 miExport.addActionListener { btnExport.doClick() }
                 viewMenu.add(miProjects)
                 viewMenu.add(miMarkup)
                 viewMenu.add(miAdjustments)
+                viewMenu.add(miAdjCropRotate)
                 viewMenu.add(miScoring)
                 viewMenu.add(miExport)
                 menuBar.add(viewMenu)

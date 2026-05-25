@@ -28,7 +28,6 @@ class TransportControls(
 
     private val btnStart = JButton("Point Start [C]")
     private val btnEnd = JButton("Point End [V]")
-    private val btnJump = JButton("Jump to Selected")
 
     private val transportBar = TransportBar(
         onTogglePlayPause = { actions.togglePlayPause() },
@@ -39,10 +38,9 @@ class TransportControls(
         isOpaque = false
 
         // Style point boundary buttons
-        listOf(btnStart, btnEnd, btnJump).forEach { UiStyles.styleSecondary(it) }
+        listOf(btnStart, btnEnd).forEach { UiStyles.styleSecondary(it) }
         btnStart.addActionListener { actions.setStartAtPlayhead() }
         btnEnd.addActionListener { actions.setEndAtPlayhead() }
-        btnJump.addActionListener { actions.jumpToSelected() }
 
         val bar = JPanel()
         bar.isOpaque = false
@@ -57,9 +55,6 @@ class TransportControls(
         bar.add(Box.createHorizontalGlue())
         bar.add(transportBar)
         bar.add(Box.createHorizontalGlue())
-
-        // Right: Jump
-        bar.add(btnJump)
 
         val controlsBar = JPanel(BorderLayout())
         controlsBar.isOpaque = true

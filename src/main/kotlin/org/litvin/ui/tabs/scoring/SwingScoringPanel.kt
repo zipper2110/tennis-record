@@ -106,6 +106,13 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
             player.setRate(SessionSettings.toRate(SessionSettings.playbackSpeedIndex))
             updateVideoControls()
         }
+
+        override fun setFrameStepEnabled(enabled: Boolean) = uiSafe {
+            SessionSettings.frameStepWhenPaused = enabled
+            updateVideoControls()
+            // After toggling via checkbox, return focus to player so hotkeys keep working
+            EventQueue.invokeLater { player.component.requestFocusInWindow() }
+        }
     }
 
     private val navigationActions = object : NavigationActions {
@@ -340,12 +347,16 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
     }
 
     private fun setSelectedIndex(index: Int, userInitiated: Boolean) {
+        // Avoid undesired auto-scrolling on user click; only scroll programmatically.
         if (index == selectedPointIndex) {
-            if (userInitiated) scrollRowIntoView(index)
+            // No-op on reselect; do not trigger any scrolling.
             return
         }
         selectedPointIndex = index
-        leftListPanel.setSelectedIndex(index, userInitiated)
+        // Always pass userInitiated = false to LeftListPanel to prevent its internal auto-scroll.
+        leftListPanel.setSelectedIndex(index, false)
+        // When selection is changed programmatically (keyboard/auto-advance), ensure it's visible.
+        if (!userInitiated) scrollRowIntoView(index)
         onSelectionChanged()
     }
 
@@ -488,7 +499,7 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
         leftPlayerPanel.setPlayerName(displayNameP1())
         rightPlayerPanel = PlayerPanel(false) { setOutcomeForSelectedPoint(Outcome.P2) }
         rightPlayerPanel.setPlayerName(displayNameP2())
-        videoSyncPanel = VideoSyncPanel(videoPlayerActions)
+        videoSyncPanel = VideoSyncPanel(videoPlayerActions) { setOutcomeForSelectedPoint(Outcome.NONE) }
 
         bottom.add(leftPlayerPanel, BorderLayout.WEST)
         bottom.add(videoSyncPanel, BorderLayout.CENTER)
@@ -517,6 +528,8 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
     private fun updateVideoControls() {
         val state = getState()
         videoSyncPanel.render(state.isPlaying, state.speedMultiplier)
+        // Sync frame-step checkbox from session setting
+        videoSyncPanel.setFrameStepEnabled(SessionSettings.frameStepWhenPaused)
     }
 
     private fun seekBy(deltaMs: Long) {
@@ -554,11 +567,30 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
         }
         // Space toggles play/pause
         bind("SPACE", "togglePlayPause") { togglePlayPause() }
-        // Seeks: Left/Right = ±1s; Shift+arrows = ±10s
-        bind("LEFT", "seekLeft1s") { seekBy(-1_000) }
-        bind("RIGHT", "seekRight1s") { seekBy(1_000) }
-        bind("shift LEFT", "seekLeft10s") { seekBy(-5_000) }
-        bind("shift RIGHT", "seekRight10s") { seekBy(5_000) }
+        // Arrow keys:
+        // Default (frameStepWhenPaused == false): Left/Right = ±1s regardless of paused state; Shift = ±5s.
+        // When frameStepWhenPaused == true: if paused → Left/Right step 1 frame; if playing → ±1s.
+        bind("LEFT", "seekLeftOrPrevFrame") {
+            val paused = player.status() == PlayerStatus.PAUSED
+            if (SessionSettings.frameStepWhenPaused && paused) {
+                // Approximate previous frame
+                try { player.stepFrameBackward() } catch (_: Throwable) { /* ignore */ }
+                updateScrubUi(player.currentTimeMs())
+            } else {
+                seekBy(-1_000)
+            }
+        }
+        bind("RIGHT", "seekRightOrNextFrame") {
+            val paused = player.status() == PlayerStatus.PAUSED
+            if (SessionSettings.frameStepWhenPaused && paused) {
+                try { player.stepFrameForward() } catch (_: Throwable) { /* ignore */ }
+                updateScrubUi(player.currentTimeMs())
+            } else {
+                seekBy(1_000)
+            }
+        }
+        bind("shift LEFT", "seekLeft5s") { seekBy(-5_000) }
+        bind("shift RIGHT", "seekRight5s") { seekBy(5_000) }
         // Speed control via keyboard: Up/Down when player area has focus
         bind("UP", "speedUp") {
             if (!isPlayerAreaFocus()) return@bind
@@ -576,6 +608,8 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
         bind("R", "nextPoint") { advanceToNextPoint() }
         // Help dialog (v0.3.1): F1 opens contextual help
         bind("F1", "openHelp") { showHelpDialog() }
+        // Frame-by-frame toggle: F
+        bind("F", "toggleFrameStep") { videoPlayerActions.setFrameStepEnabled(!SessionSettings.frameStepWhenPaused) }
     }
 
     private fun isTextEditingFocus(): Boolean {
@@ -641,12 +675,15 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
     private fun updateActionButtonsState(enable: Boolean, selectedOutcome: Outcome?) {
         if (::leftPlayerPanel.isInitialized) leftPlayerPanel.setPointButtonEnabled(enable)
         if (::rightPlayerPanel.isInitialized) rightPlayerPanel.setPointButtonEnabled(enable)
+        if (::videoSyncPanel.isInitialized) videoSyncPanel.setNoPointEnabled(enable)
 
         val sel = selectedOutcome
         val p1 = sel == Outcome.P1
         val p2 = sel == Outcome.P2
+        val none = sel == Outcome.NONE
         if (::leftPlayerPanel.isInitialized) leftPlayerPanel.setPointSelected(p1)
         if (::rightPlayerPanel.isInitialized) rightPlayerPanel.setPointSelected(p2)
+        if (::videoSyncPanel.isInitialized) videoSyncPanel.setNoPointSelected(none)
     }
 
     private fun setOutcomeForSelectedPoint(outcome: Outcome) {

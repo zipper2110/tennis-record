@@ -26,6 +26,7 @@ Constraints and invariants
 
 ## Tasks for implementation (granular)
 - T1 — Layout: split panel scaffolding (left canvas + right controls)
+  - [x] Done
   - Acceptance criteria
     - A container with two regions: Left (preview stack) and Right (controls column), resizable; minimum sizes defined (Left ≥ 640×360; Right ≥ 280 px width).
     - Component IDs: `adj-cr-root`, `adj-cr-left`, `adj-cr-right`.
@@ -33,6 +34,7 @@ Constraints and invariants
     - Use `BorderLayout` or `JSplitPane` with divider at ~68%/32%. Persist last divider location in prefs.
 
 - T2 — Left preview stack: header + canvas + seek bar
+  - [x] Done
   - Acceptance criteria
     - Stack contains: `header` row (title + Reset), `canvas` area (opaque), `seek` row (JSlider with tooltip and labels hidden).
     - Component IDs: `adj-cr-left-header`, `adj-cr-canvas`, `adj-cr-seek`.

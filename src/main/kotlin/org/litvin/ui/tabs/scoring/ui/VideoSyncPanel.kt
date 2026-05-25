@@ -13,9 +13,12 @@ import javax.swing.Box
 import javax.swing.BoxLayout
 import javax.swing.JButton
 import javax.swing.JComboBox
+import javax.swing.JCheckBox
 import javax.swing.JLabel
 import javax.swing.JPanel
 import javax.swing.SwingConstants
+import javax.swing.JToggleButton
+import javax.swing.BorderFactory
 import javax.swing.border.EmptyBorder
 import kotlin.math.abs
 
@@ -33,10 +36,13 @@ import kotlin.math.abs
  */
 class VideoSyncPanel(
     private val actions: VideoPlayerActions,
+    private val onNoPoint: () -> Unit,
 ) : JPanel(BorderLayout()) {
 
     private val playPauseBtn: JButton
     private val speedCombo: JComboBox<String>
+    private lateinit var frameStepCheckbox: JCheckBox
+    private lateinit var noPointBtn: JToggleButton
 
     // Local presets kept in UI (do not couple to SessionSettings here)
     private val speedPresets: FloatArray = floatArrayOf(2.0f, 1.0f, 0.5f, 0.25f, 0.1f)
@@ -117,21 +123,58 @@ class VideoSyncPanel(
             actions.setSpeedMultiplier(speedPresets[idx])
         }
         speedRow.add(speedCombo)
+        // Frame-by-frame checkbox
+        frameStepCheckbox = JCheckBox("Frame-by-frame")
+        try { frameStepCheckbox.accessibleContext.accessibleName = "Frame-by-frame stepping when paused" } catch (_: Throwable) {}
+        frameStepCheckbox.toolTipText = "When enabled, Left/Right step a single frame while paused"
+        frameStepCheckbox.isOpaque = false
+        frameStepCheckbox.foreground = Color(0xAD, 0xAA, 0xAA)
+        frameStepCheckbox.addActionListener { actions.setFrameStepEnabled(frameStepCheckbox.isSelected) }
+        speedRow.add(Box.createHorizontalStrut(8))
         speedRow.add(JLabel("↑ / ↓ speed").apply {
             foreground = Color(0xAD, 0xAA, 0xAA)
             font = font.deriveFont(10f)
             toolTipText = "Use ↑/↓ to change speed"
         })
+        speedRow.add(frameStepCheckbox)
 
         val center = JPanel()
         center.layout = BoxLayout(center, BoxLayout.Y_AXIS)
         center.isOpaque = false
-        center.add(Box.createVerticalStrut(46))
+
+        // Top action row: centered "No point" toggle button (styled like player point buttons)
+        val actionsRow = JPanel(FlowLayout(FlowLayout.CENTER, 0, 0))
+        actionsRow.isOpaque = false
+        noPointBtn = JToggleButton("No point [W]")
+        noPointBtn.isFocusPainted = false
+        noPointBtn.foreground = Color.WHITE
+        noPointBtn.background = Color(0x26, 0x26, 0x26)
+        noPointBtn.border = BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(Color(0x48, 0x48, 0x47, 0x33), 1),
+            EmptyBorder(6, 10, 6, 10)
+        )
+        try { noPointBtn.name = "no-point" } catch (_: Throwable) {}
+        noPointBtn.toolTipText = "W — No point"
+        noPointBtn.addActionListener { onNoPoint.invoke() }
+        actionsRow.add(noPointBtn)
+
+        center.add(actionsRow)
+        center.add(Box.createVerticalStrut(12))
         center.add(transport)
         center.add(Box.createVerticalStrut(8))
         center.add(speedRow)
 
         add(center, BorderLayout.CENTER)
+    }
+
+    /**
+     * External control for the No point button state, to mirror player buttons.
+     */
+    fun setNoPointEnabled(enabled: Boolean) {
+        try { noPointBtn.isEnabled = enabled } catch (_: Throwable) { }
+    }
+    fun setNoPointSelected(selected: Boolean) {
+        try { noPointBtn.model.isSelected = selected } catch (_: Throwable) { }
     }
 
     /**
@@ -151,5 +194,11 @@ class VideoSyncPanel(
             if (d < bestDiff) { bestDiff = d; best = i }
         }
         speedCombo.selectedIndex = best
+    }
+
+    fun setFrameStepEnabled(enabled: Boolean) {
+        try {
+            frameStepCheckbox.isSelected = enabled
+        } catch (_: Throwable) { }
     }
 }

@@ -68,6 +68,21 @@ class PointsCardsView(
         rebuild(state)
     }
 
+    fun updateSelection(selectedIndex: Int) {
+        try {
+            val prev = lastState?.selectedVisualIndex
+            lastState = lastState?.copy(selectedVisualIndex = selectedIndex) ?: lastState
+            if (prev != null && prev >= 0 && prev < cardComponents.size) {
+                applyCardSelectionStyle(cardComponents[prev], false)
+                cardComponents[prev].repaint()
+            }
+            if (selectedIndex >= 0 && selectedIndex < cardComponents.size) {
+                applyCardSelectionStyle(cardComponents[selectedIndex], true)
+                cardComponents[selectedIndex].repaint()
+            }
+        } catch (_: Throwable) { }
+    }
+
     fun scrollToVisualIndex(index: Int) {
         try {
             if (index < 0 || index >= cardComponents.size) return

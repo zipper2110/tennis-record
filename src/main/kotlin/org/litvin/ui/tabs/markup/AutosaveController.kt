@@ -13,26 +13,27 @@ import kotlin.concurrent.thread
  */
 class AutosaveController(
     debounceMs: Int = 300,
-    private val saver: () -> Unit,
-    private val onStateChanged: (AutosaveState) -> Unit,
+    private val saver: () -> Unit
 ) {
     private val timer = Timer(debounceMs) { _ -> triggerSave() }.apply { isRepeats = false }
 
-    @Volatile private var _lastSavedAtMs: Long? = null
+    @Volatile
+    private var _lastSavedAtMs: Long? = null
 
     fun schedule() {
-        try { timer.restart() } catch (_: Throwable) { /* ignore */ }
-        publish()
+        timer.restart()
     }
 
     fun autosaveNow() {
-        try { if (timer.isRunning) timer.stop() } catch (_: Throwable) { }
+        if (timer.isRunning) timer.stop()
         triggerSave()
     }
 
-    fun saveNow() = autosaveNow()
-
-    fun isPending(): Boolean = try { timer.isRunning } catch (_: Throwable) { false }
+    fun isPending(): Boolean = try {
+        timer.isRunning
+    } catch (_: Throwable) {
+        false
+    }
 
     val lastSavedAtMs: Long?
         get() = _lastSavedAtMs
@@ -40,19 +41,8 @@ class AutosaveController(
     private fun triggerSave() {
         // Run IO off-EDT
         thread(name = "autosave") {
-            try {
-                saver()
-                _lastSavedAtMs = System.currentTimeMillis()
-            } catch (_: Throwable) {
-                // saver() is responsible for surfacing the error to the UI if needed
-            } finally {
-                publish()
-            }
+            saver()
+            _lastSavedAtMs = System.currentTimeMillis()
         }
-    }
-
-    private fun publish() {
-        val snapshot = AutosaveState(pending = isPending(), lastSavedAtMs = _lastSavedAtMs)
-        EventQueue.invokeLater { onStateChanged(snapshot) }
     }
 }
