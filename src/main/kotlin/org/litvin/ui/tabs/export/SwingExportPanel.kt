@@ -46,9 +46,6 @@ class SwingExportPanel : JPanel(BorderLayout()) {
     private val encoderPanel = EncoderSummaryPanel()
 
     // Right side — Active + Completed
-    private val activePanel = JPanel(BorderLayout())
-    private val activeTitle = JLabel("Active Processing")
-    private val activeCard = JPanel(BorderLayout())
     private val progressBar = JProgressBar(0, 100)
     private val progressLabel = JLabel("Idle")
     private val cancelButton = JButton("Cancel")
@@ -100,6 +97,7 @@ class SwingExportPanel : JPanel(BorderLayout()) {
         left.add(sectionLabel("Preset"))
         presetCombo.selectedIndex = ExportPresetsIO.defaultBalancedIndex(presets)
         presetCombo.maximumSize = Dimension(Short.MAX_VALUE.toInt(), 28)
+        UiStyles.styleComboBox(presetCombo)
         left.add(presetCombo)
         UiStyles.styleHelper(qualityLabel)
         qualityLabel.text = ""
@@ -113,6 +111,7 @@ class SwingExportPanel : JPanel(BorderLayout()) {
         val resModel = DefaultComboBoxModel(arrayOf("1080p", "4K"))
         resCombo.model = resModel
         resCombo.maximumSize = Dimension(Short.MAX_VALUE.toInt(), 28)
+        UiStyles.styleComboBox(resCombo)
         left.add(resCombo)
         UiStyles.styleHelper(resSummaryLabel)
         UiStyles.styleMono(scalePlanLabel)
@@ -466,6 +465,7 @@ class SwingExportPanel : JPanel(BorderLayout()) {
     private fun sectionLabel(text: String): JComponent {
         val l = JLabel(text)
         l.font = l.font.deriveFont(Font.BOLD)
+        l.foreground = FG_PRIMARY
         l.alignmentX = 0f
         return l
     }

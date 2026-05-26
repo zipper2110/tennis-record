@@ -20,6 +20,11 @@ import javax.swing.JButton
 import javax.swing.JComponent
 import javax.swing.JLabel
 import javax.swing.JPanel
+import javax.swing.JComboBox
+import javax.swing.JList
+import javax.swing.ListCellRenderer
+import javax.swing.DefaultListCellRenderer
+import javax.swing.UIManager
 
 /**
  * Shared Swing UI styles to match the mock (projects.html):
@@ -90,7 +95,7 @@ object UiStyles {
     val SURFACE_HIGH: Color = Color(0x20, 0x20, 0x1F)       // surface-container-high
     val CARD_BG: Color = Color(0x1A, 0x1A, 0x1A)            // surface-container
     val CARD_BORDER: Color = Color(0x26, 0x26, 0x26)        // surface-variant border
-    val FG_PRIMARY: Color = Color(0xFF, 0xFF, 0xFF)         // on-surface
+    val FG_PRIMARY: Color = Color(0xD8, 0xD8, 0xD8)         // on-surface
     val FG_SECONDARY: Color = Color(0xAD, 0xAA, 0xAA)       // on-surface-variant
     val GREEN: Color = Color(0xA1, 0xFE, 0x00)              // primary-fixed
 
@@ -98,7 +103,7 @@ object UiStyles {
     val SIDEBAR_BG: Color = Color(0x12, 0x12, 0x12)
     val SIDEBAR_FG: Color = Color(0xD8, 0xD8, 0xD8)
     val SIDEBAR_FG_MUTED: Color = Color(0x9A, 0x9A, 0x9A)
-    val SIDEBAR_HOVER_BG: Color = Color(0x1C, 0x1C, 0x1C)
+    val SIDEBAR_HOVER_BG: Color = Color(0x2C, 0x2C, 0x2C)
     val SIDEBAR_ACTIVE_BG: Color = Color(0x18, 0x18, 0x18)
     val LIME: Color = Color(0xA1, 0xFE, 0x00)
 
@@ -433,6 +438,103 @@ object UiStyles {
         styleHelper(c)
         try {
             c.font = Font("Consolas", Font.PLAIN, c.font.size)
+        } catch (_: Throwable) { }
+    }
+
+    /** Apply dark theme styling for JComboBox controls (editor + popup items). */
+    fun <T> styleComboBox(cb: JComboBox<T>) {
+        try {
+            cb.isOpaque = true
+            cb.background = SURFACE_HIGH
+            cb.foreground = FG_PRIMARY
+            cb.border = BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(CARD_BORDER, 1, true),
+                BorderFactory.createEmptyBorder(2, 8, 2, 8)
+            )
+            cb.isFocusable = true
+
+            // Dark arrow/button area on the right
+            try {
+                cb.ui = object : javax.swing.plaf.basic.BasicComboBoxUI() {
+                    override fun createArrowButton(): JButton {
+                        val icon = object : Icon {
+                            override fun getIconWidth() = 10
+                            override fun getIconHeight() = 6
+                            override fun paintIcon(c: Component?, g: Graphics?, x: Int, y: Int) {
+                                val g2 = g as Graphics2D
+                                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+                                g2.color = FG_SECONDARY
+                                val w = iconWidth; val h = iconHeight
+                                val px = intArrayOf(x, x + w / 2, x + w)
+                                val py = intArrayOf(y, y + h, y)
+                                g2.fillPolygon(px, py, 3)
+                            }
+                        }
+                        return object : JButton(icon) {
+                            init {
+                                isContentAreaFilled = false
+                                isOpaque = true
+                                background = SURFACE_HIGH
+                                foreground = FG_PRIMARY
+                                border = BorderFactory.createMatteBorder(0, 1, 0, 0, CARD_BORDER)
+                                isFocusPainted = false
+                                isBorderPainted = true
+                                cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
+                            }
+                            override fun paintComponent(g: Graphics) {
+                                val g2 = g as Graphics2D
+                                g2.color = SURFACE_HIGH
+                                g2.fillRect(0, 0, width, height)
+                                super.paintComponent(g)
+                            }
+                        }
+                    }
+                }
+            } catch (_: Throwable) { }
+
+            // Renderer for both the selected value (index == -1) and dropdown items
+            cb.renderer = object : DefaultListCellRenderer() {
+                override fun getListCellRendererComponent(
+                    list: JList<*>?, value: Any?, index: Int, isSelected: Boolean, cellHasFocus: Boolean
+                ): Component {
+                    val c = super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus) as JLabel
+                    // Apply list-level colors too (helps popup background)
+                    try {
+                        list?.background = CARD_BG
+                        list?.foreground = FG_PRIMARY
+                        list?.selectionBackground = SIDEBAR_HOVER_BG
+                        list?.selectionForeground = FG_PRIMARY
+                    } catch (_: Throwable) { }
+                    c.isOpaque = true
+                    c.background = if (isSelected) SIDEBAR_HOVER_BG else CARD_BG
+                    c.foreground = FG_PRIMARY
+                    c.border = BorderFactory.createEmptyBorder(4, 8, 4, 8)
+                    return c
+                }
+            }
+
+            // Ensure the popup menu itself is dark and has dark border — best-effort via UIManager keys
+            // (Listener approach is avoided for cross‑LAF reliability.)
+
+            // Hint UI defaults to keep popup consistent when LAF reads UIManager
+            try {
+                UIManager.put("ComboBox.background", SURFACE_HIGH)
+                UIManager.put("ComboBox.foreground", FG_PRIMARY)
+                UIManager.put("ComboBox.selectionBackground", SIDEBAR_HOVER_BG)
+                UIManager.put("ComboBox.selectionForeground", FG_PRIMARY)
+                UIManager.put("ComboBox.border", BorderFactory.createLineBorder(CARD_BORDER))
+                UIManager.put("ComboBox.popupBackground", CARD_BG)
+                UIManager.put("ComboBox.disabledForeground", FG_SECONDARY)
+                UIManager.put("ComboBox.buttonBackground", SURFACE_HIGH)
+                UIManager.put("ComboBox.buttonHoverBackground", SURFACE_HIGH)
+                UIManager.put("ComboBox.buttonPressedBackground", SURFACE_HIGH)
+                UIManager.put("ComboBox.buttonArrowColor", FG_SECONDARY)
+                UIManager.put("ComboBox.borderColor", CARD_BORDER)
+                // Popup menu fallbacks (some LAFs read these keys for combo popups)
+                UIManager.put("PopupMenu.background", CARD_BG)
+                UIManager.put("PopupMenu.foreground", FG_PRIMARY)
+                UIManager.put("PopupMenu.border", BorderFactory.createLineBorder(CARD_BORDER, 1, true))
+            } catch (_: Throwable) { }
         } catch (_: Throwable) { }
     }
 

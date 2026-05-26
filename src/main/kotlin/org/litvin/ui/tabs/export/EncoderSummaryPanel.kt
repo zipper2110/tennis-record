@@ -26,6 +26,7 @@ class EncoderSummaryPanel {
 
         populateEncoders()
         encoderCombo.maximumSize = Dimension(Short.MAX_VALUE.toInt(), 28)
+        UiStyles.styleComboBox(encoderCombo)
         panel.add(encoderCombo)
 
         UiStyles.styleHelper(encoderHintLabel)

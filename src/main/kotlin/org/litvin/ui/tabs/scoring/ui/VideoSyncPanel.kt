@@ -114,6 +114,7 @@ class VideoSyncPanel(
         speedRow.isOpaque = false
         val speedLabels = arrayOf("2×", "1×", "0.5×", "0.25×", "0.1×")
         speedCombo = JComboBox(speedLabels)
+        UiStyles.styleComboBox(speedCombo)
         speedCombo.isFocusable = true
         speedCombo.name = "speed-dropdown"
         try { speedCombo.accessibleContext.accessibleName = "Playback speed" } catch (_: Throwable) {}
