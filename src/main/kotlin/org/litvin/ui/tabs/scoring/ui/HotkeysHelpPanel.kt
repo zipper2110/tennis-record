@@ -15,6 +15,7 @@ import javax.swing.SwingConstants
 import javax.swing.border.EmptyBorder
 import javax.swing.table.DefaultTableCellRenderer
 import javax.swing.table.DefaultTableModel
+import org.litvin.ui.commons.applyDarkScrollbar
 
 /**
  * HotkeysHelpPanel (E-SC-001 T6)
@@ -61,6 +62,7 @@ class HotkeysHelpPanel(
         scroll.isOpaque = false
         scroll.viewport.isOpaque = false
         scroll.border = BorderFactory.createEmptyBorder()
+        try { applyDarkScrollbar(scroll) } catch (_: Throwable) { }
 
         val wrap = JPanel(BorderLayout())
         wrap.isOpaque = false

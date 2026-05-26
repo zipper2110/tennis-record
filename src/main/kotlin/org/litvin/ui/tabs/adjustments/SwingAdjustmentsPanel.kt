@@ -16,6 +16,7 @@ import java.awt.event.MouseEvent
 import java.io.File
 import java.util.prefs.Preferences
 import javax.swing.*
+import org.litvin.ui.commons.applyDarkScrollbar
 
 /**
  * Adjustments: Color Tab — T3 (Player integration and transport wiring)
@@ -177,6 +178,7 @@ class SwingAdjustmentsPanel : JPanel(BorderLayout()) {
             viewport.background = UiStyles.DARK_BG
             border = BorderFactory.createEmptyBorder()
         }
+        try { applyDarkScrollbar(scroll, UiStyles.DARK_BG) } catch (_: Throwable) { }
         rightPanel.add(scroll, BorderLayout.CENTER)
 
         val adjustSupported = try {

@@ -14,6 +14,7 @@ import javax.swing.JPanel
 import javax.swing.JScrollPane
 import javax.swing.SwingUtilities
 import javax.swing.border.EmptyBorder
+import org.litvin.ui.commons.applyDarkScrollbar
 
 /**
  * ScoringHelpDialog (v0.3.1)
@@ -100,6 +101,7 @@ class ScoringHelpDialog(
         val leftScroll = JScrollPane(htmlPane)
         leftScroll.horizontalScrollBarPolicy = JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
         leftScroll.border = BorderFactory.createLineBorder(Color(0x48, 0x48, 0x47, 0x33))
+        try { applyDarkScrollbar(leftScroll) } catch (_: Throwable) { }
 
         // Right: Hotkeys table — two sections with explicit ordering
         val rightPanel = JPanel()
@@ -146,6 +148,7 @@ class ScoringHelpDialog(
         val rightScroll = JScrollPane(rightPanel)
         rightScroll.horizontalScrollBarPolicy = JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
         rightScroll.border = BorderFactory.createLineBorder(Color(0x48, 0x48, 0x47, 0x33))
+        try { applyDarkScrollbar(rightScroll) } catch (_: Throwable) { }
 
         val split = JPanel(java.awt.GridLayout(1, 2, 12, 0))
         split.isOpaque = false

@@ -10,6 +10,7 @@ import java.io.File
 import java.util.prefs.Preferences
 import javax.swing.*
 import javax.swing.filechooser.FileNameExtensionFilter
+import org.litvin.ui.commons.applyDarkScrollbar
 
 /**
  * Projects screen (Swing) — rebuilt to mirror the legacy JavaFX layout/wording.
@@ -259,6 +260,7 @@ class SwingProjectsPanel : JPanel(BorderLayout()) {
         sp.isOpaque = false
         sp.viewport.isOpaque = false
         sp.verticalScrollBar.unitIncrement = 18
+        try { applyDarkScrollbar(sp, background) } catch (_: Throwable) { }
         return sp
     }
 

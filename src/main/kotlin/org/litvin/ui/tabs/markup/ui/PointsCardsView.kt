@@ -2,26 +2,15 @@ package org.litvin.ui.tabs.markup.ui
 
 import org.litvin.shared.util.Timecode
 import org.litvin.ui.UiStyles
+import org.litvin.ui.commons.applyDarkScrollbar
+import org.litvin.ui.commons.scrollIntoView
 import org.litvin.ui.tabs.markup.MarkupActions
 import org.litvin.ui.tabs.markup.MarkupViewState
 import org.litvin.ui.tabs.markup.PointDto
-import java.awt.BorderLayout
-import java.awt.Container
-import java.awt.Dimension
-import java.awt.FlowLayout
-import java.awt.Font
-import java.awt.Graphics
+import java.awt.*
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
-import javax.swing.BorderFactory
-import javax.swing.Box
-import javax.swing.BoxLayout
-import javax.swing.JComponent
-import javax.swing.JLabel
-import javax.swing.JPanel
-import javax.swing.JScrollPane
-import javax.swing.ScrollPaneConstants
-import javax.swing.SwingUtilities
+import javax.swing.*
 
 /**
  * PointsCardsView — vertical list of point "cards" for the Markup tab.
@@ -53,6 +42,11 @@ class PointsCardsView(
         isOpaque = false
         viewport.isOpaque = false
     }
+    // Fixed pending area at the bottom (always visible)
+    private val pendingContainer = JPanel(BorderLayout()).apply {
+        isOpaque = false
+        border = BorderFactory.createEmptyBorder(10, CARD_H_MARGIN, 10, CARD_H_MARGIN)
+    }
 
     private val cardComponents: MutableList<JComponent> = mutableListOf()
     private var lastState: MarkupViewState? = null
@@ -61,11 +55,45 @@ class PointsCardsView(
         isOpaque = true
         background = UiStyles.DARK_BG
         add(scroll, BorderLayout.CENTER)
+        add(pendingContainer, BorderLayout.SOUTH)
+        try {
+            applyDarkScrollbar(scroll, background)
+        } catch (_: Throwable) {
+        }
     }
 
     fun setState(state: MarkupViewState) {
+        val prev = lastState
         lastState = state
+
+        // Determine if new completed point(s) were added compared to previous state
+        var targetIndexToScroll: Int? = null
+        if (prev != null) {
+            try {
+                val prevIds = prev.points.map { it.id }.toSet()
+                val newIds = state.points.map { it.id }.toSet()
+                val addedIds = newIds - prevIds
+                val grew = state.points.size > prev.points.size
+                if (grew && addedIds.isNotEmpty()) {
+                    val lastAddedDataIndex = state.points.indexOfLast { it.id in addedIds }
+                    if (lastAddedDataIndex >= 0) {
+                        // Visual index for completed points equals their data index
+                        targetIndexToScroll = lastAddedDataIndex
+                    }
+                }
+            } catch (_: Throwable) {
+            }
+        }
+
         rebuild(state)
+
+        // Defer scrolling until after layout is realized
+        targetIndexToScroll?.let { idx ->
+            try {
+                SwingUtilities.invokeLater { scrollToVisualIndex(idx) }
+            } catch (_: Throwable) {
+            }
+        }
     }
 
     fun updateSelection(selectedIndex: Int) {
@@ -80,41 +108,48 @@ class PointsCardsView(
                 applyCardSelectionStyle(cardComponents[selectedIndex], true)
                 cardComponents[selectedIndex].repaint()
             }
-        } catch (_: Throwable) { }
+        } catch (_: Throwable) {
+        }
     }
 
     fun scrollToVisualIndex(index: Int) {
-        try {
-            if (index < 0 || index >= cardComponents.size) return
-            val r = cardComponents[index].bounds
-            listPanel.scrollRectToVisible(r)
-        } catch (_: Throwable) { }
+        if (index < 0 || index >= cardComponents.size) return
+        // If the index points to the pending card fixed at bottom — it's always visible, no need to scroll
+        val isPendingAtBottom = lastState?.pendingDraftStartMs != null && index == cardComponents.lastIndex
+        if (isPendingAtBottom) return
+        cardComponents[index].scrollIntoView()
     }
 
     private fun rebuild(state: MarkupViewState) {
-        try {
-            listPanel.removeAll()
-            cardComponents.clear()
-            var visualIndex = 0
-            // Pending card at top
-            state.pendingDraftStartMs?.let { s ->
-                val card = buildPendingCard(visualIndex, s)
-                cardComponents.add(card)
-                listPanel.add(card)
-                listPanel.add(Box.createVerticalStrut(10))
-                visualIndex++
-            }
-            // Completed points
-            state.points.forEachIndexed { dataIndex, p ->
-                val card = buildPointCard(visualIndex, dataIndex, p)
-                cardComponents.add(card)
-                listPanel.add(card)
-                listPanel.add(Box.createVerticalStrut(10))
-                visualIndex++
-            }
-            listPanel.revalidate()
-            listPanel.repaint()
-        } catch (_: Throwable) { }
+        // Clear containers
+        listPanel.removeAll()
+        pendingContainer.removeAll()
+        cardComponents.clear()
+        var visualIndex = 0
+
+        // Completed points first (scrollable list)
+        state.points.forEachIndexed { dataIndex, p ->
+            val card = buildPointCard(visualIndex, dataIndex, p)
+            cardComponents.add(card)
+            listPanel.add(card)
+            listPanel.add(Box.createVerticalStrut(10))
+            visualIndex++
+        }
+
+        // Pending card fixed at the bottom (outside of scroll), visually last
+        state.pendingDraftStartMs?.let { s ->
+            val pendingCard = buildPendingCard(visualIndex, s)
+            cardComponents.add(pendingCard)
+            pendingContainer.add(pendingCard, BorderLayout.CENTER)
+            pendingContainer.isVisible = true
+        } ?: run {
+            pendingContainer.isVisible = false
+        }
+
+        listPanel.revalidate()
+        listPanel.repaint()
+        pendingContainer.revalidate()
+        pendingContainer.repaint()
     }
 
     private fun buildPendingCard(visualIndex: Int, startMs: Long): JComponent {
@@ -141,9 +176,11 @@ class PointsCardsView(
         content.add(JLabel(Timecode.format(startMs)).apply { foreground = UiStyles.FG_PRIMARY })
         card.add(content, BorderLayout.CENTER)
         // Highlight stripe
-        card.add(object: JComponent(){
+        card.add(object : JComponent() {
             override fun getPreferredSize() = Dimension(4, 1)
-            override fun paintComponent(g: Graphics) { g.color = UiStyles.LIME; g.fillRect(0,0,width,height) }
+            override fun paintComponent(g: Graphics) {
+                g.color = UiStyles.LIME; g.fillRect(0, 0, width, height)
+            }
         }, BorderLayout.WEST)
         // Tooltip and selection
         card.toolTipText = "Pending point — press V to set End"
@@ -168,19 +205,23 @@ class PointsCardsView(
             card.maximumSize = sz
         }
         // Left stripe for active
-        val stripe = object: JComponent(){
+        val stripe = object : JComponent() {
             override fun getPreferredSize() = Dimension(4, 1)
             override fun paintComponent(g: Graphics) {
-                g.color = if (visualIndex == (lastState?.selectedVisualIndex ?: -1)) UiStyles.LIME else UiStyles.CARD_BORDER
-                g.fillRect(0,0,width,height)
+                g.color =
+                    if (visualIndex == (lastState?.selectedVisualIndex ?: -1)) UiStyles.LIME else UiStyles.CARD_BORDER
+                g.fillRect(0, 0, width, height)
             }
         }
         card.add(stripe, BorderLayout.WEST)
         val center = JPanel()
         center.isOpaque = false
         center.layout = BoxLayout(center, BoxLayout.Y_AXIS)
-        val title = JLabel("Point ${dataIndex + 1}").apply { foreground = UiStyles.FG_PRIMARY; font = font.deriveFont(
-            Font.BOLD) }
+        val title = JLabel("Point ${dataIndex + 1}").apply {
+            foreground = UiStyles.FG_PRIMARY; font = font.deriveFont(
+            Font.BOLD
+        )
+        }
         val times = JPanel(FlowLayout(FlowLayout.LEFT, 14, 0)).apply {
             isOpaque = false
             add(JLabel(Timecode.format(p.startMs)).apply { foreground = UiStyles.FG_SECONDARY })
@@ -201,11 +242,17 @@ class PointsCardsView(
                 actions.selectByVisualIndex(visualIndex)
             }
             val editBtn = UiStyles.smallIconButton(UiStyles.pencilIcon(), "Edit times/label") {
-                try { EditPointDialog.show(this@PointsCardsView, p, actions) } catch (_: Throwable) { }
+                try {
+                    EditPointDialog.show(this@PointsCardsView, p, actions)
+                } catch (_: Throwable) {
+                }
             }
             val delBtn = UiStyles.smallIconButton(UiStyles.crossIcon(), "Delete point") {
                 actions.selectByVisualIndex(visualIndex)
-                try { actions.deletePoint(p.id) } catch (_: Throwable) { }
+                try {
+                    actions.deletePoint(p.id)
+                } catch (_: Throwable) {
+                }
             }
             actionsPanel.add(goBtn)
             actionsPanel.add(Box.createHorizontalStrut(8))
@@ -215,7 +262,7 @@ class PointsCardsView(
             card.add(actionsPanel, BorderLayout.EAST)
         }
         // Click selects (and seeks to start)
-        card.addMouseListener(object: MouseAdapter(){
+        card.addMouseListener(object : MouseAdapter() {
             override fun mouseClicked(e: MouseEvent) {
                 if (SwingUtilities.isLeftMouseButton(e)) {
                     actions.selectByVisualIndex(visualIndex)

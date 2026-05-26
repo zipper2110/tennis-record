@@ -145,9 +145,8 @@ class SwingExportPanel : JPanel(BorderLayout()) {
         left.add(Box.createRigidArea(Dimension(0, 12)))
         left.add(initButton)
 
-        // Right column with Active + Completed (top-aligned cards)
-        val right = JPanel()
-        right.layout = BoxLayout(right, BoxLayout.Y_AXIS)
+        // Right column with Active + Completed
+        val right = JPanel(BorderLayout())
         right.background = DARK_BG
         right.foreground = FG_PRIMARY
 
@@ -194,19 +193,18 @@ class SwingExportPanel : JPanel(BorderLayout()) {
         listOf(nameLabel, jobIdLabel, Box.createRigidArea(Dimension(0,6)), progressBar, Box.createRigidArea(Dimension(0,6)), stats).forEach { activeBody.add(it) }
 
         val activeCardPanel = UiStyles.card("Active Processing", activeBody)
-        right.add(activeCardPanel)
-        right.add(Box.createRigidArea(Dimension(0, 12)))
+        right.add(activeCardPanel, BorderLayout.NORTH)
 
-        // Completed card
+        // Completed card takes the rest of vertical space
         val completedCardPanel = UiStyles.card("Completed Renders", completed.component())
-        right.add(completedCardPanel)
+        right.add(completedCardPanel, BorderLayout.CENTER)
 
         // Load persisted completed renders initially
         refreshCompletedFromStore()
 
         val center = JPanel(BorderLayout())
         center.background = DARK_BG
-        center.add(right, BorderLayout.NORTH)
+        center.add(right, BorderLayout.CENTER)
 
         add(left, BorderLayout.WEST)
         add(center, BorderLayout.CENTER)

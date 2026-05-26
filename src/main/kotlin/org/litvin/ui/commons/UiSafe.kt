@@ -27,6 +27,7 @@ inline fun <T> uiSafe(default: T, block: () -> T): T =
     try {
         block()
     } catch (e: Exception) {
+        e.printStackTrace()
         default
     }
 

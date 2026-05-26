@@ -3,25 +3,15 @@ package org.litvin.ui.tabs.scoring.ui
 import org.litvin.markup.PointV1
 import org.litvin.shared.util.Timecode
 import org.litvin.ui.UiStyles
-import java.awt.BorderLayout
-import java.awt.Color
-import java.awt.Container
-import java.awt.Cursor
-import java.awt.Dimension
-import java.awt.FlowLayout
-import java.awt.Font
-import java.awt.Rectangle
+import org.litvin.ui.commons.scrollIntoView
+import org.litvin.ui.commons.uiSafe
+import java.awt.*
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
-import javax.swing.BorderFactory
-import javax.swing.Box
-import javax.swing.BoxLayout
-import javax.swing.JComponent
-import javax.swing.JLabel
-import javax.swing.JPanel
-import javax.swing.JScrollPane
+import javax.swing.*
 import javax.swing.border.EmptyBorder
 import kotlin.math.max
+import org.litvin.ui.commons.applyDarkScrollbar
 
 /**
  * A focused UI component for the Scoring tab that renders the left points list:
@@ -33,10 +23,10 @@ import kotlin.math.max
 class PointsListPanel : JPanel(BorderLayout()) {
 
     private val rowComponents = mutableListOf<JComponent>()
-    private lateinit var listContainer: JPanel
-    private lateinit var listScroll: JScrollPane
-    private lateinit var headerTotalBadge: JLabel
-    private lateinit var headerScoredBadge: JLabel
+    private var listContainer: JPanel
+    private var listScroll: JScrollPane
+    private var headerTotalBadge: JLabel
+    private var headerScoredBadge: JLabel
 
     private var points: List<PointV1> = emptyList()
     private var scoredIds: Set<String> = emptySet()
@@ -81,6 +71,10 @@ class PointsListPanel : JPanel(BorderLayout()) {
         listScroll.viewport.isOpaque = false
         listScroll.background = background
         listScroll.viewport.background = background
+
+        // Apply unified dark scrollbar styling
+        applyDarkScrollbar(listScroll, background)
+
         add(listScroll, BorderLayout.CENTER)
     }
 
@@ -94,7 +88,8 @@ class PointsListPanel : JPanel(BorderLayout()) {
 
     fun setSelectedIndex(index: Int, userInitiated: Boolean) {
         if (index == selectedIndex) {
-            if (userInitiated) scrollIntoView(index)
+            // Do not auto-scroll on user click of the already selected row; only programmatic.
+            if (!userInitiated) scrollIntoView(index)
             return
         }
         val prev = selectedIndex
@@ -106,19 +101,16 @@ class PointsListPanel : JPanel(BorderLayout()) {
         if (index in rowComponents.indices) {
             val nowScored = if (index in points.indices) scoredIds.contains(points[index].id) else false
             decorateRowSelection(rowComponents[index], selected = true, scored = nowScored)
-            scrollIntoView(index)
+            // Only auto-scroll for programmatic selection changes to avoid jumps on user clicks.
+            if (!userInitiated) scrollIntoView(index)
         }
         if (userInitiated) onSelect?.invoke(index, true)
     }
 
-    fun scrollIntoView(index: Int) {
-        if (index !in rowComponents.indices) return
+    fun scrollIntoView(index: Int) = uiSafe {
+        if (index !in rowComponents.indices) return@uiSafe
         val c = rowComponents[index]
-        try {
-            val rect = c.bounds
-            val view = Rectangle(0, rect.y - 8, listScroll.viewport.width, rect.height + 16)
-            listScroll.viewport.scrollRectToVisible(view)
-        } catch (_: Throwable) { }
+        c.scrollIntoView()
     }
 
     private fun rebuild() {
@@ -202,5 +194,4 @@ class PointsListPanel : JPanel(BorderLayout()) {
         row.alignmentX = 0f
         return row
     }
-
 }

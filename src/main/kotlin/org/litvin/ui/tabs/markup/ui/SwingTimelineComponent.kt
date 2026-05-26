@@ -1,8 +1,14 @@
-package org.litvin.ui.commons
+package org.litvin.ui.tabs.markup.ui
 
 import org.litvin.markup.PointV1
 import org.litvin.shared.util.Timecode
-import java.awt.*
+import java.awt.Color
+import java.awt.Dimension
+import java.awt.Font
+import java.awt.Graphics
+import java.awt.Graphics2D
+import java.awt.Rectangle
+import java.awt.RenderingHints
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
 import javax.swing.JComponent
