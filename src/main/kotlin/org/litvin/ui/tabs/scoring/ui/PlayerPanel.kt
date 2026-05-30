@@ -15,6 +15,7 @@ class PlayerPanel(
 
     private val pointsVal = JLabel("0")
     private var pointBtn: JToggleButton
+    private var accentColor: Color = if (isPrimary) Color(0x4D, 0xA3, 0xFF) else Color(0xFF, 0x6B, 0x6B)
 
     private val gp: SmallStatPanel
     private val sp: SmallStatPanel
@@ -40,12 +41,11 @@ class PlayerPanel(
         // Point button
         pointBtn = JToggleButton()
         pointBtn.isFocusPainted = false
-        pointBtn.foreground = if (isPrimary) Color(0x42, 0xA5, 0xF5) else Color(0xEF, 0x53, 0x50)
+        // Keep default UI text color; accent is shown as a left strip (MatteBorder)
+        pointBtn.foreground = UiStyles.FG_PRIMARY
         pointBtn.background = Color(0x26, 0x26, 0x26)
-        pointBtn.border = BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(Color(0x48, 0x48, 0x47, 0x33), 1),
-            EmptyBorder(6, 10, 6, 10)
-        )
+        // Initial border is built from current accentColor
+        pointBtn.border = buildPointButtonBorder()
         pointBtn.name = if (isPrimary) "p1-point" else "p2-point"
         pointBtn.addActionListener { onPointClicked.invoke() }
 
@@ -72,6 +72,37 @@ class PlayerPanel(
     fun setPlayerName(name: String) {
         pointBtn.text = "Point for $name   " + if (isPrimary) "[Q]" else "[E]"
         pointBtn.toolTipText = (if (isPrimary) "Q" else "E") + " — Point for $name"
+    }
+
+    fun setAccentColorHex(hex: String?) {
+        val c = parseHexOrNull(hex) ?: return
+        accentColor = c
+        pointBtn.border = buildPointButtonBorder()
+        // keep text color default as per design
+    }
+
+    private fun buildPointButtonBorder(): javax.swing.border.Border {
+        val outer = BorderFactory.createCompoundBorder(
+            // Left colored strip 6px, other sides 1px neutral border
+            BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(0, 6, 0, 0, accentColor),
+                BorderFactory.createLineBorder(Color(0x48, 0x48, 0x47, 0x33), 1)
+            ),
+            EmptyBorder(6, 10, 6, 10)
+        )
+        return outer
+    }
+
+    private fun parseHexOrNull(s: String?): Color? {
+        if (s == null) return null
+        val t = s.trim().removePrefix("#")
+        if (t.length != 6) return null
+        return try {
+            val r = t.substring(0, 2).toInt(16)
+            val g = t.substring(2, 4).toInt(16)
+            val b = t.substring(4, 6).toInt(16)
+            Color(r, g, b)
+        } catch (_: Throwable) { null }
     }
 
     fun render(pointsDisplay: String, games: Int, sets: Int, gameWon: Boolean, setWon: Boolean) {

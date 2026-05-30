@@ -24,10 +24,10 @@ import javax.swing.border.EmptyBorder
 class SwingExportPanel : JPanel(BorderLayout()) {
     fun onActivated() {
         // Ensure Completed list reflects latest persisted items (global across projects)
-        try { refreshCompletedFromStore() } catch (_: Throwable) { }
-        // Refresh EDL info and button gating on activation to reflect current project context
-        try { updateEdlInfo() } catch (_: Throwable) { }
-        try { updateInitButtonState() } catch (_: Throwable) { }
+        refreshCompletedFromStore()
+        // Refresh points summary and button gating on activation to reflect current project context
+        updatePointsSummary()
+        updateInitButtonState()
     }
     // Project context (manifest path) — optional; user can still pick output file.
     private var manifestPath: String? = null
@@ -38,7 +38,7 @@ class SwingExportPanel : JPanel(BorderLayout()) {
     private val presets = ExportPresetsIO.load()
     private val presetCombo = JComboBox(presets.map { it.label }.toTypedArray())
     private val resCombo = JComboBox(arrayOf("1920x1080", "3840x2160"))
-    private val idleTrimCheck = JCheckBox("Remove idle time (use EDL keeps)", true)
+    private val idleTrimCheck = JCheckBox("Cut idle time between points", true)
     private val scoreboardCheck = JCheckBox("Include Scoreboard", false).apply {
         toolTipText = "Burn in a simple scoreboard overlay that updates after each point. Uses current Scoring data; fixed English labels in v0.1.0."
     }
@@ -66,9 +66,9 @@ class SwingExportPanel : JPanel(BorderLayout()) {
     private val qualityLabel = JLabel("")
     private val resSummaryLabel = JLabel("")
     private val scalePlanLabel = JLabel("")
-    private val upscalingNoteLabel = JLabel("If the source is lower than selected, basic upscaling will be applied (no smart scaling in v0.1.0).")
-    private val edlInfoLabel = JLabel("")
-    private val encoderSummaryLabel = JLabel("")
+    private val pointsCountLabel = JLabel("")
+    private val pointsTotalLabel = JLabel("")
+    private val pointsScoredLabel = JLabel("")
 
     init {
         border = EmptyBorder(10, 10, 10, 10)
@@ -115,23 +115,31 @@ class SwingExportPanel : JPanel(BorderLayout()) {
         left.add(resCombo)
         UiStyles.styleHelper(resSummaryLabel)
         UiStyles.styleMono(scalePlanLabel)
-        UiStyles.styleHelper(upscalingNoteLabel)
-        upscalingNoteLabel.maximumSize = Dimension(Short.MAX_VALUE.toInt(), Int.MAX_VALUE)
-        Html.setWrapped(upscalingNoteLabel, upscalingNoteLabel.text)
         left.add(Box.createRigidArea(Dimension(0, 6)))
         left.add(resSummaryLabel)
         left.add(scalePlanLabel)
         left.add(Box.createRigidArea(Dimension(0, 4)))
-        left.add(upscalingNoteLabel)
         left.add(Box.createRigidArea(Dimension(0, 12)))
 
+        // Points summary — prominent block above checkboxes (each on its own row)
+        fun stylePointsLabel(l: JLabel) {
+            l.alignmentX = 0f
+            l.foreground = FG_PRIMARY
+            l.font = l.font.deriveFont(Font.BOLD, l.font.size + 4f)
+        }
+        listOf(pointsCountLabel, pointsTotalLabel, pointsScoredLabel).forEach { stylePointsLabel(it) }
+        left.add(pointsCountLabel)
+        left.add(Box.createRigidArea(Dimension(0, 2)))
+        left.add(pointsTotalLabel)
+        left.add(Box.createRigidArea(Dimension(0, 2)))
+        left.add(pointsScoredLabel)
+        left.add(Box.createRigidArea(Dimension(0, 8)))
+
         // Idle-trim + EDL info
-        UiStyles.stylePrimary(idleTrimCheck)
+        UiStyles.styleCheckBox(idleTrimCheck)
         left.add(idleTrimCheck)
-        UiStyles.stylePrimary(scoreboardCheck)
+        UiStyles.styleCheckBox(scoreboardCheck)
         left.add(scoreboardCheck)
-        UiStyles.styleHelper(edlInfoLabel)
-        left.add(edlInfoLabel)
         left.add(Box.createRigidArea(Dimension(0, 12)))
 
         // Encoder section
@@ -150,7 +158,7 @@ class SwingExportPanel : JPanel(BorderLayout()) {
         right.foreground = FG_PRIMARY
 
         // Active card
-        val nameLabel = JLabel("No active job")
+        val nameLabel = JLabel("")
         val jobIdLabel = JLabel("")
         UiStyles.styleMono(jobIdLabel)
         jobIdLabel.foreground = FG_SECONDARY
@@ -186,12 +194,23 @@ class SwingExportPanel : JPanel(BorderLayout()) {
         progressBar.value = 0
         progressBar.isStringPainted = true
 
+        val placeholder = JLabel("No active renders").apply {
+            horizontalAlignment = SwingConstants.CENTER
+            foreground = FG_SECONDARY
+        }
+
         val activeBody = JPanel()
         activeBody.layout = BoxLayout(activeBody, BoxLayout.Y_AXIS)
         activeBody.background = CARD_BG
-        listOf(nameLabel, jobIdLabel, Box.createRigidArea(Dimension(0,6)), progressBar, Box.createRigidArea(Dimension(0,6)), stats).forEach { activeBody.add(it) }
+        listOf(placeholder, nameLabel, jobIdLabel, Box.createRigidArea(Dimension(0,6)), progressBar, Box.createRigidArea(Dimension(0,6)), stats).forEach { activeBody.add(it) }
+        // Initial state: show placeholder, hide active controls
+        placeholder.isVisible = true
+        nameLabel.isVisible = false
+        jobIdLabel.isVisible = false
+        progressBar.isVisible = false
+        stats.isVisible = false
 
-        val activeCardPanel = UiStyles.card("Active Processing", activeBody)
+        val activeCardPanel = UiStyles.card("Active Renders", activeBody)
         right.add(activeCardPanel, BorderLayout.NORTH)
 
         // Completed card takes the rest of vertical space
@@ -225,15 +244,7 @@ class SwingExportPanel : JPanel(BorderLayout()) {
         fun updateResolutionPreview() {
             val sel = resCombo.selectedItem as? String ?: "1080p"
             val (w, h) = targetDimsFor(sel)
-            resSummaryLabel.text = "Output: ${w} x ${h} (${sel})"
-            scalePlanLabel.text = "Filter plan: -vf scale=${w}:-2"
-        }
-        fun formatMs(ms: Long): String {
-            var remain = ms
-            val h = remain / 3600000; remain %= 3600000
-            val m = remain / 60000; remain %= 60000
-            val s = remain / 1000; val mm = remain % 1000
-            return String.format("%d:%02d:%02d.%03d", h, m, s, mm)
+            resSummaryLabel.text = "Output: $w x $h ($sel)"
         }
 
         // Initial defaults mirroring FX
@@ -245,7 +256,7 @@ class SwingExportPanel : JPanel(BorderLayout()) {
             updateQualitySummary(defIdx)
         }
         updateResolutionPreview()
-        updateEdlInfo()
+        updatePointsSummary()
 
         presetCombo.addActionListener {
             val idx = presetCombo.selectedIndex
@@ -257,9 +268,24 @@ class SwingExportPanel : JPanel(BorderLayout()) {
             }
         }
         resCombo.addActionListener { updateResolutionPreview() }
-        idleTrimCheck.addActionListener { 
-            updateEdlInfo()
-            try { updateInitButtonState() } catch (_: Throwable) { }
+        idleTrimCheck.addActionListener {
+            // If user tries to enable idle-trim with no marked points, prevent and explain
+            if (idleTrimCheck.isSelected && !hasAnyMarkedPoints()) {
+                idleTrimCheck.isSelected = false
+                JOptionPane.showMessageDialog(this, "Cannot cut idle time: there are no marked points in the current project.", "Idle-trim unavailable", JOptionPane.INFORMATION_MESSAGE)
+                return@addActionListener
+            }
+            updatePointsSummary()
+            updateInitButtonState()
+        }
+        scoreboardCheck.addActionListener {
+            // If user tries to enable scoreboard with no scored points, prevent and explain
+            if (scoreboardCheck.isSelected && !hasAnyScoredPoints()) {
+                scoreboardCheck.isSelected = false
+                JOptionPane.showMessageDialog(this, "Cannot include scoreboard: there are no scored points in the current project.", "Scoreboard unavailable", JOptionPane.INFORMATION_MESSAGE)
+                return@addActionListener
+            }
+            updatePointsSummary()
         }
 
         // Observe queue updates to refresh UI
@@ -268,7 +294,14 @@ class SwingExportPanel : JPanel(BorderLayout()) {
                 lastSnapshot = snap
                 val cur = snap.current
                 if (cur == null) {
-                    nameLabel.text = "No active job"
+                    // No active export — show placeholder and hide controls
+                    placeholder.isVisible = true
+                    nameLabel.isVisible = false
+                    jobIdLabel.isVisible = false
+                    progressBar.isVisible = false
+                    stats.isVisible = false
+
+                    nameLabel.text = ""
                     jobIdLabel.text = ""
                     progressBar.value = 0
                     progressBar.string = ""
@@ -276,6 +309,13 @@ class SwingExportPanel : JPanel(BorderLayout()) {
                     cancelButton.isEnabled = false
                     detailsButton.isEnabled = false
                 } else {
+                    // Active export — show controls and hide placeholder
+                    placeholder.isVisible = false
+                    nameLabel.isVisible = true
+                    jobIdLabel.isVisible = true
+                    progressBar.isVisible = true
+                    stats.isVisible = true
+
                     val sbFlag = if (cur.includeScoreboard) "  ·  Scoreboard" else ""
                     nameLabel.text = File(cur.outputPath).name + sbFlag
                     jobIdLabel.text = "Job ID: ${cur.id}"
@@ -318,9 +358,8 @@ class SwingExportPanel : JPanel(BorderLayout()) {
 
     fun setProjectManifest(path: String?) {
         manifestPath = path
-        try { updateEdlInfo() } catch (_: Throwable) { }
-        try { updateInitButtonState() } catch (_: Throwable) { }
-        // Task 3.17 — default Scoreboard checkbox based on project scoring snapshot
+        updatePointsSummary()
+        updateInitButtonState()
         try {
             val mp = manifestPath
             val projectDir = if (!mp.isNullOrBlank()) EdlIO.projectDirFromManifest(mp) else null
@@ -384,7 +423,6 @@ class SwingExportPanel : JPanel(BorderLayout()) {
         // Build overlay timeline if requested
         val includeSb = scoreboardCheck.isSelected
         val overlayTimeline = if (includeSb) {
-            try {
                 val score = if (projectDir != null) ScoreIO.readForProjectDir(projectDir) else ScoreV1()
                 val edlPoints = validated.ifEmpty { edl?.points ?: emptyList() }
                 ScoreboardTimelineBuilder.build(
@@ -392,11 +430,10 @@ class SwingExportPanel : JPanel(BorderLayout()) {
                     score.outcomes,
                     idleTrimCheck.isSelected,
                     score.player1Name,
-                    score.player2Name
+                    score.player2Name,
+                    score.player1ColorHex,
+                    score.player2ColorHex
                 )
-            } catch (_: Throwable) {
-                emptyList()
-            }
         } else emptyList()
 
         val job = RenderJob(
@@ -506,29 +543,79 @@ class SwingExportPanel : JPanel(BorderLayout()) {
         }
     }
 
-
-    private fun updateEdlInfo() {
-        val manifest = manifestPath
-        val isOn = idleTrimCheck.isSelected
-        if (manifest.isNullOrBlank()) {
-            edlInfoLabel.text = if (isOn) "No project open. Full render." else "Idle-trim OFF — full source will be rendered."
-            return
+    private fun hasAnyMarkedPoints(): Boolean {
+        return try {
+            val mp = manifestPath
+            val projectDir = if (!mp.isNullOrBlank()) EdlIO.projectDirFromManifest(mp) else null
+            val edl = try { if (projectDir != null) EdlIO.readForProjectDir(projectDir) else null } catch (_: Throwable) { null }
+            (edl?.points?.isNotEmpty() == true)
+        } catch (_: Throwable) {
+            false
         }
-        if (!isOn) { edlInfoLabel.text = "Idle-trim OFF — full source will be rendered."; return }
-        val projectDir = EdlIO.projectDirFromManifest(manifest)
-        val edl = try { EdlIO.readForProjectDir(projectDir) } catch (_: Throwable) { null }
-        val keeps = validateEdl(edl)
-        if (keeps.isEmpty()) { edlInfoLabel.text = "EDL empty — full source will be rendered."; return }
-        val total = keeps.fold(0L) { acc, p -> acc + (p.endMs - p.startMs) }
-        Html.setWrapped(edlInfoLabel, "EDL: ${keeps.size} keep intervals · total ${formatMs(total)}")
     }
 
-    private fun formatMs(ms: Long): String {
+    private fun hasAnyScoredPoints(): Boolean {
+        return try {
+            val mp = manifestPath
+            val projectDir = if (!mp.isNullOrBlank()) EdlIO.projectDirFromManifest(mp) else null
+            val edl = try { if (projectDir != null) EdlIO.readForProjectDir(projectDir) else null } catch (_: Throwable) { null }
+            val points = edl?.points ?: emptyList()
+            if (points.isEmpty()) return false
+            val score = try { if (projectDir != null) ScoreIO.readForProjectDir(projectDir) else ScoreV1() } catch (_: Throwable) { ScoreV1() }
+            val outcomes = score.outcomes
+            points.any { pt -> outcomes.containsKey(pt.id) }
+        } catch (_: Throwable) {
+            false
+        }
+    }
+
+    private fun updatePointsSummary() {
+        try {
+            val mp = manifestPath
+            val projectDir = if (!mp.isNullOrBlank()) EdlIO.projectDirFromManifest(mp) else null
+            val edl = try { if (projectDir != null) EdlIO.readForProjectDir(projectDir) else null } catch (_: Throwable) { null }
+            val points = edl?.points ?: emptyList()
+            val totalMs = points.fold(0L) { acc, p -> acc + (p.endMs - p.startMs) }
+            val pointsCount = points.size
+
+            val score = try { if (projectDir != null) ScoreIO.readForProjectDir(projectDir) else ScoreV1() } catch (_: Throwable) { ScoreV1() }
+            val outcomes = score.outcomes
+            val scoredCount = points.count { pt ->
+                // Consider a point scored if there is any outcome recorded for it (including NONE)
+                outcomes.containsKey(pt.id)
+            }
+
+            val allScored = pointsCount > 0 && scoredCount == pointsCount
+
+            // If there are no points, ensure idle-trim is not selected (requirement)
+            if (pointsCount == 0 && idleTrimCheck.isSelected) {
+                idleTrimCheck.isSelected = false
+                // Keep init button state consistent if selection changed
+                updateInitButtonState()
+            }
+
+            // Set texts
+            pointsCountLabel.text = "$pointsCount points"
+            pointsTotalLabel.text = "total ${formatSeconds(totalMs)}"
+            pointsScoredLabel.text = "scored ${scoredCount}/${pointsCount}"
+
+            // Colors
+            pointsCountLabel.foreground = if (pointsCount == 0) UiStyles.YELLOW else FG_PRIMARY
+            pointsScoredLabel.foreground = if (allScored) UiStyles.GREEN else FG_PRIMARY
+            pointsTotalLabel.foreground = FG_PRIMARY
+        } catch (_: Throwable) {
+            pointsCountLabel.text = ""
+            pointsTotalLabel.text = ""
+            pointsScoredLabel.text = ""
+        }
+    }
+
+    private fun formatSeconds(ms: Long): String {
         var remain = ms
         val h = remain / 3_600_000; remain %= 3_600_000
         val m = remain / 60_000; remain %= 60_000
-        val s = remain / 1000; val mm = remain % 1000
-        return String.format("%d:%02d:%02d.%03d", h, m, s, mm)
+        val s = remain / 1000;
+        return String.format("%d:%02d:%02d", h, m, s)
     }
 
     // Task 3.15 — Gate Initialize button based on project context and prerequisites

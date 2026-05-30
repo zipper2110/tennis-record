@@ -17,6 +17,9 @@ data class OverlaySpan(
     val text: String,
     val p1Name: String? = null,
     val p2Name: String? = null,
+    // Optional per-player colors for name squares (HTML hex like #RRGGBB)
+    val p1ColorHex: String? = null,
+    val p2ColorHex: String? = null,
     // 3.21 — Tiebreak support fields (optional; fall back to parsing text when absent)
     val isTiebreak: Boolean = false,
     val tbP1: Int = 0,
@@ -32,7 +35,15 @@ data class OverlaySpan(
 
 object ScoreboardTimelineBuilder {
     /** Builds overlay spans in OUTPUT time domain. */
-    fun build(points: List<PointV1>, outcomes: Map<String, Outcome>, idleTrim: Boolean, player1Name: String = "Player 1", player2Name: String = "Player 2"): List<OverlaySpan> {
+    fun build(
+        points: List<PointV1>,
+        outcomes: Map<String, Outcome>,
+        idleTrim: Boolean,
+        player1Name: String = "Player 1",
+        player2Name: String = "Player 2",
+        player1ColorHex: String? = null,
+        player2ColorHex: String? = null,
+    ): List<OverlaySpan> {
         if (points.isEmpty()) return emptyList()
         val ordered = points.sortedBy { it.startMs }
 
@@ -98,6 +109,8 @@ object ScoreboardTimelineBuilder {
                 text = text,
                 p1Name = n1,
                 p2Name = n2,
+                p1ColorHex = player1ColorHex,
+                p2ColorHex = player2ColorHex,
                 isTiebreak = st?.isTiebreak ?: false,
                 tbP1 = st?.tbP1 ?: 0,
                 tbP2 = st?.tbP2 ?: 0,

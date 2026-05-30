@@ -128,8 +128,7 @@ class VideoSyncPanel(
         frameStepCheckbox = JCheckBox("Frame-by-frame")
         try { frameStepCheckbox.accessibleContext.accessibleName = "Frame-by-frame stepping when paused" } catch (_: Throwable) {}
         frameStepCheckbox.toolTipText = "When enabled, Left/Right step a single frame while paused"
-        frameStepCheckbox.isOpaque = false
-        frameStepCheckbox.foreground = Color(0xAD, 0xAA, 0xAA)
+        UiStyles.styleCheckBox(frameStepCheckbox)
         frameStepCheckbox.addActionListener { actions.setFrameStepEnabled(frameStepCheckbox.isSelected) }
         speedRow.add(Box.createHorizontalStrut(8))
         speedRow.add(JLabel("↑ / ↓ speed").apply {

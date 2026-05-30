@@ -5,12 +5,23 @@ import java.awt.BorderLayout
 import java.awt.Color
 import java.awt.FlowLayout
 import java.awt.Font
+import java.awt.Graphics
+import java.awt.Graphics2D
+import java.awt.Rectangle
+import java.awt.Dimension
+import java.awt.RenderingHints
 import javax.swing.BorderFactory
+import kotlin.math.min
+import org.litvin.ui.UiStyles
 import javax.swing.JLabel
 import javax.swing.JPanel
 import javax.swing.JSlider
 import javax.swing.border.EmptyBorder
 import javax.swing.event.ChangeListener
+import javax.swing.plaf.basic.BasicSliderUI
+import java.awt.event.MouseAdapter
+import java.awt.event.MouseEvent
+import kotlin.math.roundToInt
 
 /**
  * ScrubPanel — per-point scrub bar with time labels.
@@ -24,7 +35,7 @@ class ScrubPanel(
 
     private val segmentStartLabel = JLabel("00:00:00")
     private val segmentNowLabel = JLabel("00:00:00  ")
-    private val scrubSlider = JSlider(0, 100, 0)
+    private val scrubSlider = JSlider(0, 10000, 0)
     private val segDescrLabel = JLabel("Point segment")
     private val rightBox = JPanel(FlowLayout(FlowLayout.RIGHT, 8, 0))
 
@@ -45,11 +56,38 @@ class ScrubPanel(
         // Slider
         scrubSlider.name = "scrub"
         scrubSlider.toolTipText = "Scrub within the selected point segment"
-        scrubSlider.background = background
+        scrubSlider.isOpaque = false
+        scrubSlider.paintTicks = false
+        scrubSlider.snapToTicks = false
+        // Paint remaining part in green via custom UI
+        scrubSlider.ui = DualColorSliderUI(
+            scrubSlider,
+            baseColor = Color(0x33, 0xAA, 0x55),
+            remainingColor = Color(0x88, 0x88, 0x88)
+        )
+        // Jump to exact click position and update continuously while dragging
+        val updateFromMouse: (MouseEvent) -> Unit = { e ->
+            val ui = scrubSlider.ui
+            if (ui is DualColorSliderUI) {
+                val newVal = if (scrubSlider.orientation == JSlider.HORIZONTAL) ui.valueForX(e.x) else ui.valueForY(e.y)
+                val bounded = newVal.coerceIn(scrubSlider.minimum, scrubSlider.maximum)
+                scrubSlider.value = bounded
+            }
+        }
+        scrubSlider.addMouseListener(object : MouseAdapter() {
+            override fun mousePressed(e: MouseEvent) {
+                updateFromMouse(e)
+            }
+        })
+        scrubSlider.addMouseMotionListener(object : MouseAdapter() {
+            override fun mouseDragged(e: MouseEvent) {
+                updateFromMouse(e)
+            }
+        })
         scrubSlider.addChangeListener(ChangeListener {
             if (isUpdatingFromExternal) return@ChangeListener
             if (endMs <= startMs) return@ChangeListener
-            val frac = scrubSlider.value / 100.0
+            val frac = scrubSlider.value.toDouble() / scrubSlider.maximum.toDouble()
             var target = startMs + ((endMs - startMs) * frac).toLong()
             val maxPlayable = (endMs - 1).coerceAtLeast(startMs)
             if (target > maxPlayable) target = maxPlayable
@@ -93,7 +131,8 @@ class ScrubPanel(
             val rel = (absMs - startMs).coerceAtLeast(0L)
             val dur = (endMs - startMs).coerceAtLeast(1L)
             val frac = (rel.toDouble() / dur.toDouble()).coerceIn(0.0, 0.999)
-            val sliderVal = (frac * 100).toInt().coerceIn(0, 100)
+            val max = scrubSlider.maximum.coerceAtLeast(1)
+            val sliderVal = (frac * max).toInt().coerceIn(0, max)
             isUpdatingFromExternal = true
             try {
                 scrubSlider.value = sliderVal
@@ -130,4 +169,74 @@ class ScrubPanel(
         setSegment(0L, 0L)
         setErrorVisible(false)
     }
+}
+
+/**
+ * Custom slider UI that paints the elapsed part (left of thumb) in the slider's `foreground`
+ * and the remaining part (right of thumb) in `remainingColor`.
+ */
+class DualColorSliderUI(
+    slider: JSlider,
+    private val baseColor: Color,
+    private val remainingColor: Color,
+) : BasicSliderUI(slider) {
+
+    private val trackHeight = 4
+    private val trackArc = 4
+
+    override fun paintTrack(g: Graphics) {
+        val g2 = g as Graphics2D
+        val old = g2.create()
+        try {
+            val r: Rectangle = trackRect
+            // Base track background (subtle dark line)
+            g2.color = baseColor
+            val baseY = r.y + (r.height - trackHeight) / 2
+            g2.fillRoundRect(r.x, baseY, r.width, trackHeight, trackArc, trackArc)
+
+            // Compute thumb center
+            val thumbCenterX = thumbRect.x + thumbRect.width / 2
+            val leftWidth = (thumbCenterX - r.x).coerceIn(0, r.width)
+            val rightStart = (r.x + leftWidth).coerceIn(r.x, r.x + r.width)
+            val rightWidth = (r.x + r.width - rightStart).coerceAtLeast(0)
+
+            // Elapsed (left) uses slider.foreground
+            g2.color = baseColor
+            g2.fillRoundRect(r.x, baseY, trackHeight, trackHeight, trackHeight, trackHeight)
+
+            g2.color = remainingColor
+            g2.fillRect(rightStart, baseY, rightWidth, trackHeight)
+        } finally {
+            old.dispose()
+        }
+    }
+
+    override fun paintFocus(g: Graphics?) {
+        // no default focus ring
+    }
+
+    override fun getThumbSize(): Dimension {
+        val d = 12
+        return Dimension(d, d)
+    }
+
+    override fun paintThumb(g: Graphics) {
+        val g2 = g as Graphics2D
+        val oldAA = g2.getRenderingHint(RenderingHints.KEY_ANTIALIASING)
+        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+        try {
+            val r = thumbRect
+            val size = min(r.width, r.height)
+            val x = r.x + (r.width - size) / 2
+            val y = r.y + (r.height - size) / 2
+            g2.color = UiStyles.GREEN
+            g2.fillOval(x, y, size, size)
+        } finally {
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, oldAA)
+        }
+    }
+
+    // Expose helpers so outer code can compute values from pixel coords precisely
+    fun valueForX(x: Int): Int = valueForXPosition(x)
+    fun valueForY(y: Int): Int = valueForYPosition(y)
 }

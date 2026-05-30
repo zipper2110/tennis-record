@@ -27,14 +27,30 @@ import javax.swing.text.DocumentFilter
 class LeftListPanel(
     private val actions: NavigationActions,
     private val onNamesChanged: (p1: String, p2: String) -> Unit,
+    private val onColorsChanged: (c1Hex: String, c2Hex: String) -> Unit,
 ) : JPanel(BorderLayout()) {
+
+    private fun parseHexOrNull(s: String?): Color? {
+        if (s == null) return null
+        val t = s.trim().removePrefix("#")
+        if (t.length != 6) return null
+        return try {
+            val r = t.substring(0, 2).toInt(16)
+            val g = t.substring(2, 4).toInt(16)
+            val b = t.substring(4, 6).toInt(16)
+            Color(r, g, b)
+        } catch (_: Throwable) { null }
+    }
 
     private val timeline = TimelineSection(actions)
     private val nextPointBtn: JButton
     private val p1NameField: JTextField
     private val p2NameField: JTextField
+    private lateinit var p1ColorBtn: JButton
+    private lateinit var p2ColorBtn: JButton
 
     private var isUpdatingNameFields: Boolean = false
+    private var isUpdatingColors: Boolean = false
 
     init {
         background = Color(0x15, 0x15, 0x15)
@@ -131,11 +147,54 @@ class LeftListPanel(
         p2Label.font = p2Label.font.deriveFont(Font.BOLD, 10f)
         p2NameField = nameField()
 
+        // Color pickers
+        fun colorButton(): JButton {
+            val b = JButton()
+            b.text = "Pick color"
+            b.isFocusPainted = false
+            b.background = Color(0x26, 0x26, 0x26)
+            b.foreground = Color(0xFF, 0xFF, 0xFF)
+            b.border = BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(Color(0x48, 0x48, 0x47, 0x55), 1),
+                EmptyBorder(4, 6, 4, 6)
+            )
+            b.maximumSize = Dimension(Int.MAX_VALUE, b.preferredSize.height)
+            b.alignmentX = 0f
+            return b
+        }
+        p1ColorBtn = colorButton()
+        p2ColorBtn = colorButton()
+        p1ColorBtn.toolTipText = "Pick Player 1 color"
+        p2ColorBtn.toolTipText = "Pick Player 2 color"
+
+        fun showPicker(cur: Color?, onSel: (Color) -> Unit) {
+            val initial = cur ?: Color(0x4D, 0xA3, 0xFF)
+            val chosen = JColorChooser.showDialog(this, "Choose Color", initial)
+            if (chosen != null) onSel(chosen)
+        }
+        fun colorHex(c: Color): String = "#%02X%02X%02X".format(c.red, c.green, c.blue)
+        fun parseHexOrNull(s: String?): Color? {
+            if (s == null) return null
+            val t = s.trim().removePrefix("#")
+            if (t.length != 6) return null
+            return try {
+                val r = t.substring(0, 2).toInt(16)
+                val g = t.substring(2, 4).toInt(16)
+                val b = t.substring(4, 6).toInt(16)
+                Color(r, g, b)
+            } catch (_: Throwable) { null }
+        }
         fun notifyNamesChanged() {
             if (isUpdatingNameFields) return
             val n1 = p1NameField.text.trim()
             val n2 = p2NameField.text.trim()
             onNamesChanged(n1, n2)
+        }
+        fun notifyColorsChanged() {
+            if (isUpdatingColors) return
+            val c1 = p1ColorBtn.background
+            val c2 = p2ColorBtn.background
+            onColorsChanged(colorHex(c1), colorHex(c2))
         }
         p1NameField.document.addDocumentListener(object : DocumentListener {
             override fun insertUpdate(e: DocumentEvent) = notifyNamesChanged()
@@ -147,6 +206,18 @@ class LeftListPanel(
             override fun removeUpdate(e: DocumentEvent) = notifyNamesChanged()
             override fun changedUpdate(e: DocumentEvent) = notifyNamesChanged()
         })
+        p1ColorBtn.addActionListener {
+            showPicker(p1ColorBtn.background) { c ->
+                p1ColorBtn.background = c
+                notifyColorsChanged()
+            }
+        }
+        p2ColorBtn.addActionListener {
+            showPicker(p2ColorBtn.background) { c ->
+                p2ColorBtn.background = c
+                notifyColorsChanged()
+            }
+        }
 
         footer.add(nextPointBtn)
         footer.add(Box.createVerticalStrut(6))
@@ -157,10 +228,14 @@ class LeftListPanel(
         footer.add(p1Label)
         footer.add(Box.createVerticalStrut(3))
         footer.add(p1NameField)
+        footer.add(Box.createVerticalStrut(4))
+        footer.add(p1ColorBtn)
         footer.add(Box.createVerticalStrut(6))
         footer.add(p2Label)
         footer.add(Box.createVerticalStrut(3))
         footer.add(p2NameField)
+        footer.add(Box.createVerticalStrut(4))
+        footer.add(p2ColorBtn)
 
         val footerWrap = JPanel(BorderLayout())
         footerWrap.isOpaque = false
@@ -192,6 +267,16 @@ class LeftListPanel(
             p2NameField.text = p2
         } finally {
             isUpdatingNameFields = false
+        }
+    }
+
+    fun setPlayerColors(c1Hex: String, c2Hex: String) {
+        isUpdatingColors = true
+        try {
+            parseHexOrNull(c1Hex)?.let { p1ColorBtn.background = it }
+            parseHexOrNull(c2Hex)?.let { p2ColorBtn.background = it }
+        } finally {
+            isUpdatingColors = false
         }
     }
 }

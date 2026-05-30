@@ -56,32 +56,6 @@ import javax.swing.border.EmptyBorder
  */
 class SwingScoringPanel : JPanel(BorderLayout()) {
 
-    // Actions adapter for leaf components (E-SC-001 contracts)
-    private val actions: ScoringActions = object : ScoringActions {
-        override fun pointWon(side: Side) = uiSafe {
-            val outcome = if (side == Side.P1) Outcome.P1 else Outcome.P2
-            setOutcomeForSelectedPoint(outcome)
-        }
-
-        override fun undo() { /* TODO(E-SC-001/T4): hook up undo when available */
-        }
-
-        override fun redo() { /* TODO(E-SC-001/T4): hook up redo when available */
-        }
-
-        override fun finalizeGame(winner: Side) { /* TODO(E-SC-001/T4): implement when domain is ready */
-        }
-
-        override fun finalizeSet(winner: Side) { /* TODO(E-SC-001/T4): implement when domain is ready */
-        }
-
-        override fun toggleServe() { /* TODO(E-SC-001/T4): implement when domain is ready */
-        }
-
-        override fun saveScore() = uiSafe { saveNow() }
-        override fun autosave() = uiSafe { saveNow() }
-    }
-
     private val videoPlayerActions = object : VideoPlayerActions {
         override fun playPause() {
             togglePlayPause()
@@ -178,6 +152,10 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
     // Data
     private var points: List<PointV1> = emptyList()
 
+    // Player colors (hex)
+    private var player1ColorHex: String = "#4DA3FF"
+    private var player2ColorHex: String = "#FF6B6B"
+
     // Outcomes persistence (ScoreV1). "Scored" includes NONE.
     private val outcomesByPointId: MutableMap<String, Outcome> = LinkedHashMap()
     private val scoredPointIds: Set<String>
@@ -230,9 +208,16 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
         // Names
         player1Name = score.player1Name
         player2Name = score.player2Name
+        // Colors
+        player1ColorHex = score.player1ColorHex
+        player2ColorHex = score.player2ColorHex
         if (::leftListPanel.isInitialized) {
             leftListPanel.setPlayerNames(player1Name, player2Name)
+            leftListPanel.setPlayerColors(player1ColorHex, player2ColorHex)
         }
+        // Apply colors to point buttons if panels are already created
+        if (::leftPlayerPanel.isInitialized) leftPlayerPanel.setAccentColorHex(player1ColorHex)
+        if (::rightPlayerPanel.isInitialized) rightPlayerPanel.setAccentColorHex(player2ColorHex)
         refreshNameDependentUi()
         // Outcomes
         val validIds = points.map { it.id }.toSet()
@@ -292,6 +277,14 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
                 player1Name = p1
                 player2Name = p2
                 refreshNameDependentUi()
+                try { namesSaveTimer.restart() } catch (_: Throwable) { saveNow() }
+            },
+            onColorsChanged = { c1, c2 ->
+                player1ColorHex = c1
+                player2ColorHex = c2
+                // Apply immediately to point buttons
+                if (::leftPlayerPanel.isInitialized) leftPlayerPanel.setAccentColorHex(player1ColorHex)
+                if (::rightPlayerPanel.isInitialized) rightPlayerPanel.setAccentColorHex(player2ColorHex)
                 try { namesSaveTimer.restart() } catch (_: Throwable) { saveNow() }
             }
         )
@@ -497,8 +490,10 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
 
         leftPlayerPanel = PlayerPanel(true) { setOutcomeForSelectedPoint(Outcome.P1) }
         leftPlayerPanel.setPlayerName(displayNameP1())
+        leftPlayerPanel.setAccentColorHex(player1ColorHex)
         rightPlayerPanel = PlayerPanel(false) { setOutcomeForSelectedPoint(Outcome.P2) }
         rightPlayerPanel.setPlayerName(displayNameP2())
+        rightPlayerPanel.setAccentColorHex(player2ColorHex)
         videoSyncPanel = VideoSyncPanel(videoPlayerActions) { setOutcomeForSelectedPoint(Outcome.NONE) }
 
         bottom.add(leftPlayerPanel, BorderLayout.WEST)
@@ -715,7 +710,9 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
             val map = LinkedHashMap(outcomesByPointId) // snapshot
             val s1 = player1Name
             val s2 = player2Name
-            ScoreIO.writeForProjectDir(dir, ScoreV1(outcomes = map, version = 1, player1Name = s1, player2Name = s2))
+            val c1 = player1ColorHex
+            val c2 = player2ColorHex
+            ScoreIO.writeForProjectDir(dir, ScoreV1(outcomes = map, version = 1, player1Name = s1, player2Name = s2, player1ColorHex = c1, player2ColorHex = c2))
         } catch (t: Throwable) {
             // Non-fatal; show error similarly to Markup autosave
             Dialogs.showError(this, t, "Autosave failed")

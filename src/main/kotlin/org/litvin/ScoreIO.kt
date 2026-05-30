@@ -24,6 +24,8 @@ data class ScoreV1(
     val version: Int = 1,
     val player1Name: String = "Player 1",
     val player2Name: String = "Player 2",
+    val player1ColorHex: String = "#4DA3FF",
+    val player2ColorHex: String = "#FF6B6B",
 )
 
 object ScoreIO {

@@ -44,6 +44,16 @@ object AssOverlayWriter {
 
         file.parentFile?.mkdirs()
         file.bufferedWriter(Charsets.UTF_8).use { w ->
+            // Use per-span colors when provided; fall back to defaults
+            fun parseHexRgbOrDefault(hex: String?, defRgb: Int): Int {
+                val sHex = hex?.trim()?.removePrefix("#") ?: return defRgb
+                return try {
+                    if (sHex.length == 6) sHex.toInt(16) else defRgb
+                } catch (_: Throwable) { defRgb }
+            }
+            val c1Rgb = parseHexRgbOrDefault(spans.first().p1ColorHex, 0x4DA3FF)
+            val c2Rgb = parseHexRgbOrDefault(spans.first().p2ColorHex, 0xFF6B6B)
+
             // Header
             w.appendLine("[Script Info]")
             w.appendLine("ScriptType: v4.00+")
@@ -62,6 +72,8 @@ object AssOverlayWriter {
             val panelBg = assColor(0x0E1116, 0x80) // 50% opacity background
             val white = assColor(0xFFFFFF, 0x00)
             val black = assColor(0x000000, 0x00)
+            val p1Square = assColor(c1Rgb, 0x30)
+            val p2Square = assColor(c2Rgb, 0x30)
 
             // Base styles
             w.appendLine("Style: Title,Arial,${fmt(titleFont)},$neon,&H000000FF,&H00000000,$black,1,0,0,0,100,100,2,0,1,1.5,0,7,0,0,0,0")
@@ -71,7 +83,8 @@ object AssOverlayWriter {
             w.appendLine("Style: BigScoreDim,Arial,${fmt(bigScoreFont)},$neon,&H000000FF,&H00000000,$black,1,0,0,0,100,100,0,0,1,1.2,0,9,0,0,0,0")
             w.appendLine("Style: Dot,Arial,${fmt(nameFont)},$neon,&H000000FF,&H00000000,$black,1,0,0,0,100,100,0,0,1,1.2,0,7,0,0,0,0")
             w.appendLine("Style: Panel,Arial,20,${withAlpha(black, 0x50)},&H000000FF,&H00000000,$black,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,0")
-            w.appendLine("Style: Square,Arial,20,${withAlpha(neon, 0x30)},&H000000FF,&H00000000,$black,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,0")
+            w.appendLine("Style: SquareP1,Arial,20,${withAlpha(p1Square, 0x30)},&H000000FF,&H00000000,$black,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,0")
+            w.appendLine("Style: SquareP2,Arial,20,${withAlpha(p2Square, 0x30)},&H000000FF,&H00000000,$black,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,0")
             w.appendLine()
 
             // Events
@@ -136,8 +149,8 @@ object AssOverlayWriter {
                 // Icon squares (drawn as filled rectangles)
                 val icon1 = drawRect(contentX, row1Y, contentX + iconSize, row1Y + iconSize)
                 val icon2 = drawRect(contentX, row2Y - iconSize, contentX + iconSize, row2Y)
-                w.appendLine("Dialogue: 1,$start,$end,Square,,0,0,0,,{\\p1}\\1c${assColor(0x4DA3FF, 0x00)}$icon1{\\p0}")
-                w.appendLine("Dialogue: 1,$start,$end,Square,,0,0,0,,{\\p1}\\1c${assColor(0xFF6B6B, 0x00)}$icon2{\\p0}")
+                w.appendLine("Dialogue: 1,$start,$end,SquareP1,,0,0,0,,{\\p1}\\1c${assColor(0x000000, 0x00)}$icon1{\\p0}")
+                w.appendLine("Dialogue: 1,$start,$end,SquareP2,,0,0,0,,{\\p1}\\1c${assColor(0x000000, 0x00)}$icon2{\\p0}")
 
                 // Names (use provided names with fallback; uppercase at render time; apply simple ellipsis)
                 val nameX = contentX + iconSize + (12 * scale).toInt()

@@ -25,6 +25,7 @@ import javax.swing.JList
 import javax.swing.ListCellRenderer
 import javax.swing.DefaultListCellRenderer
 import javax.swing.UIManager
+import javax.swing.JCheckBox
 
 /**
  * Shared Swing UI styles to match the mock (projects.html):
@@ -92,12 +93,13 @@ object UiStyles {
     }
     // Palette inspired by design/projects.html dark theme
     val DARK_BG: Color = Color(0x0E, 0x0E, 0x0E)            // background / surface-dim
-    val SURFACE_HIGH: Color = Color(0x20, 0x20, 0x1F)       // surface-container-high
+    val SURFACE_HIGH: Color = Color(0x30, 0x30, 0x30)       // surface-container-high
     val CARD_BG: Color = Color(0x1A, 0x1A, 0x1A)            // surface-container
     val CARD_BORDER: Color = Color(0x26, 0x26, 0x26)        // surface-variant border
     val FG_PRIMARY: Color = Color(0xD8, 0xD8, 0xD8)         // on-surface
     val FG_SECONDARY: Color = Color(0xAD, 0xAA, 0xAA)       // on-surface-variant
     val GREEN: Color = Color(0xA1, 0xFE, 0x00)              // primary-fixed
+    val YELLOW: Color = Color(0xFF, 0xD5, 0x4A)            // warning/emphasis
 
     // Sidebar specific palette (from mock)
     val SIDEBAR_BG: Color = Color(0x12, 0x12, 0x12)
@@ -567,6 +569,56 @@ object UiStyles {
         foreground = fg
         border = BorderFactory.createEmptyBorder(2, 6, 2, 6)
         font = font.deriveFont(10f)
+    }
+
+    /** Apply dark theme styling to JCheckBox with custom minimalist box and checkmark. */
+    fun styleCheckBox(cb: JCheckBox) {
+        try {
+            cb.isOpaque = false
+            cb.foreground = FG_PRIMARY
+            cb.background = CARD_BG
+            cb.border = BorderFactory.createEmptyBorder(2, 2, 2, 2)
+            cb.cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
+
+            fun boxIcon(selected: Boolean, disabled: Boolean = false): Icon = object : Icon {
+                private val size = 16
+                override fun getIconWidth() = size
+                override fun getIconHeight() = size
+                override fun paintIcon(c: Component?, g: Graphics?, x: Int, y: Int) {
+                    val g2 = g as Graphics2D
+                    g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+                    val w = size; val h = size
+                    val r = 4
+                    // Box background
+                    val bgCol = if (disabled) Color(0x1F,0x1F,0x1F) else SURFACE_HIGH
+                    g2.color = bgCol
+                    g2.fillRoundRect(x, y, w, h, r, r)
+                    // Border
+                    g2.color = if (disabled) CARD_BORDER.darker() else CARD_BORDER
+                    g2.drawRoundRect(x, y, w - 1, h - 1, r, r)
+                    if (selected) {
+                        // Fill with accent tint and draw check
+                        val fill = if (disabled) Color(0x3A,0x3A,0x2F) else Color(0x22, 0x2F, 0x16)
+                        g2.color = fill
+                        g2.fillRoundRect(x + 1, y + 1, w - 2, h - 2, r, r)
+                        // Check mark
+                        g2.color = if (disabled) FG_SECONDARY else LIME
+                        g2.stroke = BasicStroke(2.2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
+                        val p = java.awt.geom.Path2D.Float()
+                        p.moveTo((x + w*0.26f), (y + h*0.54f))
+                        p.lineTo((x + w*0.44f), (y + h*0.72f))
+                        p.lineTo((x + w*0.78f), (y + h*0.30f))
+                        g2.draw(p)
+                    }
+                }
+            }
+            cb.icon = boxIcon(false, disabled = false)
+            cb.selectedIcon = boxIcon(true, disabled = false)
+            cb.disabledIcon = boxIcon(false, disabled = true)
+            cb.disabledSelectedIcon = boxIcon(true, disabled = true)
+            // Keep text spacing pleasant
+            cb.iconTextGap = 8
+        } catch (_: Throwable) { }
     }
 
     /** Green circle with white checkmark icon for scored points. */
