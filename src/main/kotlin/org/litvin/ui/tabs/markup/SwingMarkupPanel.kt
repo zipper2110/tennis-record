@@ -99,6 +99,12 @@ class SwingMarkupPanel : JPanel(BorderLayout()) {
             player.load(f)
             player.pause()
             isMediaLoaded = true
+            // Re-apply current adjustments after media is loaded to ensure VLC picks them up
+            try {
+                val cur = AdjustmentsStore.get()
+                player.applyColorAdjustments(cur)
+                player.applyGeometryAdjustments(cur)
+            } catch (_: Throwable) { /* ignore */ }
         } catch (t: Throwable) {
             if (!loadErrorShown) {
                 loadErrorShown = true

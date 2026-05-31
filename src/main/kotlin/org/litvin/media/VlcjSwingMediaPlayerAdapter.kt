@@ -212,6 +212,16 @@ class VlcjSwingMediaPlayerAdapter {
 
             override fun lengthChanged(mediaPlayer: MediaPlayer, newLength: Long) {
                 durationMs = newLength
+                // Media just became ready: re-apply any pending color/geometry adjustments.
+                // Some VLC builds reset adjust/crop state on load, so enforce last known values now.
+                try {
+                    applyAdjustNow()
+                } catch (_: Throwable) { /* ignore */ }
+                try {
+                    // Schedule geometry application; dimensions may not be known yet, so mark dirty to retry.
+                    dirtyGeometry = true
+                    applyGeometryNow()
+                } catch (_: Throwable) { /* ignore */ }
                 onReady?.invoke()
                 onStatusChanged?.invoke(PlayerStatus.READY)
             }

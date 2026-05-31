@@ -229,6 +229,7 @@ object RenderQueueManager {
                         idleTrim = job.idleTrim,
                         keeps = if (job.idleTrim) job.edlSnapshot else emptyList(),
                         subtitlesAssPath = assFile?.absolutePath,
+                        adjustments = try { org.litvin.adjustments.AdjustmentsStore.get() } catch (_: Throwable) { null }
                     )
                 )
                 println("[DEBUG] ffmpeg command: ${build.preview}")

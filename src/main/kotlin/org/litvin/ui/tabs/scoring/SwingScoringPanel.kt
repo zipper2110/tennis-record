@@ -140,6 +140,10 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
             player.load(videoFile)
             player.pause()
             isMediaLoaded = true
+            // Re-apply current color adjustments after media is loaded to ensure VLC picks them up
+            try {
+                player.applyColorAdjustments(AdjustmentsStore.get())
+            } catch (_: Throwable) { /* ignore */ }
         } catch (t: Throwable) {
             Dialogs.showError(this, t, "Failed to load project")
         }
@@ -461,6 +465,17 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
         val viewport = GeometryViewportPanel(player.component)
         viewport.name = "video"
         videoPanel.add(viewport)
+
+        // Apply color adjustments from the central store (parity with Markup tab)
+        val adjUnsub = AdjustmentsStore.subscribe { adj ->
+            player.applyColorAdjustments(adj)
+        }
+        // Apply current adjustments immediately
+        try {
+            player.applyColorAdjustments(AdjustmentsStore.get())
+        } catch (_: Throwable) { /* ignore */ }
+        // Keep unsubscribe handle on the viewport for potential cleanup on removal
+        viewport.putClientProperty("adj_unsub", adjUnsub)
 
         return videoWrapper
     }

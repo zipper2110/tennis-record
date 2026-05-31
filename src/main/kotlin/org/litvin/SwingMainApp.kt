@@ -10,7 +10,7 @@ import org.litvin.ui.tabs.projects.SwingProjectsPanel
 import org.litvin.ui.tabs.markup.SwingMarkupPanel
 import org.litvin.ui.tabs.scoring.SwingScoringPanel
 import org.litvin.ui.tabs.export.SwingExportPanel
-import org.litvin.ui.tabs.adjustments.SwingAdjustmentsPanel
+import org.litvin.ui.tabs.adjustments.SwingColorAdjustmentsPanel
 import org.litvin.ui.tabs.adjustments.SwingCropRotatePanel
 
 
@@ -139,7 +139,7 @@ object SwingMainApp {
 
                 // Projects screen (Swing Phase 2) and Markup (Phase 3)
                 val ralliesPanel = SwingMarkupPanel()
-                val colorsPanel = SwingAdjustmentsPanel()
+                val colorsPanel = SwingColorAdjustmentsPanel()
                 val cropRotatePanel = SwingCropRotatePanel()
                 val scoringPanel = SwingScoringPanel()
                 val exportPanel = SwingExportPanel()

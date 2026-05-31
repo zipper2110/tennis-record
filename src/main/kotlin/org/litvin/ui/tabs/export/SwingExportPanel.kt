@@ -49,7 +49,6 @@ class SwingExportPanel : JPanel(BorderLayout()) {
     private val progressBar = JProgressBar(0, 100)
     private val progressLabel = JLabel("Idle")
     private val cancelButton = JButton("Cancel")
-    private val detailsButton = JButton("Details…")
     private var lastFailureNotifiedJobId: String? = null
     private var lastFailureJob: RenderJob? = null
 
@@ -167,29 +166,11 @@ class SwingExportPanel : JPanel(BorderLayout()) {
         stats.add(progressLabel, BorderLayout.WEST)
         val rightButtons = JPanel(FlowLayout(FlowLayout.RIGHT, 8, 0))
         rightButtons.background = CARD_BG
-        UiStyles.styleSecondary(detailsButton)
-        detailsButton.isEnabled = false
-        rightButtons.add(detailsButton)
         UiStyles.styleSecondary(cancelButton)
         cancelButton.isEnabled = false
         rightButtons.add(cancelButton)
         stats.add(rightButtons, BorderLayout.EAST)
         cancelButton.addActionListener { RenderQueueManager.cancelCurrent() }
-        detailsButton.addActionListener {
-            val job = lastFailureJob ?: lastSnapshot?.current
-            val tail = job?.stderrTail
-            val reason = job?.failureReason
-            val msg = buildString {
-                if (!reason.isNullOrBlank()) append(reason).append("\n\n")
-                if (!tail.isNullOrBlank()) {
-                    append("ffmpeg stderr (tail):\n\n")
-                    append(tail)
-                } else {
-                    append("No additional diagnostic output is available.")
-                }
-            }
-            Dialogs.showInfo(this@SwingExportPanel, msg, "Render failure details")
-        }
 
         progressBar.value = 0
         progressBar.isStringPainted = true
@@ -307,7 +288,6 @@ class SwingExportPanel : JPanel(BorderLayout()) {
                     progressBar.string = ""
                     progressLabel.text = "Idle"
                     cancelButton.isEnabled = false
-                    detailsButton.isEnabled = false
                 } else {
                     // Active export — show controls and hide placeholder
                     placeholder.isVisible = false
@@ -328,7 +308,6 @@ class SwingExportPanel : JPanel(BorderLayout()) {
                         RenderStatus.FAILED -> {
                             val reason = cur.failureReason ?: "Unknown error"
                             progressLabel.text = "FAILED — $reason"
-                            detailsButton.isEnabled = true
                             if (lastFailureNotifiedJobId != cur.id) {
                                 lastFailureNotifiedJobId = cur.id
                                 lastFailureJob = cur
@@ -337,16 +316,13 @@ class SwingExportPanel : JPanel(BorderLayout()) {
                         }
                         RenderStatus.COMPLETED -> {
                             progressLabel.text = "Completed — Size: $sz"
-                            detailsButton.isEnabled = false
                             addCompleted(cur)
                         }
                         RenderStatus.CANCELED -> {
                             progressLabel.text = "Canceled"
-                            detailsButton.isEnabled = false
                         }
                         else -> {
                             progressLabel.text = "ETA: $eta    Size: $sz"
-                            detailsButton.isEnabled = false
                         }
                     }
                 }

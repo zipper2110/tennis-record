@@ -4,7 +4,6 @@ import org.litvin.ManifestIO
 import org.litvin.media.PlayerStatus
 import org.litvin.media.VlcjSwingMediaPlayerAdapter
 import org.litvin.adjustments.AdjustmentsV1
-import org.litvin.adjustments.WhiteBalanceV1
 import org.litvin.adjustments.AdjustmentsStore
 import org.litvin.ui.UiStyles
 import java.awt.BorderLayout
@@ -27,14 +26,14 @@ import org.litvin.ui.commons.applyDarkScrollbar
  * - Play/Pause button, seek slider, time labels, and SPACE key toggle
  * Component IDs: adj-color-root, adj-color-left, adj-color-right, adj-color-viewport, adj-color-transport, adj-color-left-header
  */
-class SwingAdjustmentsPanel : JPanel(BorderLayout()) {
+class SwingColorAdjustmentsPanel : JPanel(BorderLayout()) {
     private var projectManifestPath: String? = null
 
     // Adjustments store subscription and feedback guard (T6)
     private var unsubscribeStore: (() -> Unit)? = null
     private var updatingFromModel: Boolean = false
 
-    private val prefs: Preferences = Preferences.userNodeForPackage(SwingAdjustmentsPanel::class.java)
+    private val prefs: Preferences = Preferences.userNodeForPackage(SwingColorAdjustmentsPanel::class.java)
     private val dividerPrefKey = "adj.color.split.divider"
 
     // Media player and media loading state
@@ -195,7 +194,7 @@ class SwingAdjustmentsPanel : JPanel(BorderLayout()) {
         sliders.forEach { slider ->
             slider.addChangeListener {
                 if (!updatingFromModel) {
-                    val adjustments = uiToModel().also { println(it) }
+                    val adjustments = uiToModel()
                     applyPreview(adjustments)
                     AdjustmentsStore.set { prev -> adjustments }
                 }
@@ -268,7 +267,7 @@ class SwingAdjustmentsPanel : JPanel(BorderLayout()) {
     private fun modelToUi(adjustments: AdjustmentsV1) {
         updatingFromModel = true
         try {
-            val sliderValues = AdjustmentsUiConverter.modelToSliderValues(adjustments).also { println(it) }
+            val sliderValues = AdjustmentsUiConverter.modelToSliderValues(adjustments)
             brightnessSlider.value = sliderValues.brightness
             contrastSlider.value = sliderValues.contrast
             saturationSlider.value = sliderValues.saturation
@@ -296,6 +295,10 @@ class SwingAdjustmentsPanel : JPanel(BorderLayout()) {
         player.load(videoFile)
         player.pause()
         isMediaLoaded = true
+        // Re-apply current adjustments after media is loaded to ensure VLC picks them up
+        try {
+            applyPreview(AdjustmentsStore.get())
+        } catch (_: Throwable) { /* ignore */ }
     }
 
     private var lastTimeUiUpdateAt: Long = 0L

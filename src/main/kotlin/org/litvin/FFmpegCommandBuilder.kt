@@ -25,6 +25,7 @@ object FFmpegCommandBuilder {
         val idleTrim: Boolean = true,
         val keeps: List<PointV1> = emptyList(),
         val subtitlesAssPath: String? = null, // when non-null, burn-in subtitles (scoreboard)
+        val adjustments: org.litvin.adjustments.AdjustmentsV1? = null, // optional color/geometry adjustments
     )
 
     data class Result(
@@ -59,6 +60,30 @@ object FFmpegCommandBuilder {
         var vMap = "[vout]"
         var aMap = "[aout]"
 
+        fun buildColorFilter(adj: org.litvin.adjustments.AdjustmentsV1?): String? {
+            if (adj == null) return null
+            val wb = adj.whiteBalance
+            // Convert model (VLCJ-oriented) scale → FFmpeg eq scale:
+            // - Model brightness is [0..3] with identity 1.0; FFmpeg expects [-1..+1] with identity 0.0 → b_ff = (b_model - 1)
+            // - Contrast and saturation are multipliers already (identity 1.0) → pass through (with clamp to eq supported ranges)
+            // - Gamma derived from tint (identity 1.0) and slight saturation tweak from temperature for preview parity.
+            val bModel = adj.brightness // [~0..3], identity 1.0 in current UI/model mapping
+            val cModel = adj.contrast   // [~0..3], identity 1.0
+            var sModel = adj.saturation // [~0..3], identity 1.0
+            val gamma = 1.0 + ((wb?.tint ?: 0.0f).toDouble() * 0.2)
+            sModel += ((wb?.temperature ?: 0.0f) * 0.05f)
+            // Map and clamp
+            val bc = (bModel - 1.0f).coerceIn(-1.0f, 1.0f).toDouble()
+            val cc = cModel.coerceIn(0.0f, 3.0f).toDouble()
+            val sc = sModel.coerceIn(0.0f, 3.0f).toDouble()
+            val gc = gamma.coerceIn(0.1, 10.0)
+            val isIdentity = (Math.abs(bc) < 1e-6) && (Math.abs(cc - 1.0) < 1e-6) && (Math.abs(sc - 1.0) < 1e-6) && (Math.abs(gc - 1.0) < 1e-6)
+            if (isIdentity) return null
+            // Use Locale.US formatting to ensure dot decimal
+            fun fmt(d: Double): String = java.lang.String.format(java.util.Locale.US, "%.4f", d)
+            return "eq=brightness=${fmt(bc)}:contrast=${fmt(cc)}:saturation=${fmt(sc)}:gamma=${fmt(gc)}"
+        }
+
         if (p.idleTrim && p.keeps.isNotEmpty()) {
             // Build trim/concat graph
             val parts = mutableListOf<String>()
@@ -80,14 +105,20 @@ object FFmpegCommandBuilder {
             // Output scaled video into an intermediate label; we may append subtitles next
             parts += "[vcat]$scaleStr[vsc]"
             parts += aLabels.joinToString(separator = "") + "concat=n=${p.keeps.size}:v=0:a=1" + aMap
-            // If subtitles present, append burn-in after scaling; else just map vsc as output
+            // Apply color adjustments after scale to match preview, before subtitles
+            val color = buildColorFilter(p.adjustments)
+            var baseLabel = "[vsc]"
+            if (color != null) {
+                parts += "$baseLabel$color[vclr]"
+                baseLabel = "[vclr]"
+            }
+            // If subtitles present, append burn-in after color; else map baseLabel directly
             val subPath = p.subtitlesAssPath
             if (subPath != null) {
                 val esc = escapeForFilterPath(subPath)
-                parts += "[vsc]subtitles='${esc}'$vMap"
+                parts += "$baseLabel" + "subtitles='${esc}'" + vMap
             } else {
-                // No extra node; map label directly by setting vMap to [vsc]
-                vMap = "[vsc]"
+                vMap = baseLabel
             }
             filterComplex = parts.joinToString(";")
         }
@@ -138,14 +169,17 @@ object FFmpegCommandBuilder {
         if (filterComplex != null) {
             args += listOf("-filter_complex", filterComplex, "-map", vMap, "-map", aMap)
         } else {
-            // simple scale, optionally followed by subtitles burn-in
+            // simple scale, optionally followed by color adjustments and subtitles burn-in
             val sub = p.subtitlesAssPath
-            val vf = if (sub != null) {
+            val color = buildColorFilter(p.adjustments)
+            val filters = mutableListOf<String>()
+            filters += "scale=${p.outWidth}:-2"
+            if (color != null) filters += color
+            if (sub != null) {
                 val esc = escapeForFilterPath(sub)
-                "scale=${p.outWidth}:-2,subtitles='${esc}'"
-            } else {
-                "scale=${p.outWidth}:-2"
+                filters += "subtitles='${esc}'"
             }
+            val vf = filters.joinToString(",")
             args += listOf("-vf", vf)
         }
 
