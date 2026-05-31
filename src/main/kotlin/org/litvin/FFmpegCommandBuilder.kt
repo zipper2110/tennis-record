@@ -66,25 +66,38 @@ object FFmpegCommandBuilder {
             // Convert model (VLCJ-oriented) scale → FFmpeg eq scale:
             // - Model brightness is VLC-style [0..2] with identity 1.0. FFmpeg's eq brightness is much stronger,
             //   so damp the offset for VLC preview parity.
-            // - Contrast is close enough to pass through for the app's [0..2] range.
+            // - Positive contrast passes through. Negative contrast is compressed after -50 so export does not
+            //   exceed the calibrated VLC preview floor; UI -100 exports as ffmpeg -80 (contrast=0.2).
             // - Saturation is not perceptually equivalent: preserve desaturation exactly, but damp boosted values for VLC preview parity.
-            // - Gamma derived from tint (identity 1.0) and slight saturation tweak from temperature for preview parity.
+            // - White balance is approximated like the VLC preview: temperature/tint feed hue rotation, tint feeds gamma,
+            //   and temperature adds a slight saturation nudge.
             val bModel = adj.brightness // [~0..2], identity 1.0 in current UI/model mapping
             val cModel = adj.contrast   // [~0..2], identity 1.0
             var sModel = adj.saturation // [~0..2], identity 1.0
-            val gamma = 1.0 + ((wb?.tint ?: 0.0f).toDouble() * 0.2)
-            sModel += ((wb?.temperature ?: 0.0f) * 0.05f)
+            val temperature = (wb?.temperature ?: 0.0f).coerceIn(-1.0f, 1.0f)
+            val tint = (wb?.tint ?: 0.0f).coerceIn(-1.0f, 1.0f)
+            val gamma = 1.0 + (tint.toDouble() * 0.2)
+            val hueDegrees = (temperature.toDouble() * 180.0) + (tint.toDouble() * 12.0)
+            sModel += (temperature * 0.05f)
             // Map and clamp
             val bc = ((bModel - 1.0f) * 0.39f).coerceIn(-1.0f, 1.0f).toDouble()
-            val cc = cModel.coerceIn(0.0f, 3.0f).toDouble()
+            val cc = mapContrastForFfmpeg(cModel)
             val sClamped = sModel.coerceIn(0.0f, 3.0f).toDouble()
             val sc = if (sClamped <= 1.0) sClamped else 1.0 + ((sClamped - 1.0) * 0.5)
             val gc = gamma.coerceIn(0.1, 10.0)
-            val isIdentity = (Math.abs(bc) < 1e-6) && (Math.abs(cc - 1.0) < 1e-6) && (Math.abs(sc - 1.0) < 1e-6) && (Math.abs(gc - 1.0) < 1e-6)
-            if (isIdentity) return null
+            val isEqIdentity = (Math.abs(bc) < 1e-6) && (Math.abs(cc - 1.0) < 1e-6) && (Math.abs(sc - 1.0) < 1e-6) && (Math.abs(gc - 1.0) < 1e-6)
+            val isHueIdentity = Math.abs(hueDegrees) < 1e-6
+            if (isEqIdentity && isHueIdentity) return null
             // Use Locale.US formatting to ensure dot decimal
             fun fmt(d: Double): String = java.lang.String.format(java.util.Locale.US, "%.4f", d)
-            return "eq=brightness=${fmt(bc)}:contrast=${fmt(cc)}:saturation=${fmt(sc)}:gamma=${fmt(gc)}"
+            val filters = mutableListOf<String>()
+            if (!isEqIdentity) {
+                filters += "eq=brightness=${fmt(bc)}:contrast=${fmt(cc)}:saturation=${fmt(sc)}:gamma=${fmt(gc)}"
+            }
+            if (!isHueIdentity) {
+                filters += "hue=h=${fmt(hueDegrees)}"
+            }
+            return filters.joinToString(",")
         }
 
         if (p.idleTrim && p.keeps.isNotEmpty()) {
@@ -207,6 +220,16 @@ object FFmpegCommandBuilder {
 
         return Result(args = args, preview = preview)
     }
+}
+
+private fun mapContrastForFfmpeg(modelContrast: Float): Double {
+    val contrastSlider = ((modelContrast.coerceIn(0.0f, 2.0f) - 1.0f) * 100.0f).toDouble()
+    val mappedSlider = when {
+        contrastSlider >= 0.0 -> contrastSlider
+        contrastSlider >= -50.0 -> contrastSlider
+        else -> -50.0 + ((contrastSlider + 50.0) * 0.6)
+    }
+    return (1.0 + (mappedSlider / 100.0)).coerceIn(0.0, 3.0)
 }
 
 private fun Double.formatSecs(): String {

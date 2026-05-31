@@ -20,7 +20,9 @@ import javax.imageio.ImageIO
 import org.litvin.adjustments.AdjustmentsV1
 import org.litvin.ui.tabs.adjustments.AdjustmentsUiConverter
 
-class VlcjSwingMediaPlayerAdapter {
+class VlcjSwingMediaPlayerAdapter(
+    private val colorPreviewStrategy: ColorPreviewAdjustmentStrategy = CalibratedVlcColorPreviewAdjustmentStrategy,
+) {
     // For Phase 0 we stick to defaults; options can be tuned later if needed.
     private val embeddedComponent = EmbeddedMediaPlayerComponent()
     private val mediaPlayer: EmbeddedMediaPlayer = embeddedComponent.mediaPlayer()
@@ -171,24 +173,16 @@ class VlcjSwingMediaPlayerAdapter {
 
     /**
      * Apply color adjustments to VLC preview without pausing (coalesced, ≤120 Hz).
-     * Maps brightness/contrast/saturation directly; approximates white balance via hue/gamma and a slight sat shift.
+     * Maps model values through a preview strategy so VLC's live filter can approximate export color semantics.
      */
     fun applyColorAdjustments(adj: AdjustmentsV1) {
-        // Map model → VLC values
-        var hueDeg = 0.0f
-        var gamma = 1.0f
+        val preview = colorPreviewStrategy.map(adj)
 
-        val wb = adj.whiteBalance
-        if (wb != null) {
-            hueDeg = wb.temperature
-            gamma = 1.0f + wb.tint
-        }
-
-        pendingBrightness = adj.brightness
-        pendingContrast = adj.contrast
-        pendingSaturation = adj.saturation
-        pendingHue = hueDeg
-        pendingGamma = gamma
+        pendingBrightness = preview.brightness
+        pendingContrast = preview.contrast
+        pendingSaturation = preview.saturation
+        pendingHue = preview.hue
+        pendingGamma = preview.gamma
         dirtyAdjust = true
     }
 

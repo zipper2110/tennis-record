@@ -393,8 +393,6 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
         val valid = segmentEndMs > segmentStartMs
         val existing = outcomesByPointId[p.id]
         updateActionButtonsState(enable = valid, selectedOutcome = existing)
-        // Inline error indicator for zero-duration/malformed segment
-        if (::segmentScrub.isInitialized) segmentScrub.setErrorVisible(!valid)
         // Enable/disable Next based on whether a subsequent point exists
         if (::leftListPanel.isInitialized) leftListPanel.setNextEnabled((selectedPointIndex + 1) in points.indices)
         // Recompute panels for current selection

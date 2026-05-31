@@ -43,6 +43,19 @@ class FFmpegCommandBuilderAdjustmentsScaleTest {
         }.toMap()
     }
 
+    private fun parseHueMap(vf: String): Map<String, String>? {
+        val hueStart = vf.indexOf("hue=")
+        if (hueStart < 0) return null
+        val after = vf.substring(hueStart + 4)
+        val endIdx = after.indexOfAny(charArrayOf(',', ';'))
+        val hueBody = if (endIdx >= 0) after.substring(0, endIdx) else after
+        val parts = hueBody.split(":")
+        return parts.mapNotNull {
+            val kv = it.split("=")
+            if (kv.size == 2) kv[0] to kv[1] else null
+        }.toMap()
+    }
+
     @Test
     fun identity_model_values_emit_no_eq_filter() {
         // Treat identity as brightness=1.0, contrast=1.0, saturation=1.0, wb=0/0 per UI mapping
@@ -108,5 +121,44 @@ class FFmpegCommandBuilderAdjustmentsScaleTest {
         val saturation = eq["saturation"]!!.toDouble()
 
         assertTrue(kotlin.math.abs(saturation) < 1e-3, "Expected saturation 0.0 to stay grayscale, was $saturation (vf=$vf)")
+    }
+
+    @Test
+    fun negative_contrast_export_supports_current_ui_floor() {
+        val vf = buildVf(AdjustmentsV1(brightness = 1.0f, contrast = 0.5f, saturation = 1.0f, whiteBalance = WhiteBalanceV1(0f, 0f)))
+        val eq = parseEqMap(vf)!!
+        val contrast = eq["contrast"]!!.toDouble()
+        assertTrue(kotlin.math.abs(contrast - 0.5) < 1e-3, "Expected -50 contrast to pass through as 0.5, was $contrast (vf=$vf)")
+    }
+
+    @Test
+    fun positive_contrast_still_passes_through() {
+        val vf = buildVf(AdjustmentsV1(brightness = 1.0f, contrast = 2.0f, saturation = 1.0f, whiteBalance = WhiteBalanceV1(0f, 0f)))
+        val eq = parseEqMap(vf)!!
+        val contrast = eq["contrast"]!!.toDouble()
+
+        assertTrue(kotlin.math.abs(contrast - 2.0) < 1e-3, "Expected +100 contrast to pass through as 2.0, was $contrast (vf=$vf)")
+    }
+
+    @Test
+    fun white_balance_temperature_adds_hue_filter_and_saturation_nudge() {
+        val vf = buildVf(AdjustmentsV1(brightness = 1.0f, contrast = 1.0f, saturation = 1.0f, whiteBalance = WhiteBalanceV1(0.5f, 0f)))
+        val eq = parseEqMap(vf)!!
+        val hue = parseHueMap(vf)!!
+
+        assertTrue(vf.contains(",hue="), "Expected hue filter after eq, was: $vf")
+        assertTrue(kotlin.math.abs(eq["saturation"]!!.toDouble() - 1.0125) < 1e-3, "Expected WB temp saturation nudge, vf=$vf")
+        assertTrue(kotlin.math.abs(hue["h"]!!.toDouble() - 90.0) < 1e-3, "Expected WB temp hue 90 degrees, vf=$vf")
+    }
+
+    @Test
+    fun white_balance_tint_adds_gamma_and_small_hue_offset() {
+        val vf = buildVf(AdjustmentsV1(brightness = 1.0f, contrast = 1.0f, saturation = 1.0f, whiteBalance = WhiteBalanceV1(0f, 0.5f)))
+        val eq = parseEqMap(vf)!!
+        val hue = parseHueMap(vf)!!
+
+        assertTrue(vf.contains(",hue="), "Expected hue filter after eq, was: $vf")
+        assertTrue(kotlin.math.abs(eq["gamma"]!!.toDouble() - 1.1) < 1e-3, "Expected WB tint gamma 1.1, vf=$vf")
+        assertTrue(kotlin.math.abs(hue["h"]!!.toDouble() - 6.0) < 1e-3, "Expected WB tint hue 6 degrees, vf=$vf")
     }
 }

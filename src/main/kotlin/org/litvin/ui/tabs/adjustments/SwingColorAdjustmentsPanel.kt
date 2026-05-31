@@ -6,12 +6,12 @@ import org.litvin.media.VlcjSwingMediaPlayerAdapter
 import org.litvin.adjustments.AdjustmentsV1
 import org.litvin.adjustments.AdjustmentsStore
 import org.litvin.ui.UiStyles
+import org.litvin.ui.commons.ScrubBar
 import java.awt.BorderLayout
+import java.awt.Color
 import java.awt.Dimension
 import java.awt.EventQueue
 import java.awt.event.ActionEvent
-import java.awt.event.MouseAdapter
-import java.awt.event.MouseEvent
 import java.io.File
 import java.util.prefs.Preferences
 import javax.swing.*
@@ -43,12 +43,7 @@ class SwingColorAdjustmentsPanel : JPanel(BorderLayout()) {
 
     // Transport UI refs
     private var playPauseBtn: JButton
-    private var currentLbl: JLabel
-    private var durationLbl: JLabel
-    private var seekSlider: JSlider
-
-    // Dragging flag for seek slider
-    private var isDraggingSeek: Boolean = false
+    private var scrubBar: ScrubBar
 
     private val viewportPanel = JPanel(BorderLayout()).apply {
         name = "adj-color-viewport"
@@ -105,32 +100,55 @@ class SwingColorAdjustmentsPanel : JPanel(BorderLayout()) {
         viewportPanel.add(player.component, BorderLayout.CENTER)
 
         // Populate transport: play/pause, time labels, seek slider
-        playPauseBtn = JButton("Play")
-        val timesPanel = JPanel(java.awt.FlowLayout(java.awt.FlowLayout.LEFT, 8, 4))
-        currentLbl = JLabel("00:00")
-        val sepLbl = JLabel("/")
-        durationLbl = JLabel("00:00")
-        timesPanel.add(currentLbl)
-        timesPanel.add(sepLbl)
-        timesPanel.add(durationLbl)
-        seekSlider = JSlider(0, 1000, 0).apply {
-            majorTickSpacing = 0
-            paintTicks = false
-            paintLabels = false
-            putClientProperty("JSlider.isFilled", true)
-            toolTipText = "Seek"
+        playPauseBtn = UiStyles.squarePrimaryButton(UiStyles.playIcon(28)) { togglePlayPause() }.apply {
+            name = "adj-color-play-pause"
+            accessibleContext.accessibleName = "Play or Pause"
+            toolTipText = "SPACE - Play"
         }
-        val transportTop = JPanel(BorderLayout())
-        transportTop.add(timesPanel, BorderLayout.WEST)
-        transportTop.add(playPauseBtn, BorderLayout.EAST)
-        transportPanel.add(transportTop, BorderLayout.NORTH)
-        transportPanel.add(seekSlider, BorderLayout.CENTER)
+        scrubBar = ScrubBar(
+            onUserScrub = { target -> player.seek(target) },
+            tooltip = "Seek"
+        )
+        val playRow = JPanel(java.awt.FlowLayout(java.awt.FlowLayout.CENTER, 0, 6)).apply {
+            isOpaque = true
+            background = UiStyles.SURFACE_HIGH
+        }
+        playRow.add(playPauseBtn)
+        val scrubRow = JPanel(BorderLayout()).apply {
+            isOpaque = true
+            background = Color(0x11, 0x11, 0x11)
+            border = BorderFactory.createEmptyBorder(8, 16, 8, 16)
+            scrubBar.setBarBackground(background)
+            add(scrubBar, BorderLayout.CENTER)
+        }
+        transportPanel.add(playRow, BorderLayout.NORTH)
+        transportPanel.add(scrubRow, BorderLayout.CENTER)
 
-        val content = JPanel().apply {
-            layout = BoxLayout(this, BoxLayout.Y_AXIS); background = UiStyles.DARK_BG; isOpaque = true
+        val content = object : JPanel(), Scrollable {
+            override fun getPreferredScrollableViewportSize(): Dimension = preferredSize
+            override fun getScrollableUnitIncrement(
+                visibleRect: java.awt.Rectangle,
+                orientation: Int,
+                direction: Int
+            ): Int = 24
+            override fun getScrollableBlockIncrement(
+                visibleRect: java.awt.Rectangle,
+                orientation: Int,
+                direction: Int
+            ): Int = visibleRect.height - 24
+            override fun getScrollableTracksViewportWidth(): Boolean = true
+            override fun getScrollableTracksViewportHeight(): Boolean = false
+        }.apply {
+            layout = BoxLayout(this, BoxLayout.Y_AXIS)
+            background = UiStyles.DARK_BG
+            isOpaque = true
+            border = BorderFactory.createEmptyBorder(15, 15, 15, 15)
         }
         val sectionHeader = JPanel(BorderLayout()).apply { isOpaque = false }
-        val sectionTitle = JLabel("Color Grade").apply { foreground = UiStyles.FG_PRIMARY }
+        val sectionTitle = JLabel("Color Grade").apply {
+            foreground = UiStyles.FG_PRIMARY
+            font = font.deriveFont(font.style, font.size2D + 3.0f)
+        }
         colorResetBtn =
             JButton("Reset").apply { name = "adj-color-reset"; toolTipText = "Reset Color Grade to defaults" }
         colorResetBtn.addActionListener {
@@ -144,7 +162,8 @@ class SwingColorAdjustmentsPanel : JPanel(BorderLayout()) {
         headerRight2.add(colorResetBtn)
         sectionHeader.add(sectionTitle, BorderLayout.WEST)
         sectionHeader.add(headerRight2, BorderLayout.EAST)
-        sectionHeader.border = BorderFactory.createEmptyBorder(8, 8, 4, 8)
+        sectionHeader.border = BorderFactory.createEmptyBorder(0, 0, 18, 0)
+        sectionHeader.alignmentX = LEFT_ALIGNMENT
         content.add(sectionHeader)
 
         // Sliders
@@ -161,7 +180,7 @@ class SwingColorAdjustmentsPanel : JPanel(BorderLayout()) {
                 "Brightness [-100..+100], default 0"
             )
         )
-        content.add(labeledSliderRow("Contrast", contrastSlider, "adj-contrast", "Contrast [-100..+100], default 0"))
+        content.add(labeledSliderRow("Contrast", contrastSlider, "adj-contrast", "Contrast [-50..+50], default 0"))
         content.add(
             labeledSliderRow(
                 "Saturation",
@@ -191,6 +210,7 @@ class SwingColorAdjustmentsPanel : JPanel(BorderLayout()) {
         if (!adjustSupported) {
             sliders.forEach { sld -> sld.toolTipText = (sld.toolTipText?.let { it + "\n" } ?: "") + unsupportedTip }
         }
+        configureColorSliderRanges()
         sliders.forEach { slider ->
             slider.addChangeListener {
                 if (!updatingFromModel) {
@@ -202,9 +222,7 @@ class SwingColorAdjustmentsPanel : JPanel(BorderLayout()) {
         }
 
         // Wire controls
-        playPauseBtn.addActionListener { togglePlayPause() }
         installKeyBindings()
-        installSeekHandlers()
         installPlayerCallbacks()
 
         add(split, BorderLayout.CENTER)
@@ -255,11 +273,17 @@ class SwingColorAdjustmentsPanel : JPanel(BorderLayout()) {
             JPanel(java.awt.FlowLayout(java.awt.FlowLayout.RIGHT, 6, 2)).apply { isOpaque = false; add(valueLbl) }
         val row = JPanel(BorderLayout()).apply {
             isOpaque = false
-            border = BorderFactory.createEmptyBorder(2, 4, 2, 4)
-            add(left, BorderLayout.WEST)
+            border = BorderFactory.createEmptyBorder(0, 0, 60, 0)
+            alignmentX = LEFT_ALIGNMENT
+            add(JPanel(BorderLayout()).apply {
+                isOpaque = false
+                add(left, BorderLayout.WEST)
+                add(right, BorderLayout.EAST)
+            }, BorderLayout.NORTH)
             add(center, BorderLayout.CENTER)
-            add(right, BorderLayout.EAST)
         }
+        row.maximumSize = Dimension(Int.MAX_VALUE, 100)
+        row.preferredSize = Dimension(0, 100)
         slider.addChangeListener { valueLbl.text = slider.value.toString() }
         return row
     }
@@ -268,16 +292,25 @@ class SwingColorAdjustmentsPanel : JPanel(BorderLayout()) {
         updatingFromModel = true
         try {
             val sliderValues = AdjustmentsUiConverter.modelToSliderValues(adjustments)
-            brightnessSlider.value = sliderValues.brightness
-            contrastSlider.value = sliderValues.contrast
-            saturationSlider.value = sliderValues.saturation
+            brightnessSlider.value = sliderValues.brightness.coerceIn(brightnessSlider.minimum, brightnessSlider.maximum)
+            contrastSlider.value = sliderValues.contrast.coerceIn(contrastSlider.minimum, contrastSlider.maximum)
+            saturationSlider.value = sliderValues.saturation.coerceIn(saturationSlider.minimum, saturationSlider.maximum)
             tempSlider.value = sliderValues.temperature
             tintSlider.value = sliderValues.tint
             // Also update live preview
-            applyPreview(adjustments)
+            applyPreview(uiToModel())
         } finally {
             updatingFromModel = false
         }
+    }
+
+    private fun configureColorSliderRanges() {
+        brightnessSlider.minimum = -80
+        brightnessSlider.maximum = 74
+        contrastSlider.minimum = -50
+        contrastSlider.maximum = 50
+        saturationSlider.minimum = -85
+        saturationSlider.maximum = 100
     }
 
     override fun addNotify() {
@@ -308,66 +341,30 @@ class SwingColorAdjustmentsPanel : JPanel(BorderLayout()) {
         player.onTimeChanged = { ms ->
             EventQueue.invokeLater {
                 val dur = player.totalDurationMs()
-                // Duration label: update only if changed
                 if (dur > 0) {
-                    val durText = formatTime(dur)
-                    if (durationLbl.text != durText) durationLbl.text = durText
-                    if (!isDraggingSeek) {
-                        // Throttle slider updates to lighten EDT load
-                        val now = System.currentTimeMillis()
-                        if ((now - lastTimeUiUpdateAt) >= timeUiCadenceMs) {
-                            val pos = ((ms.coerceIn(0, dur).toDouble() / dur.toDouble()) * seekSlider.maximum).toInt()
-                            if (seekSlider.value != pos) seekSlider.value = pos
-                            lastTimeUiUpdateAt = now
-                        }
-                        val curText = formatTime(ms)
-                        if (currentLbl.text != curText) currentLbl.text = curText
+                    val now = System.currentTimeMillis()
+                    if ((now - lastTimeUiUpdateAt) >= timeUiCadenceMs) {
+                        scrubBar.setRange(0L, dur)
+                        scrubBar.setPosition(ms)
+                        lastTimeUiUpdateAt = now
                     }
                 } else {
-                    val curText = formatTime(ms)
-                    if (currentLbl.text != curText) currentLbl.text = curText
+                    scrubBar.reset()
                 }
                 updatePlayPauseUi()
             }
         }
         player.onStatusChanged = { _ -> EventQueue.invokeLater { updatePlayPauseUi() } }
-        // onReady not used here
-    }
-
-    private fun installSeekHandlers() {
-        // While dragging, show the time under the thumb; on release, seek accurately
-        seekSlider.addChangeListener {
-            if (!seekSlider.isEnabled) return@addChangeListener
-            val dur = player.totalDurationMs()
-            if (dur <= 0) return@addChangeListener
-            val ms = sliderToMs(seekSlider.value, dur)
-            if (seekSlider.valueIsAdjusting) {
-                isDraggingSeek = true
-                currentLbl.text = formatTime(ms)
-            } else {
-                // final position changed programmatically or by keyboard
-                if (isDraggingSeek) {
-                    isDraggingSeek = false
-                    player.seek(ms)
+        player.onReady = {
+            EventQueue.invokeLater {
+                val dur = player.totalDurationMs()
+                if (dur > 0) {
+                    scrubBar.setRange(0L, dur)
+                    scrubBar.setPosition(player.currentTimeMs())
                 }
+                updatePlayPauseUi()
             }
         }
-        // Also listen for mouse release explicitly to ensure seek fires
-        seekSlider.addMouseListener(object : MouseAdapter() {
-            override fun mouseReleased(e: MouseEvent) {
-                val dur = player.totalDurationMs()
-                if (dur <= 0) return
-                val ms = sliderToMs(seekSlider.value, dur)
-                isDraggingSeek = false
-                player.seek(ms)
-            }
-        })
-    }
-
-    private fun sliderToMs(value: Int, durationMs: Long): Long {
-        val ratio = value.toDouble() / seekSlider.maximum.toDouble()
-        val target = (durationMs.toDouble() * ratio).toLong()
-        return target.coerceIn(0L, durationMs)
     }
 
     private fun togglePlayPause() {
@@ -379,7 +376,9 @@ class SwingColorAdjustmentsPanel : JPanel(BorderLayout()) {
 
     private fun updatePlayPauseUi() {
         val playing = player.status() == PlayerStatus.PLAYING
-        playPauseBtn.text = if (playing) "Pause" else "Play"
+        playPauseBtn.icon = if (playing) UiStyles.pauseIcon(28) else UiStyles.playIcon(28)
+        playPauseBtn.toolTipText = if (playing) "SPACE - Pause" else "SPACE - Play"
+        playPauseBtn.repaint()
     }
 
     private fun installKeyBindings() {
@@ -444,17 +443,4 @@ class SwingColorAdjustmentsPanel : JPanel(BorderLayout()) {
         AdjustmentsStore.save(dir)
     }
 
-    private fun formatTime(ms: Long): String {
-        var total = if (ms < 0) 0 else ms
-        val hours = total / 3_600_000
-        total -= hours * 3_600_000
-        val minutes = total / 60_000
-        total -= minutes * 60_000
-        val seconds = total / 1_000
-        return if (hours > 0) String.format("%d:%02d:%02d", hours, minutes, seconds) else String.format(
-            "%02d:%02d",
-            minutes,
-            seconds
-        )
-    }
 }
