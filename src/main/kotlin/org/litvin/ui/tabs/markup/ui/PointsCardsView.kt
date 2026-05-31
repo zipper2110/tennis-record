@@ -216,11 +216,11 @@ class PointsCardsView(
         card.add(stripe, BorderLayout.WEST)
         val center = JPanel()
         center.isOpaque = false
-        center.layout = BoxLayout(center, BoxLayout.Y_AXIS)
-        val title = JLabel("Point ${dataIndex + 1}").apply {
+        center.layout = BoxLayout(center, BoxLayout.X_AXIS)
+        val title = JLabel("#${dataIndex + 1}").apply {
             foreground = UiStyles.FG_PRIMARY; font = font.deriveFont(
-            Font.BOLD
-        )
+                Font.BOLD
+            )
         }
         val times = JPanel(FlowLayout(FlowLayout.LEFT, 14, 0)).apply {
             isOpaque = false
@@ -228,18 +228,14 @@ class PointsCardsView(
             add(JLabel(p.endMs?.let { Timecode.format(it) } ?: "—").apply { foreground = UiStyles.FG_SECONDARY })
         }
         center.add(title)
-        center.add(Box.createVerticalStrut(6))
+        center.add(Box.createHorizontalStrut(12))
         center.add(times)
         card.add(center, BorderLayout.CENTER)
-        // Right-side actions (Go, Edit, Delete)
+        // Right-side actions (Edit, Delete) — show on hover
         run {
             val actionsPanel = JPanel().apply {
                 isOpaque = false
                 layout = BoxLayout(this, BoxLayout.X_AXIS)
-            }
-            val goBtn = UiStyles.smallIconButton(UiStyles.targetIcon(), "Go to marked point") {
-                actions.seekTo(p.startMs)
-                actions.selectByVisualIndex(visualIndex)
             }
             val editBtn = UiStyles.smallIconButton(UiStyles.pencilIcon(), "Edit times/label") {
                 try {
@@ -254,12 +250,43 @@ class PointsCardsView(
                 } catch (_: Throwable) {
                 }
             }
-            actionsPanel.add(goBtn)
-            actionsPanel.add(Box.createHorizontalStrut(8))
             actionsPanel.add(editBtn)
             actionsPanel.add(Box.createHorizontalStrut(8))
             actionsPanel.add(delBtn)
+            actionsPanel.isVisible = false
             card.add(actionsPanel, BorderLayout.EAST)
+
+            // Hover behavior: show actions on hover; hide only when mouse truly leaves the card area (not when moving to children)
+            val toggle = object : MouseAdapter() {
+                private fun show() {
+                    if (!actionsPanel.isVisible) {
+                        actionsPanel.isVisible = true
+                        card.revalidate(); card.repaint()
+                    }
+                }
+                private fun maybeHide() {
+                    // Defer to the next tick to allow enter events on children to fire first
+                    SwingUtilities.invokeLater {
+                        try {
+                            val pointer = java.awt.MouseInfo.getPointerInfo()?.location
+                            if (pointer != null) {
+                                val loc = card.locationOnScreen
+                                val rect = Rectangle(loc, card.size)
+                                if (rect.contains(pointer)) return@invokeLater // still inside the card → keep visible
+                            }
+                        } catch (_: Throwable) { }
+                        actionsPanel.isVisible = false
+                        card.revalidate(); card.repaint()
+                    }
+                }
+                override fun mouseEntered(e: MouseEvent) { show() }
+                override fun mouseExited(e: MouseEvent) { maybeHide() }
+            }
+            // Attach to card and key children so moving between them doesn't hide the panel
+            card.addMouseListener(toggle)
+            actionsPanel.addMouseListener(toggle)
+            editBtn.addMouseListener(toggle)
+            delBtn.addMouseListener(toggle)
         }
         // Click selects (and seeks to start)
         card.addMouseListener(object : MouseAdapter() {
@@ -280,9 +307,9 @@ class PointsCardsView(
     }
 
     companion object {
-        private const val RIGHT_PANEL_WIDTH = 420
+        private const val RIGHT_PANEL_WIDTH = 340
         private const val CARD_H_MARGIN = 10
         private const val CARD_WIDTH = RIGHT_PANEL_WIDTH - CARD_H_MARGIN * 2
-        private const val CARD_HEIGHT = 68
+        private const val CARD_HEIGHT = 44
     }
 }

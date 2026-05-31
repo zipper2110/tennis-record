@@ -7,16 +7,17 @@ package org.litvin.shared.util
  * - Provides rounding to nearest 10 ms to align with Markup rules
  */
 object Timecode {
-    /** Format milliseconds to hh:mm:ss.mmm (zero-padded). */
+    /** Format milliseconds to hh:mm:ss.S (tenths). */
     fun format(totalMs: Long): String {
         // For v0.1.0 we expect non-negative times; keep simple integer divisions
         val ms = (totalMs % 1000).toInt()
+        val tenths = ms / 100 // truncate to 1 decimal place
         val totalSeconds = totalMs / 1000
         val s = (totalSeconds % 60).toInt()
         val totalMinutes = totalSeconds / 60
         val m = (totalMinutes % 60).toInt()
         val h = (totalMinutes / 60).toInt()
-        return String.format("%02d:%02d:%02d.%03d", h, m, s, ms)
+        return String.format("%02d:%02d:%02d.%01d", h, m, s, tenths)
     }
 
     /** Round to the nearest 10 milliseconds. */

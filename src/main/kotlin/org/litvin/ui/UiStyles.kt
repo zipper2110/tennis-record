@@ -10,7 +10,6 @@ import java.awt.Font
 import java.awt.GradientPaint
 import java.awt.Graphics
 import java.awt.Graphics2D
-import java.awt.Polygon
 import java.awt.RenderingHints
 import javax.swing.AbstractButton
 import javax.swing.BorderFactory
@@ -22,10 +21,16 @@ import javax.swing.JLabel
 import javax.swing.JPanel
 import javax.swing.JComboBox
 import javax.swing.JList
-import javax.swing.ListCellRenderer
 import javax.swing.DefaultListCellRenderer
 import javax.swing.UIManager
 import javax.swing.JCheckBox
+// Ikonli (icon packs)
+import org.kordamp.ikonli.Ikon
+import org.kordamp.ikonli.feather.Feather
+import org.kordamp.ikonli.material2.Material2AL
+import org.kordamp.ikonli.material2.Material2MZ
+import org.kordamp.ikonli.material2.Material2RoundMZ
+import org.kordamp.ikonli.swing.FontIcon
 
 /**
  * Shared Swing UI styles to match the mock (projects.html):
@@ -35,47 +40,14 @@ import javax.swing.JCheckBox
  */
 object UiStyles {
     // Small action icons for cards
-    fun targetIcon(size: Int = 18): Icon = object : Icon {
-        override fun getIconWidth() = size
-        override fun getIconHeight() = size
-        override fun paintIcon(c: Component?, g: Graphics?, x: Int, y: Int) {
-            val g2 = g as Graphics2D
-            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
-            val w = size; val h = size
-            // outer circle
-            g2.color = LIME
-            g2.drawOval(x + 1, y + 1, w - 2, h - 2)
-            // dot
-            g2.fillOval(x + w/2 - 2, y + h/2 - 2, 4, 4)
-        }
-    }
-    fun pencilIcon(size: Int = 18): Icon = object : Icon {
-        override fun getIconWidth() = size
-        override fun getIconHeight() = size
-        override fun paintIcon(c: Component?, g: Graphics?, x: Int, y: Int) {
-            val g2 = g as Graphics2D
-            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
-            g2.color = LIME
-            val w = size; val h = size
-            g2.stroke = BasicStroke(2f)
-            g2.drawLine(x + w/4, y + h - h/4, x + w - w/6, y + h/6)
-            g2.drawLine(x + w - w/6, y + h/6, x + w - w/8, y + h/4)
-            g2.drawRect(x + w/4 - 2, y + h - h/4 - 2, 4, 4)
-        }
-    }
-    fun crossIcon(size: Int = 18): Icon = object : Icon {
-        override fun getIconWidth() = size
-        override fun getIconHeight() = size
-        override fun paintIcon(c: Component?, g: Graphics?, x: Int, y: Int) {
-            val g2 = g as Graphics2D
-            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
-            g2.color = Color(0xFF, 0x55, 0x55)
-            val w = size; val h = size
-            g2.stroke = BasicStroke(2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
-            g2.drawLine(x + 4, y + 4, x + w - 4, y + h - 4)
-            g2.drawLine(x + w - 4, y + 4, x + 4, y + h - 4)
-        }
-    }
+    fun targetIcon(size: Int = 18) = ikon(Material2AL.ASSIGNMENT_TURNED_IN, size, LIME)
+
+    fun plusCircleIcon(size: Int = 18) = ikon(Material2AL.ADD_CIRCLE, size, ICON_CIRCLE_DARK)
+
+    fun pencilIcon(size: Int = 18): Icon = ikon(Material2AL.EDIT, size, LIME)
+
+    fun crossIcon(size: Int = 18): Icon = ikon(Material2AL.BACKSPACE, size, Color(0xCC, 0x46, 0x46))
+
     fun smallIconButton(icon: Icon, tooltip: String? = null, onClick: () -> Unit): JButton = JButton().apply {
         this.icon = icon
         toolTipText = tooltip
@@ -98,7 +70,7 @@ object UiStyles {
     val CARD_BORDER: Color = Color(0x26, 0x26, 0x26)        // surface-variant border
     val FG_PRIMARY: Color = Color(0xD8, 0xD8, 0xD8)         // on-surface
     val FG_SECONDARY: Color = Color(0xAD, 0xAA, 0xAA)       // on-surface-variant
-    val GREEN: Color = Color(0xA1, 0xFE, 0x00)              // primary-fixed
+    val GREEN: Color = Color(0xAF, 0xF6, 0x25)              // primary-fixed
     val YELLOW: Color = Color(0xFF, 0xD5, 0x4A)            // warning/emphasis
 
     // Sidebar specific palette (from mock)
@@ -120,62 +92,29 @@ object UiStyles {
     private val ICON_CIRCLE_DARK = Color(0x3C, 0x43, 0x00)   // deep olive circle
     private val ICON_PLUS_LIGHT = Color(0xED, 0xFF, 0xC8)    // pale lime for plus
 
-    // Transport icons
-    fun playIcon(size: Int = 28): Icon = object : Icon {
-        override fun getIconWidth() = size
-        override fun getIconHeight() = size
-        override fun paintIcon(c: Component?, g: Graphics?, x: Int, y: Int) {
-            val g2 = g as Graphics2D
-            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
-            g2.color = Color(0x1A, 0x2E, 0x00)
-            val w = size; val h = size
-            val px = x + (w * 0.28).toInt()
-            val py = y + (h * 0.18).toInt()
-            val p = Polygon()
-            p.addPoint(px, py)
-            p.addPoint(px, py + (h * 0.64).toInt())
-            p.addPoint(px + (w * 0.54).toInt(), y + h / 2)
-            g2.fillPolygon(p)
+    // Transport icons (prefer Ikonli Feather pack when available)
+    private fun ikon(ik: Ikon, size: Int, color: Color): Icon {
+        return try {
+            FontIcon.of(ik, size).also { it.iconColor = color }
+        } catch (_: Throwable) {
+            // Fallback: empty label icon of requested size; callers usually pair with background styling
+            object : Icon {
+                override fun getIconWidth() = size
+                override fun getIconHeight() = size
+                override fun paintIcon(c: Component?, g: Graphics?, x: Int, y: Int) {}
+            }
         }
     }
 
-    fun pauseIcon(size: Int = 28): Icon = object : Icon {
-        override fun getIconWidth() = size
-        override fun getIconHeight() = size
-        override fun paintIcon(c: Component?, g: Graphics?, x: Int, y: Int) {
-            val g2 = g as Graphics2D
-            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
-            g2.color = Color(0x1A, 0x2E, 0x00)
-            val w = size; val h = size
-            val barW = (w * 0.26).toInt()
-            val gap = (w * 0.16).toInt()
-            g2.fillRect(x + (w*0.16).toInt(), y + (h*0.16).toInt(), barW, (h*0.68).toInt())
-            g2.fillRect(x + (w*0.16).toInt() + barW + gap, y + (h*0.16).toInt(), barW, (h*0.68).toInt())
-        }
-    }
-    fun seekIcon(isRight: Boolean, size: Int = 20): Icon = object : Icon {
-        override fun getIconWidth() = size
-        override fun getIconHeight() = size
-        override fun paintIcon(c: Component?, g: Graphics?, x: Int, y: Int) {
-            val g2 = g as Graphics2D
-            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
-            g2.color = LIME
-            val w = size; val h = size
-            // simple chevron arrow
-            val p = Polygon()
-            if (isRight) {
-                p.addPoint(x + (w*0.25).toInt(), y + (h*0.15).toInt())
-                p.addPoint(x + (w*0.75).toInt(), y + h/2)
-                p.addPoint(x + (w*0.25).toInt(), y + (h*0.85).toInt())
-            } else {
-                p.addPoint(x + (w*0.75).toInt(), y + (h*0.15).toInt())
-                p.addPoint(x + (w*0.25).toInt(), y + h/2)
-                p.addPoint(x + (w*0.75).toInt(), y + (h*0.85).toInt())
-            }
-            g2.stroke = BasicStroke(4f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
-            g2.drawPolyline(p.xpoints, p.ypoints, 3)
-        }
-    }
+    fun playIcon(size: Int = 28) = ikon(Material2RoundMZ.PLAY_ARROW, size, Color(0x1A, 0x2E, 0x00))
+
+    fun pauseIcon(size: Int = 28) = ikon(Material2RoundMZ.PAUSE, size, Color(0x1A, 0x2E, 0x00))
+
+    fun seekRightIcon(size: Int = 18): Icon = ikon(Feather.CHEVRON_RIGHT, size, LIME)
+    fun seekLeftIcon(size: Int = 18): Icon = ikon(Feather.CHEVRON_LEFT, size, LIME)
+
+    fun forward5Icon(size: Int = 18): Icon = ikon(Feather.CHEVRONS_RIGHT, size, LIME)
+    fun backward5Icon(size: Int = 18): Icon = ikon(Feather.CHEVRONS_LEFT, size, LIME)
 
     fun squarePrimaryButton(icon: Icon, size: Int = 64, onClick: (() -> Unit)? = null): JButton {
         return object : JButton() {
@@ -275,49 +214,17 @@ object UiStyles {
     }
 
     // Small, simple icons for sidebar
-    fun folderIcon(size: Int = 20): Icon = object : Icon {
-        override fun getIconWidth() = size
-        override fun getIconHeight() = size
-        override fun paintIcon(c: Component?, g: Graphics?, x: Int, y: Int) {
-            val g2 = g as Graphics2D
-            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
-            g2.color = LIME
-            val w = size; val h = size
-            g2.fillRoundRect(x + w/10, y + h/4, (w*0.8).toInt(), (h*0.6).toInt(), 4, 4)
-            g2.fillRoundRect(x, y + h/5, (w*0.55).toInt(), (h*0.28).toInt(), 4, 4)
-        }
-    }
-    fun slidersIcon(size: Int = 20): Icon = object : Icon {
-        override fun getIconWidth() = size
-        override fun getIconHeight() = size
-        override fun paintIcon(c: Component?, g: Graphics?, x: Int, y: Int) {
-            val g2 = g as Graphics2D
-            g2.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE)
-            g2.color = LIME
-            g2.stroke = BasicStroke((size / 8f))
-            val w = size; val h = size
-            g2.drawLine(x + w/5, y + h/4, x + w - w/5, y + h/4)
-            g2.drawLine(x + w/5, y + h/2, x + w - w/5, y + h/2)
-            g2.drawLine(x + w/5, y + h - h/4, x + w - w/5, y + h - h/4)
-        }
-    }
-    fun exportIcon(size: Int = 20): Icon = object : Icon {
-        override fun getIconWidth() = size
-        override fun getIconHeight() = size
-        override fun paintIcon(c: Component?, g: Graphics?, x: Int, y: Int) {
-            val g2 = g as Graphics2D
-            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
-            g2.color = LIME
-            val w = size; val h = size
-            // box
-            g2.drawRoundRect(x + w/6, y + h/3, (w*0.66).toInt(), (h*0.5).toInt(), 4, 4)
-            // arrow up-right
-            g2.stroke = BasicStroke(2f)
-            g2.drawLine(x + w/3, y + h/2, x + w - w/5, y + h/3)
-            g2.drawLine(x + w - w/5, y + h/3, x + w - w/5 - w/6, y + h/3)
-            g2.drawLine(x + w - w/5, y + h/3, x + w - w/5, y + h/3 + h/6)
-        }
-    }
+    fun folderIcon(size: Int = 20): Icon = ikon(Material2MZ.SOURCE, size, LIME)
+
+    fun colorsIcon(size: Int = 20): Icon = ikon(Material2AL.COLOR_LENS, size, LIME)
+
+    fun exportIcon(size: Int = 20): Icon = ikon(Feather.FILM, size, LIME)
+
+    // Tab icon: Crop (prefer Ikonli Feather.CROP with fallback)
+    fun cropRotateIcon(size: Int = 20): Icon = ikon(Material2AL.CROP_ROTATE, size, LIME)
+
+    // Tab icon: Crop (prefer Ikonli Feather.CROP with fallback)
+    fun rallyIcon(size: Int = 20): Icon = ikon(Material2MZ.SPORTS_TENNIS, size, LIME)
 
     /** Primary CTA button with gradient; includes a leading circle-plus icon. */
     fun primaryButton(text: String, onClick: () -> Unit): JButton = object : JButton(text) {
@@ -344,7 +251,7 @@ object UiStyles {
         isRolloverEnabled = true
         border = BorderFactory.createEmptyBorder(10, 20, 10, 20)
         cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
-        icon = PlusInCircleIcon(18, ICON_CIRCLE_DARK, ICON_PLUS_LIGHT)
+        icon = plusCircleIcon(size = 22)
         iconTextGap = 10
         foreground = TEXT_ON_PRIMARY
         font = font.deriveFont(Font.BOLD, font.size2D + 1.5f)
@@ -367,13 +274,14 @@ object UiStyles {
     }.apply {
         addActionListener { onClick() }
         background = GREEN
-        foreground = Color.BLACK
+        foreground = TEXT_ON_PRIMARY
         isOpaque = false
         isContentAreaFilled = false
         isBorderPainted = false
         border = BorderFactory.createEmptyBorder(4, 10, 4, 10)
         font = font.deriveFont(Font.BOLD)
         isFocusPainted = false
+        cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
     }
 
     /** Secondary button: dark surface with thin rounded border, bold label. */

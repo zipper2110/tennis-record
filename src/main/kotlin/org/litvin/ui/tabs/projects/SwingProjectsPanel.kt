@@ -2,6 +2,7 @@ package org.litvin.ui.tabs.projects
 import org.litvin.*
 import org.litvin.ui.commons.Dialogs
 import org.litvin.ui.UiStyles
+import org.litvin.ui.UiStyles.GREEN
 
 import java.awt.*
 import java.awt.event.MouseAdapter
@@ -28,7 +29,7 @@ class SwingProjectsPanel : JPanel(BorderLayout()) {
     private val prefs: Preferences = Preferences.userNodeForPackage(SwingProjectsPanel::class.java)
 
     // Header controls
-    private val importBtn = primaryButton("IMPORT NEW MATCH") { onNewProject(this) }
+    private val importBtn = UiStyles.primaryButton("IMPORT NEW MATCH") { onNewProject(this) }
 
     // Scrolling content container for sections and list
     private val scrollContent = JPanel()
@@ -50,7 +51,7 @@ class SwingProjectsPanel : JPanel(BorderLayout()) {
     private val nextBtn = JButton("Next")
     private val pageLabel = JLabel("Page 1 / 1")
     private var currentPage = 1
-    private val pageSize = 12
+    private val pageSize = 10
     private var items: List<RecentsProvider.RecentEntry> = emptyList()
 
     var onProjectOpened: ((String) -> Unit)? = null
@@ -73,34 +74,44 @@ class SwingProjectsPanel : JPanel(BorderLayout()) {
         }
         add(header, BorderLayout.NORTH)
 
-        // Scroll content
-        scrollContent.layout = BoxLayout(scrollContent, BoxLayout.Y_AXIS)
-        scrollContent.isOpaque = false
-
+        // Content layout: top (current project + section header), center (scrollable list), bottom (pagination)
+        val topPanel = JPanel().apply {
+            isOpaque = false
+            layout = BoxLayout(this, BoxLayout.Y_AXIS)
+            // Add some breathing room before the Current Project block
+            border = BorderFactory.createEmptyBorder(12, 0, 0, 0)
+        }
+        topPanel.add(Box.createVerticalStrut(30))
         // Current Project section
-        scrollContent.add(sectionLabel("Current Project"))
-        scrollContent.add(Box.createVerticalStrut(6))
+        topPanel.add(sectionLabel("Current Project"))
+        topPanel.add(Box.createVerticalStrut(16))
         // Container for current project card (updated dynamically)
-        scrollContent.add(currentProjectContainer)
-        scrollContent.add(Box.createVerticalStrut(18))
+        topPanel.add(currentProjectContainer)
+        // Increase spacing after the Current Project block
+        topPanel.add(Box.createVerticalStrut(30))
         renderCurrentProjectCard()
-
         // Existing Projects section
-        scrollContent.add(sectionLabel("Recent Match Projects"))
-        scrollContent.add(Box.createVerticalStrut(8))
+        topPanel.add(sectionLabel("Recent Match Projects"))
+        topPanel.add(Box.createVerticalStrut(16))
 
-
-        // List container (added directly; outer scroll pane handles scrolling)
+        // List container (its own scroll pane so pagination stays fixed)
         listContainer.layout = BoxLayout(listContainer, BoxLayout.Y_AXIS)
         listContainer.isOpaque = false
         listContainer.alignmentX = 0f
-        scrollContent.add(listContainer)
-        scrollContent.add(Box.createVerticalStrut(8))
+        val listScroll = JScrollPane(listContainer).apply {
+            border = BorderFactory.createEmptyBorder()
+            isOpaque = false
+            viewport.isOpaque = false
+            verticalScrollBar.unitIncrement = 18
+            applyDarkScrollbar(this, background)
+        }
 
-        // Pagination bar
+        // Pagination bar (fixed at the bottom)
         val pagination = JPanel().apply {
             isOpaque = false
             layout = BoxLayout(this, BoxLayout.X_AXIS)
+            // Add top margin to separate the list and pagination block
+            border = BorderFactory.createEmptyBorder(12, 0, 0, 0)
             UiStyles.styleSecondary(prevBtn)
             UiStyles.styleSecondary(nextBtn)
             pageLabel.foreground = FG_SECONDARY
@@ -113,12 +124,18 @@ class SwingProjectsPanel : JPanel(BorderLayout()) {
             add(nextBtn)
             add(Box.createHorizontalGlue())
         }
-        scrollContent.add(pagination)
 
-        add(scrollContent.wrapIntoTransparent(), BorderLayout.CENTER)
+        // Assemble main content below header: a center panel hosting top section, scrollable list, and fixed pagination
+        val centerPanel = JPanel(BorderLayout()).apply {
+            isOpaque = false
+            add(topPanel, BorderLayout.NORTH)
+            add(listScroll, BorderLayout.CENTER)
+            add(pagination, BorderLayout.SOUTH)
+        }
+        add(centerPanel, BorderLayout.CENTER)
 
         // Initial data load
-        refreshRecents(false)
+        loadRecents(false)
     }
 
     // region — Rendering helpers
@@ -180,7 +197,7 @@ class SwingProjectsPanel : JPanel(BorderLayout()) {
 
     private fun sectionLabel(text: String): JComponent = JLabel(text).apply {
         font = font.deriveFont(Font.BOLD, font.size2D + 2f)
-        foreground = FG_PRIMARY
+        foreground = GREEN
         alignmentX = 0f
     }
 
@@ -241,6 +258,9 @@ class SwingProjectsPanel : JPanel(BorderLayout()) {
                 }
             }
         })
+        // Prevent vertical stretching of project cards when extra space is available
+        val prefH = card.preferredSize.height
+        card.maximumSize = Dimension(Int.MAX_VALUE, prefH)
         return card
     }
 
@@ -264,37 +284,7 @@ class SwingProjectsPanel : JPanel(BorderLayout()) {
         return sp
     }
 
-    private fun primaryButton(text: String, action: () -> Unit): JButton = object : JButton(text) {
-        override fun paintComponent(g: Graphics) {
-            val g2 = g as Graphics2D
-            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
-            val w = width
-            val h = height
-            val r = 12
-            val hover = model.isRollover
-            val pressed = model.isArmed && model.isPressed
-            val c1 = if (pressed) GRADIENT_START.darker() else if (hover) GRADIENT_START_HOVER else GRADIENT_START
-            val c2 = if (pressed) GRADIENT_END.darker() else if (hover) GRADIENT_END_HOVER else GRADIENT_END
-            val paint = GradientPaint(0f, 0f, c1, w.toFloat(), h.toFloat(), c2)
-            g2.paint = paint
-            g2.fillRoundRect(0, 0, w, h, r, r)
-            // draw children (icon + text)
-            super.paintComponent(g)
-        }
-    }.apply {
-        addActionListener { action() }
-        isOpaque = false
-        isContentAreaFilled = false
-        isBorderPainted = false
-        isRolloverEnabled = true
-        border = BorderFactory.createEmptyBorder(10, 20, 10, 20)
-        cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
-        icon = PlusInCircleIcon(18, ICON_CIRCLE_DARK, ICON_PLUS_LIGHT)
-        iconTextGap = 10
-        foreground = TEXT_ON_PRIMARY
-        font = font.deriveFont(Font.BOLD, font.size2D + 1.5f)
-        isFocusPainted = false
-    }
+
 
     private fun primarySmallButton(text: String, onClick: () -> Unit): JButton = JButton(text).apply {
         addActionListener { onClick() }
@@ -351,7 +341,7 @@ class SwingProjectsPanel : JPanel(BorderLayout()) {
 
     // region — Data & pagination
 
-    private fun refreshRecents(fromCache: Boolean) {
+    private fun loadRecents(fromCache: Boolean) {
         items = if (fromCache) RecentsProvider.current() else RecentsProvider.refresh()
         currentPage = 1
         renderList()
@@ -468,7 +458,7 @@ class SwingProjectsPanel : JPanel(BorderLayout()) {
             // Update current project card, recents & navigate
             currentProjectPath = manifestPath
             renderCurrentProjectCard()
-            refreshRecents(false)
+            loadRecents(false)
             onProjectOpened?.invoke(manifestPath)
         } catch (t: Throwable) {
             Dialogs.showError(parent, t, "Failed to create project")
@@ -509,7 +499,7 @@ class SwingProjectsPanel : JPanel(BorderLayout()) {
             // Update current project card, recents & navigate
             currentProjectPath = path
             renderCurrentProjectCard()
-            refreshRecents(false)
+            loadRecents(false)
             onProjectOpened?.invoke(path)
         } catch (t: Throwable) {
             Dialogs.showError(parentComponent, t, "Failed to open project")
@@ -526,7 +516,6 @@ class SwingProjectsPanel : JPanel(BorderLayout()) {
         private val CARD_BORDER = Color(0x26, 0x26, 0x26)        // surface-variant border
         private val FG_PRIMARY = Color(0xFF, 0xFF, 0xFF)         // on-surface
         private val FG_SECONDARY = Color(0xAD, 0xAA, 0xAA)       // on-surface-variant
-        private val GREEN = Color(0xA1, 0xFE, 0x00)              // primary-fixed
 
         // CTA gradient (mock: light lime to bright neon green)
         private val GRADIENT_START = Color(0xDD, 0xFF, 0xB0)     // #ddffb0

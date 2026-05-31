@@ -8,12 +8,13 @@ import kotlin.test.assertFailsWith
 class TimecodeTest {
     @Test
     fun format_basic() {
-        assertEquals("00:00:00.000", Timecode.format(0))
-        assertEquals("00:00:00.001", Timecode.format(1))
-        assertEquals("00:00:01.000", Timecode.format(1000))
-        assertEquals("00:01:00.000", Timecode.format(60_000))
-        assertEquals("01:00:00.000", Timecode.format(3_600_000))
-        assertEquals("10:09:08.007", Timecode.format(10*3_600_000L + 9*60_000L + 8_000L + 7L))
+        // Updated to show only 1 digit for milliseconds (tenths)
+        assertEquals("00:00:00.0", Timecode.format(0))
+        assertEquals("00:00:00.0", Timecode.format(1))
+        assertEquals("00:00:01.0", Timecode.format(1000))
+        assertEquals("00:01:00.0", Timecode.format(60_000))
+        assertEquals("01:00:00.0", Timecode.format(3_600_000))
+        assertEquals("10:09:08.0", Timecode.format(10*3_600_000L + 9*60_000L + 8_000L + 7L))
     }
 
     @Test

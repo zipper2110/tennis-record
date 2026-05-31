@@ -1,6 +1,6 @@
 package org.litvin
 
-import com.formdev.flatlaf.FlatLightLaf
+import com.formdev.flatlaf.FlatDarkLaf
 import org.litvin.ui.UiStyles
 import java.awt.*
 import java.util.prefs.Preferences
@@ -21,51 +21,45 @@ import org.litvin.ui.tabs.adjustments.SwingCropRotatePanel
  */
 object SwingMainApp {
     private const val CARD_PROJECTS = "projects"
-    private const val CARD_MARKUP = "markup"
+    private const val CARD_RALLIES = "markup"
     private const val CARD_EXPORT = "export"
     private const val CARD_SCORING = "scoring"
-    private const val CARD_ADJUSTMENTS = "adjustments"
+    private const val CARD_ADJ_COLORS = "adjustments"
     private const val CARD_ADJ_CROP_ROTATE = "adjustments-crop-rotate"
 
     @JvmStatic
     fun main(args: Array<String>) {
-        SwingUtilities.invokeLater(Runnable {
-            try {
-                UIManager.setLookAndFeel(FlatLightLaf())
-                UIManager.put("defaultFont", Font("Segoe UI", Font.PLAIN, 14))
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        })
+        try {
+            UIManager.setLookAndFeel(FlatDarkLaf())
+            UIManager.put("defaultFont", Font("Segoe UI", Font.PLAIN, 14))
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
 
         // HiDPI bootstrap — must be set BEFORE any AWT/Swing classes are initialized
-        try {
-            val javaSpec = (System.getProperty("java.specification.version") ?: "11").trim()
-            val major = javaSpec.toDoubleOrNull() ?: 11.0
+        val javaSpec = (System.getProperty("java.specification.version") ?: "11").trim()
+        val major = javaSpec.toDoubleOrNull() ?: 11.0
 
-            // Enable Java2D UI scaling support where available
-            if (System.getProperty("sun.java2d.uiScale.enabled") == null)
-                System.setProperty("sun.java2d.uiScale.enabled", "true")
+        // Enable Java2D UI scaling support where available
+        if (System.getProperty("sun.java2d.uiScale.enabled") == null)
+            System.setProperty("sun.java2d.uiScale.enabled", "true")
 
-            // IMPORTANT: For modern JDKs (9+) do NOT force dpiaware/uiScale — it can disable Windows scaling
-            if (major < 9) {
-                // Mark the app as DPI-aware on Windows (prevents blurry bitmap upscaling on JDK8)
-                if (System.getProperty("sun.java2d.dpiaware") == null)
-                    System.setProperty("sun.java2d.dpiaware", "true")
+        // IMPORTANT: For modern JDKs (9+) do NOT force dpiaware/uiScale — it can disable Windows scaling
+        if (major < 9) {
+            // Mark the app as DPI-aware on Windows (prevents blurry bitmap upscaling on JDK8)
+            if (System.getProperty("sun.java2d.dpiaware") == null)
+                System.setProperty("sun.java2d.dpiaware", "true")
 
-                // On Java 8, automatic scaling is unreliable: compute scale from screen DPI and force uiScale
-                if (System.getProperty("sun.java2d.uiScale") == null) {
-                    try {
-                        val dpi = java.awt.Toolkit.getDefaultToolkit().screenResolution.toDouble()
-                        val scale = dpi / 96.0
-                        if (scale >= 1.25) {
-                            val s = String.format(java.util.Locale.US, "%.2f", scale)
-                            System.setProperty("sun.java2d.uiScale", s)
-                        }
-                    } catch (_: Throwable) { /* ignore */ }
+            // On Java 8, automatic scaling is unreliable: compute scale from screen DPI and force uiScale
+            if (System.getProperty("sun.java2d.uiScale") == null) {
+                val dpi = Toolkit.getDefaultToolkit().screenResolution.toDouble()
+                val scale = dpi / 96.0
+                if (scale >= 1.25) {
+                    val s = String.format(java.util.Locale.US, "%.2f", scale)
+                    System.setProperty("sun.java2d.uiScale", s)
                 }
             }
-        } catch (_: Throwable) { /* ignore */ }
+        }
 
         // Font anti-aliasing hints (Windows 11 optimized; harmless on modern JDKs)
         // Allow override via system property or env var:
@@ -96,8 +90,6 @@ object SwingMainApp {
             System.setProperty("awt.useSystemAAFontSettings", "on")
         }
 
-        UIManager.setLookAndFeel(FlatLightLaf())
-
         // Keep all UI work on the EDT
         EventQueue.invokeLater {
             try {
@@ -108,9 +100,7 @@ object SwingMainApp {
                 }
 
                 // Try to hint Windows to use the High Performance GPU for Java/this app
-                try {
-                    WindowsGpuPreference.ensureHighPerformancePreference()
-                } catch (_: Throwable) { }
+                WindowsGpuPreference.ensureHighPerformancePreference()
 
                 // Base theming (Phase 0.4)
                 applyBaseTheme()
@@ -130,11 +120,11 @@ object SwingMainApp {
 
                 // Buttons with lime icons
                 lateinit var btnProjects: UiStyles.SidebarButton
-                lateinit var btnMarkup: UiStyles.SidebarButton
-                lateinit var btnAdjustments: UiStyles.SidebarButton
+                lateinit var btnRallies: UiStyles.SidebarButton
+                lateinit var btnColors: UiStyles.SidebarButton
                 lateinit var btnScoring: UiStyles.SidebarButton
                 lateinit var btnExport: UiStyles.SidebarButton
-                lateinit var btnAdjCropRotate: UiStyles.SidebarButton
+                lateinit var btnCropRotate: UiStyles.SidebarButton
 
                 fun addItem(b: UiStyles.SidebarButton) {
                     b.alignmentX = 0f
@@ -147,146 +137,110 @@ object SwingMainApp {
                 val cards = JPanel(CardLayout())
                 val cl = cards.layout as CardLayout
 
-                // Track current manifest path to pass to screens
-                var currentManifestPath: String? = null
-
                 // Projects screen (Swing Phase 2) and Markup (Phase 3)
-                var setActive: (String) -> Unit = {}
-                val markupPanel = SwingMarkupPanel()
-                val adjustmentsPanel = SwingAdjustmentsPanel()
+                val ralliesPanel = SwingMarkupPanel()
+                val colorsPanel = SwingAdjustmentsPanel()
                 val cropRotatePanel = SwingCropRotatePanel()
                 val scoringPanel = SwingScoringPanel()
                 val exportPanel = SwingExportPanel()
-                val projectsPanel = SwingProjectsPanel().apply {
-                    onProjectOpened = { path ->
-                        try {
-                            currentManifestPath = path
-                            markupPanel.setProjectManifest(path)
-                            adjustmentsPanel.setProjectManifest(path)
-                            scoringPanel.setProjectManifest(path)
-                            exportPanel.setProjectManifest(path)
-                            frame.title = "Tennis Record — Markup (Swing)"
-                            cl.show(cards, CARD_MARKUP)
-                            setActive(CARD_MARKUP)
-                            try { markupPanel.onActivated() } catch (_: Throwable) {}
-                        } catch (_: Throwable) { }
-                    }
-                }
-
-                cards.add(projectsPanel, CARD_PROJECTS)
-                cards.add(markupPanel, CARD_MARKUP)
-                cards.add(adjustmentsPanel, CARD_ADJUSTMENTS)
-                cards.add(cropRotatePanel, CARD_ADJ_CROP_ROTATE)
-                cards.add(scoringPanel, CARD_SCORING)
-                cards.add(exportPanel, CARD_EXPORT)
 
                 // Navigation helper with lifecycle wiring
                 var currentCard: String? = null
                 fun goTo(card: String) {
-                    try {
-                        // Pause media on panels being left
-                        when (currentCard) {
-                            CARD_MARKUP -> try { markupPanel.onDeactivated() } catch (_: Throwable) {}
-                            CARD_ADJUSTMENTS -> try { adjustmentsPanel.onDeactivated() } catch (_: Throwable) {}
-                            CARD_ADJ_CROP_ROTATE -> { /* no-op for now; add lifecycle hooks later */ }
-                            CARD_SCORING -> try { scoringPanel.onDeactivated() } catch (_: Throwable) {}
-                        }
-                        // Show target card
-                        cl.show(cards, card)
-                        // Update button active states
-                        setActive(card)
-                        // Activate the new panel (no autoplay)
-                        when (card) {
-                            CARD_MARKUP -> try { markupPanel.onActivated() } catch (_: Throwable) {}
-                            CARD_ADJUSTMENTS -> try { adjustmentsPanel.onActivated() } catch (_: Throwable) {}
-                            CARD_SCORING -> try { scoringPanel.onActivated() } catch (_: Throwable) {}
-                            CARD_EXPORT -> try { exportPanel.onActivated() } catch (_: Throwable) {}
-                        }
-                        currentCard = card
-                    } catch (_: Throwable) { }
+                    // Pause media on panels being left
+                    when (currentCard) {
+                        CARD_RALLIES -> ralliesPanel.onDeactivated()
+                        CARD_ADJ_COLORS -> colorsPanel.onDeactivated()
+                        CARD_ADJ_CROP_ROTATE -> { /* no-op for now; add lifecycle hooks later */ }
+                        CARD_SCORING -> scoringPanel.onDeactivated()
+                    }
+                    // Show target card
+                    cl.show(cards, card)
+                    // Activate the new panel (no autoplay)
+                    when (card) {
+                        CARD_RALLIES -> ralliesPanel.onActivated()
+                        CARD_ADJ_COLORS -> colorsPanel.onActivated()
+                        CARD_SCORING -> scoringPanel.onActivated()
+                        CARD_EXPORT -> exportPanel.onActivated()
+                    }
+                    // Update sidebar active state to reflect selected tab
+                    btnProjects.active = card == CARD_PROJECTS
+                    btnRallies.active = card == CARD_RALLIES
+                    btnColors.active = card == CARD_ADJ_COLORS
+                    btnCropRotate.active = card == CARD_ADJ_CROP_ROTATE
+                    btnScoring.active = card == CARD_SCORING
+                    btnExport.active = card == CARD_EXPORT
+                    currentCard = card
                 }
+
+                val projectsPanel = SwingProjectsPanel().apply {
+                    onProjectOpened = { path ->
+                        ralliesPanel.setProjectManifest(path)
+                        colorsPanel.setProjectManifest(path)
+                        scoringPanel.setProjectManifest(path)
+                        exportPanel.setProjectManifest(path)
+                        // Reveal other tabs now that a project is selected
+                        btnRallies.isVisible = true
+                        btnColors.isVisible = true
+                        btnCropRotate.isVisible = true
+                        btnScoring.isVisible = true
+                        btnExport.isVisible = true
+                        sidebar.revalidate(); sidebar.repaint()
+                        frame.title = "Tennis Record — Markup"
+                        goTo(CARD_RALLIES)
+                    }
+                }
+
+                cards.add(projectsPanel, CARD_PROJECTS)
+                cards.add(ralliesPanel, CARD_RALLIES)
+                cards.add(colorsPanel, CARD_ADJ_COLORS)
+                cards.add(cropRotatePanel, CARD_ADJ_CROP_ROTATE)
+                cards.add(scoringPanel, CARD_SCORING)
+                cards.add(exportPanel, CARD_EXPORT)
 
                 // Create sidebar items with icons and actions
                 btnProjects = UiStyles.sidebarButton("Projects", UiStyles.folderIcon()) {
-                    frame.title = "Tennis Record — Projects (Swing)"
+                    frame.title = "Tennis Record — Projects"
                     goTo(CARD_PROJECTS)
                 }
                 addItem(btnProjects)
 
-                btnMarkup = UiStyles.sidebarButton("Markup", UiStyles.slidersIcon()) {
-                    frame.title = "Tennis Record — Markup (Swing)"
-                    goTo(CARD_MARKUP)
+                btnColors = UiStyles.sidebarButton("Colors", UiStyles.colorsIcon()) {
+                    frame.title = "Tennis Record — Color"
+                    goTo(CARD_ADJ_COLORS)
                 }
-                addItem(btnMarkup)
+                addItem(btnColors)
 
-                btnAdjustments = UiStyles.sidebarButton("Adjustments", UiStyles.pencilIcon()) {
-                    frame.title = "Tennis Record — Adjustments (Swing)"
-                    goTo(CARD_ADJUSTMENTS)
-                }
-                addItem(btnAdjustments)
-
-                btnAdjCropRotate = UiStyles.sidebarButton("Crop/Rotate", UiStyles.slidersIcon()) {
-                    frame.title = "Tennis Record — Adjustments: Crop/Rotate (Swing)"
+                btnCropRotate = UiStyles.sidebarButton("Crop", UiStyles.cropRotateIcon()) {
+                    frame.title = "Tennis Record — Crop & Rotate"
                     goTo(CARD_ADJ_CROP_ROTATE)
                 }
-                addItem(btnAdjCropRotate)
+                addItem(btnCropRotate)
+
+                btnRallies = UiStyles.sidebarButton("Rallies", UiStyles.rallyIcon()) {
+                    frame.title = "Tennis Record — Rallies"
+                    goTo(CARD_RALLIES)
+                }
+                addItem(btnRallies)
 
                 btnScoring = UiStyles.sidebarButton("Scoring", UiStyles.targetIcon()) {
-                    frame.title = "Tennis Record — Scoring (Swing)"
+                    frame.title = "Tennis Record — Scoring"
                     goTo(CARD_SCORING)
                 }
                 addItem(btnScoring)
 
                 btnExport = UiStyles.sidebarButton("Export", UiStyles.exportIcon()) {
-                    frame.title = "Tennis Record — Export (Swing)"
+                    frame.title = "Tennis Record — Export"
                     goTo(CARD_EXPORT)
                 }
                 addItem(btnExport)
 
-                // Now that buttons exist, wire active-state updater
-                setActive = { card ->
-                    btnProjects.active = card == CARD_PROJECTS
-                    btnMarkup.active = card == CARD_MARKUP
-                    btnAdjustments.active = card == CARD_ADJUSTMENTS
-                    btnAdjCropRotate.active = card == CARD_ADJ_CROP_ROTATE
-                    btnScoring.active = card == CARD_SCORING
-                    btnExport.active = card == CARD_EXPORT
-                }
-
-                // Menu bar with File (Save All) and View navigation
-                val menuBar = JMenuBar()
-                // File menu
-                val fileMenu = JMenu("File")
-                val miSaveAll = JMenuItem("Save All")
-                try { miSaveAll.accelerator = KeyStroke.getKeyStroke("control S") } catch (_: Throwable) { }
-                miSaveAll.addActionListener {
-                    try { markupPanel.saveNow() } catch (_: Throwable) { }
-                    try { scoringPanel.saveNow() } catch (_: Throwable) { }
-                }
-                fileMenu.add(miSaveAll)
-                menuBar.add(fileMenu)
-                // View menu
-                val viewMenu = JMenu("View")
-                val miProjects = JMenuItem("Projects")
-                val miMarkup = JMenuItem("Markup")
-                val miAdjustments = JMenuItem("Adjustments")
-                val miAdjCropRotate = JMenuItem("Crop/Rotate")
-                val miScoring = JMenuItem("Scoring")
-                val miExport = JMenuItem("Export")
-                miProjects.addActionListener { btnProjects.doClick() }
-                miMarkup.addActionListener { btnMarkup.doClick() }
-                miAdjustments.addActionListener { btnAdjustments.doClick() }
-                miAdjCropRotate.addActionListener { btnAdjCropRotate.doClick() }
-                miScoring.addActionListener { btnScoring.doClick() }
-                miExport.addActionListener { btnExport.doClick() }
-                viewMenu.add(miProjects)
-                viewMenu.add(miMarkup)
-                viewMenu.add(miAdjustments)
-                viewMenu.add(miAdjCropRotate)
-                viewMenu.add(miScoring)
-                viewMenu.add(miExport)
-                menuBar.add(viewMenu)
-                frame.jMenuBar = menuBar
+                // Hide all non-project tabs until a project is opened
+                btnRallies.isVisible = false
+                btnColors.isVisible = false
+                btnCropRotate.isVisible = false
+                btnScoring.isVisible = false
+                btnExport.isVisible = false
 
                 frame.add(sidebar, BorderLayout.WEST)
                 frame.add(cards, BorderLayout.CENTER)
@@ -305,20 +259,6 @@ object SwingMainApp {
                     frame.setSize(1200, 800)
                     frame.setLocationRelativeTo(null)
                 }
-                // Persist window state on close + dispose resources
-//                frame.addWindowListener(object: java.awt.event.WindowAdapter() {
-//                    override fun windowClosing(e: java.awt.event.WindowEvent) {
-//                        try {
-//                            val b = frame.bounds
-//                            prefs.putInt("win.x", b.x)
-//                            prefs.putInt("win.y", b.y)
-//                            prefs.putInt("win.w", b.width)
-//                            prefs.putInt("win.h", b.height)
-//                            prefs.putInt("win.state", frame.extendedState)
-//                        } catch (_: Throwable) { }
-//                        try { markupPanel.dispose() } catch (_: Throwable) { }
-//                    }
-//                })
 
                 frame.isVisible = true
 
@@ -326,57 +266,46 @@ object SwingMainApp {
                 btnProjects.doClick()
 
                 // After setting GPU preference, inform user (mirrors JavaFX behavior)
-                try {
-                    if (WindowsGpuPreference.wasChangeApplied()) {
-                        JOptionPane.showMessageDialog(
-                            frame,
-                            "We set a Windows preference for this app to use the dedicated/external GPU on future launches.\n\n" +
-                                "Please restart the application now. If it still uses the integrated GPU, open Windows Graphics Settings → Graphics performance preference, or NVIDIA/AMD control panel, and force the high‑performance GPU for javaw.exe (or your packaged EXE).",
-                            "GPU preference set",
-                            JOptionPane.INFORMATION_MESSAGE
-                        )
-                    }
-                } catch (_: Throwable) { }
+                if (WindowsGpuPreference.wasChangeApplied()) {
+                    JOptionPane.showMessageDialog(
+                        frame,
+                        "We set a Windows preference for this app to use the dedicated/external GPU on future launches.\n\n" +
+                            "Please restart the application now. If it still uses the integrated GPU, open Windows Graphics Settings → Graphics performance preference, or NVIDIA/AMD control panel, and force the high‑performance GPU for javaw.exe (or your packaged EXE).",
+                        "GPU preference set",
+                        JOptionPane.INFORMATION_MESSAGE
+                    )
+                }
             } catch (t: Throwable) {
                 t.printStackTrace()
-                JOptionPane.showMessageDialog(null, t.message ?: t.toString(), "Startup error", JOptionPane.ERROR_MESSAGE)
+                JOptionPane.showMessageDialog(null, t.message ?: t.toString(),
+                    "Startup error", JOptionPane.ERROR_MESSAGE)
             }
         }
     }
 
-    private fun placeholderPanel(text: String): JPanel {
-        val panel = JPanel(BorderLayout())
-        val label = JLabel(text, SwingConstants.CENTER)
-        label.font = label.font.deriveFont(Font.BOLD, 20f)
-        panel.add(label, BorderLayout.CENTER)
-        return panel
-    }
-
-    // Phase 0.4 — base theming and HiDPI-friendly defaults
     private fun applyBaseTheme() {
         // Keep the previously set LAF (FlatLaf) — don't override it here.
         // Improve font rendering and set a consistent default font across components.
-        try {
-            // Prefer modern Segoe on Windows when available
-            val families = try { java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment().availableFontFamilyNames.toSet() } catch (_: Throwable) { emptySet() }
-            val family = when {
-                families.contains("Segoe UI Variable") -> "Segoe UI Variable"
-                families.contains("Segoe UI") -> "Segoe UI"
-                else -> "Tahoma"
-            }
-            val baseSize = (UIManager.getFont("Label.font")?.size2D ?: 13f).coerceAtLeast(13f)
-            val baseFont = Font(family, Font.PLAIN, baseSize.toInt())
 
-            // Apply to all UI defaults that are fonts
-            val keys = UIManager.getDefaults().keys()
-            while (keys.hasMoreElements()) {
-                val k = keys.nextElement()
-                if (k.toString().endsWith(".font")) {
-                    UIManager.put(k, baseFont)
-                }
+        // Prefer modern Segoe on Windows when available
+        val families = GraphicsEnvironment.getLocalGraphicsEnvironment().availableFontFamilyNames.toSet()
+        val family = when {
+            families.contains("Segoe UI Variable") -> "Segoe UI Variable"
+            families.contains("Segoe UI") -> "Segoe UI"
+            else -> "Tahoma"
+        }
+        val baseSize = (UIManager.getFont("Label.font")?.size2D ?: 13f).coerceAtLeast(13f)
+        val baseFont = Font(family, Font.PLAIN, baseSize.toInt())
+
+        // Apply to all UI defaults that are fonts
+        val keys = UIManager.getDefaults().keys()
+        while (keys.hasMoreElements()) {
+            val k = keys.nextElement()
+            if (k.toString().endsWith(".font")) {
+                UIManager.put(k, baseFont)
             }
-            UIManager.put("defaultFont", baseFont)
-        } catch (_: Throwable) { }
+        }
+        UIManager.put("defaultFont", baseFont)
 
         // Make tooltips nicer
         UIManager.put("ToolTip.hideAccelerator", true)

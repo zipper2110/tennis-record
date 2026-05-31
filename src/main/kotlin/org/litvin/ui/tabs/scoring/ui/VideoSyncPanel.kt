@@ -1,12 +1,9 @@
 package org.litvin.ui.tabs.scoring.ui
 
 import org.litvin.ui.UiStyles
-import org.litvin.ui.tabs.scoring.ScoringActions
-import org.litvin.ui.tabs.scoring.ScoringViewState
 import org.litvin.ui.tabs.scoring.VideoPlayerActions
 import java.awt.BorderLayout
 import java.awt.Color
-import java.awt.Container
 import java.awt.Dimension
 import java.awt.FlowLayout
 import javax.swing.Box
@@ -70,30 +67,29 @@ class VideoSyncPanel(
             b.minimumSize = Dimension(120, 40)
         }
 
-        val btnSeekBack10 = JButton()
+        val btnSeekBack5 = JButton()
         val btnSeekBack1 = JButton()
         val btnSeekFwd1 = JButton()
-        val btnSeekFwd10 = JButton()
-        styleSeekLarge(btnSeekBack10); styleSeek(btnSeekBack1); styleSeek(btnSeekFwd1); styleSeekLarge(btnSeekFwd10)
-        btnSeekBack10.icon = UiStyles.seekIcon(false, 18); btnSeekBack10.text = "-10s [shift+←]"
-        btnSeekBack1.icon = UiStyles.seekIcon(false, 18); btnSeekBack1.text = "-1s [←]"
-        btnSeekFwd1.icon = UiStyles.seekIcon(true, 18); btnSeekFwd1.text = "+1s [→]"
-        btnSeekFwd10.icon = UiStyles.seekIcon(true, 18); btnSeekFwd10.text = "+10s [shift+→]"
-        try {
-            btnSeekBack10.accessibleContext.accessibleName = "Seek back 10 seconds"
-            btnSeekBack1.accessibleContext.accessibleName = "Seek back 1 second"
-            btnSeekFwd1.accessibleContext.accessibleName = "Seek forward 1 second"
-            btnSeekFwd10.accessibleContext.accessibleName = "Seek forward 10 seconds"
-        } catch (_: Throwable) {}
-        btnSeekBack10.horizontalTextPosition = SwingConstants.RIGHT
+        val btnSeekFwd5 = JButton()
+        styleSeekLarge(btnSeekBack5); styleSeek(btnSeekBack1); styleSeek(btnSeekFwd1); styleSeekLarge(btnSeekFwd5)
+        btnSeekBack5.icon = UiStyles.backward5Icon();
+        btnSeekBack5.text = "-10s [shift+←]"
+        btnSeekBack1.icon = UiStyles.seekLeftIcon();
+        btnSeekBack1.text = "-1s [←]"
+        btnSeekFwd1.icon = UiStyles.seekRightIcon();
+        btnSeekFwd1.text = "+1s [→]"
+        btnSeekFwd5.icon = UiStyles.forward5Icon();
+        btnSeekFwd5.text = "+10s [shift+→]"
+
+        btnSeekBack5.horizontalTextPosition = SwingConstants.RIGHT
         btnSeekBack1.horizontalTextPosition = SwingConstants.RIGHT
         btnSeekFwd1.horizontalTextPosition = SwingConstants.LEFT
-        btnSeekFwd10.horizontalTextPosition = SwingConstants.LEFT
+        btnSeekFwd5.horizontalTextPosition = SwingConstants.LEFT
         // Wire actions
-        btnSeekBack10.addActionListener { actions.seekBy(-10_000) }
+        btnSeekBack5.addActionListener { actions.seekBy(-5_000) }
         btnSeekBack1.addActionListener { actions.seekBy(-1_000) }
         btnSeekFwd1.addActionListener { actions.seekBy(1_000) }
-        btnSeekFwd10.addActionListener { actions.seekBy(10_000) }
+        btnSeekFwd5.addActionListener { actions.seekBy(5_000) }
 
         playPauseBtn = UiStyles.squarePrimaryButton(UiStyles.playIcon(28)) { actions.playPause() }
         try {
@@ -103,11 +99,11 @@ class VideoSyncPanel(
         } catch (_: Throwable) {}
 
         // Assemble row similar to Markup
-        transport.add(btnSeekBack10); transport.add(Box.createHorizontalStrut(6))
+        transport.add(btnSeekBack5); transport.add(Box.createHorizontalStrut(6))
         transport.add(btnSeekBack1); transport.add(Box.createHorizontalStrut(12))
         transport.add(playPauseBtn); transport.add(Box.createHorizontalStrut(12))
         transport.add(btnSeekFwd1); transport.add(Box.createHorizontalStrut(6))
-        transport.add(btnSeekFwd10)
+        transport.add(btnSeekFwd5)
 
         // Speed row
         val speedRow = JPanel(FlowLayout(FlowLayout.CENTER, 8, 0))
@@ -117,7 +113,6 @@ class VideoSyncPanel(
         UiStyles.styleComboBox(speedCombo)
         speedCombo.isFocusable = true
         speedCombo.name = "speed-dropdown"
-        try { speedCombo.accessibleContext.accessibleName = "Playback speed" } catch (_: Throwable) {}
         speedCombo.toolTipText = "Use ↑/↓ to change speed"
         speedCombo.addActionListener {
             val idx = speedCombo.selectedIndex.coerceIn(0, speedPresets.lastIndex)

@@ -35,7 +35,7 @@ class SwingCropRotatePanel : JPanel(BorderLayout()) {
         name = "adj-cr-left-header"
         isOpaque = true
         background = UiStyles.DARK_BG
-        val title = javax.swing.JLabel("Crop & Rotate")
+        val title = javax.swing.JLabel("Crop")
         title.foreground = java.awt.Color.WHITE
         val resetBtn = javax.swing.JButton("Reset")
         // Action will be wired by later tasks; for now it's a placeholder per T2

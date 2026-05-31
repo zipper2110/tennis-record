@@ -65,8 +65,7 @@ class SwingMarkupPanel : JPanel(BorderLayout()) {
     private var keybindings: Keybindings? = null
 
     // Fixed sizing constants (right panel/cards)
-    private val RIGHT_PANEL_WIDTH = 420
-
+    private val RIGHT_PANEL_WIDTH = 340
 
     // Idle UI refresher to keep time label and timeline handle in sync when paused/seeking
     private val idleUiTimer = Timer(100) { _ ->

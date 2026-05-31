@@ -48,10 +48,14 @@ class TransportBar(
         }
         styleSeekLarge(btnSeekBack10); styleSeek(btnSeekBack1); styleSeek(btnSeekFwd1); styleSeekLarge(btnSeekFwd10)
 
-        btnSeekBack10.icon = UiStyles.seekIcon(false, 18); btnSeekBack10.text = "-5s [shift+←]"
-        btnSeekBack1.icon = UiStyles.seekIcon(false, 18); btnSeekBack1.text = "-1s [←]"
-        btnSeekFwd1.icon = UiStyles.seekIcon(true, 18); btnSeekFwd1.text = "+1s [→]"
-        btnSeekFwd10.icon = UiStyles.seekIcon(true, 18); btnSeekFwd10.text = "+5s [shift+→]"
+        btnSeekBack10.icon = UiStyles.backward5Icon();
+        btnSeekBack10.text = "-5s [shift+←]"
+        btnSeekBack1.icon = UiStyles.seekLeftIcon();
+        btnSeekBack1.text = "-1s [←]"
+        btnSeekFwd1.icon = UiStyles.seekRightIcon();
+        btnSeekFwd1.text = "+1s [→]"
+        btnSeekFwd10.icon = UiStyles.forward5Icon();
+        btnSeekFwd10.text = "+5s [shift+→]"
 
         btnSeekBack10.toolTipText = "Shift+Left"
         btnSeekBack1.toolTipText = "Left"
