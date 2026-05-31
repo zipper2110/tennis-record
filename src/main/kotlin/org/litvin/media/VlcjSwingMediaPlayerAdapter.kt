@@ -100,7 +100,7 @@ class VlcjSwingMediaPlayerAdapter {
                 // Try toggling adjust mode; if it throws, not supported
                 mediaPlayer.video().setAdjustVideo(true)
                 // Try a harmless no-op set to ensure setter exists
-                mediaPlayer.video().setBrightness(0.0f)
+                mediaPlayer.video().setBrightness(AdjustmentsUiConverter.DEFAULTS.brightness)
                 true
             } catch (_: Throwable) {
                 false

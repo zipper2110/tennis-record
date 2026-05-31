@@ -64,18 +64,21 @@ object FFmpegCommandBuilder {
             if (adj == null) return null
             val wb = adj.whiteBalance
             // Convert model (VLCJ-oriented) scale → FFmpeg eq scale:
-            // - Model brightness is [0..3] with identity 1.0; FFmpeg expects [-1..+1] with identity 0.0 → b_ff = (b_model - 1)
-            // - Contrast and saturation are multipliers already (identity 1.0) → pass through (with clamp to eq supported ranges)
+            // - Model brightness is VLC-style [0..2] with identity 1.0. FFmpeg's eq brightness is much stronger,
+            //   so damp the offset for VLC preview parity.
+            // - Contrast is close enough to pass through for the app's [0..2] range.
+            // - Saturation is not perceptually equivalent: preserve desaturation exactly, but damp boosted values for VLC preview parity.
             // - Gamma derived from tint (identity 1.0) and slight saturation tweak from temperature for preview parity.
-            val bModel = adj.brightness // [~0..3], identity 1.0 in current UI/model mapping
-            val cModel = adj.contrast   // [~0..3], identity 1.0
-            var sModel = adj.saturation // [~0..3], identity 1.0
+            val bModel = adj.brightness // [~0..2], identity 1.0 in current UI/model mapping
+            val cModel = adj.contrast   // [~0..2], identity 1.0
+            var sModel = adj.saturation // [~0..2], identity 1.0
             val gamma = 1.0 + ((wb?.tint ?: 0.0f).toDouble() * 0.2)
             sModel += ((wb?.temperature ?: 0.0f) * 0.05f)
             // Map and clamp
-            val bc = (bModel - 1.0f).coerceIn(-1.0f, 1.0f).toDouble()
+            val bc = ((bModel - 1.0f) * 0.39f).coerceIn(-1.0f, 1.0f).toDouble()
             val cc = cModel.coerceIn(0.0f, 3.0f).toDouble()
-            val sc = sModel.coerceIn(0.0f, 3.0f).toDouble()
+            val sClamped = sModel.coerceIn(0.0f, 3.0f).toDouble()
+            val sc = if (sClamped <= 1.0) sClamped else 1.0 + ((sClamped - 1.0) * 0.5)
             val gc = gamma.coerceIn(0.1, 10.0)
             val isIdentity = (Math.abs(bc) < 1e-6) && (Math.abs(cc - 1.0) < 1e-6) && (Math.abs(sc - 1.0) < 1e-6) && (Math.abs(gc - 1.0) < 1e-6)
             if (isIdentity) return null

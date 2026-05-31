@@ -78,17 +78,35 @@ class FFmpegCommandBuilderAdjustmentsScaleTest {
     }
 
     @Test
-    fun brightness_extremes_map_to_eq_bounds() {
-        // Low end: model 0.0 -> eq -1.0
+    fun brightness_extremes_are_damped_for_ffmpeg_preview_parity() {
+        // Low end: model 0.0 -> eq about -0.39, not -1.0, because ffmpeg eq is much stronger than VLC preview.
         var vf = buildVf(AdjustmentsV1(brightness = 0.0f, contrast = 1.0f, saturation = 1.0f, whiteBalance = WhiteBalanceV1(0f, 0f)))
         var eq = parseEqMap(vf)!!
         val bLow = eq["brightness"]!!.toDouble()
-        assertTrue(bLow <= -0.999 || kotlin.math.abs(bLow + 1.0) < 1e-3, "Expected ~-1.0, was $bLow (vf=$vf)")
+        assertTrue(kotlin.math.abs(bLow + 0.39) < 1e-3, "Expected ~-0.39, was $bLow (vf=$vf)")
 
-        // High end: model 3.0 -> eq +1.0
-        vf = buildVf(AdjustmentsV1(brightness = 3.0f, contrast = 1.0f, saturation = 1.0f, whiteBalance = WhiteBalanceV1(0f, 0f)))
+        // High end: model 2.0 -> eq about +0.39
+        vf = buildVf(AdjustmentsV1(brightness = 2.0f, contrast = 1.0f, saturation = 1.0f, whiteBalance = WhiteBalanceV1(0f, 0f)))
         eq = parseEqMap(vf)!!
         val bHigh = eq["brightness"]!!.toDouble()
-        assertTrue(bHigh >= 0.999 || kotlin.math.abs(bHigh - 1.0) < 1e-3, "Expected ~+1.0, was $bHigh (vf=$vf)")
+        assertTrue(kotlin.math.abs(bHigh - 0.39) < 1e-3, "Expected ~+0.39, was $bHigh (vf=$vf)")
+    }
+
+    @Test
+    fun boosted_saturation_is_damped_for_ffmpeg_preview_parity() {
+        val vf = buildVf(AdjustmentsV1(brightness = 1.0f, contrast = 1.0f, saturation = 2.0f, whiteBalance = WhiteBalanceV1(0f, 0f)))
+        val eq = parseEqMap(vf)!!
+        val saturation = eq["saturation"]!!.toDouble()
+
+        assertTrue(kotlin.math.abs(saturation - 1.5) < 1e-3, "Expected saturation boost to map to ~1.5, was $saturation (vf=$vf)")
+    }
+
+    @Test
+    fun full_desaturation_stays_grayscale() {
+        val vf = buildVf(AdjustmentsV1(brightness = 1.0f, contrast = 1.0f, saturation = 0.0f, whiteBalance = WhiteBalanceV1(0f, 0f)))
+        val eq = parseEqMap(vf)!!
+        val saturation = eq["saturation"]!!.toDouble()
+
+        assertTrue(kotlin.math.abs(saturation) < 1e-3, "Expected saturation 0.0 to stay grayscale, was $saturation (vf=$vf)")
     }
 }

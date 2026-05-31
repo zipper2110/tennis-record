@@ -49,7 +49,7 @@ class AdjustmentsIOTest {
 
         val readBack = AdjustmentsIO.read(adjPath)
         assertEquals(1, readBack.version)
-        assertEquals(0.0f, readBack.brightness)
+        assertEquals(1.0f, readBack.brightness)
         assertEquals(1.0f, readBack.contrast)
         assertEquals(1.0f, readBack.saturation)
         assertEquals(null, readBack.whiteBalance)

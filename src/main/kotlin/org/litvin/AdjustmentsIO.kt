@@ -31,8 +31,8 @@ data class WhiteBalanceV1(
  */
 data class AdjustmentsV1(
     // Color
-    val brightness: Float = 0.0f,  // [-1.0, +1.0] offset; identity is 0.0
-    val contrast: Float = 1.0f,    // [0.0, 3.0]
+    val brightness: Float = 1.0f,  // [0.0, 2.0] VLC-style multiplier; identity is 1.0
+    val contrast: Float = 1.0f,    // [0.0, 2.0]
     val saturation: Float = 1.0f,  // [0.0, 3.0]
     val whiteBalance: WhiteBalanceV1? = null, // optional; default identity
 
