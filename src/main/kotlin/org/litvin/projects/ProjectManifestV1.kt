@@ -1,4 +1,4 @@
-package org.litvin
+package org.litvin.projects
 
 /**
  * Project manifest schema v1 (stored as JSON in project.trproj).
@@ -11,11 +11,11 @@ package org.litvin
  * - version: manifest schema version (always 1 for v1)
  * - sourceVideo: optional absolute path to the selected source video file
  */
- data class ProjectManifestV1(
+data class ProjectManifestV1(
     val id: String,
     val name: String,
     val createdAt: String,
     val lastOpenedAt: String,
     val version: Int = 1,
     val sourceVideo: String? = null,
- )
+)

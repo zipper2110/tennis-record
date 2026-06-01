@@ -3,6 +3,7 @@ import org.litvin.*
 import org.litvin.markup.EdlIO
 import org.litvin.markup.EdlV1
 import org.litvin.markup.PointV1
+import org.litvin.projects.ManifestIO
 import org.litvin.scoring.Outcome
 import org.litvin.scoring.ScoreIO
 import org.litvin.scoring.ScoreV1

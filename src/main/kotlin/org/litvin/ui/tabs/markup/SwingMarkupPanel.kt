@@ -1,7 +1,7 @@
 package org.litvin.ui.tabs.markup
 
 import org.litvin.GeometryViewportPanel
-import org.litvin.ManifestIO
+import org.litvin.projects.ManifestIO
 import org.litvin.adjustments.AdjustmentsStore
 import org.litvin.markup.EdlIO
 import org.litvin.markup.EdlV1

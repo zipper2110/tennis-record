@@ -27,6 +27,8 @@ Allowed directions (subset order):
 
 ## UI component conventions
 - Encapsulate business logic or visual style in focused components with clear APIs.
+- Prefer extracting repeated or cohesive UI widgets into separate component classes instead of keeping them as builder methods inside a tab panel.
+- Keep theme-level colors in `UiStyles`; UI components should consume shared style constants instead of defining local palettes.
 - Favor composition over inheritance; keep components testable.
 - Prefer immutable value objects for inputs/outputs where practical.
 
@@ -77,6 +79,8 @@ Allowed directions (subset order):
 
 ## UI component conventions
 - Encapsulate business logic or visual style in focused components with clear APIs.
+- Prefer extracting repeated or cohesive UI widgets into separate component classes instead of keeping them as builder methods inside a tab panel.
+- Keep theme-level colors in `UiStyles`; UI components should consume shared style constants instead of defining local palettes.
 - Favor composition over inheritance; keep components testable.
 - Prefer immutable value objects for inputs/outputs where practical.
 

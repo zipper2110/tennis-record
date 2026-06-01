@@ -11,7 +11,7 @@ import org.litvin.ui.tabs.markup.SwingMarkupPanel
 import org.litvin.ui.tabs.scoring.SwingScoringPanel
 import org.litvin.ui.tabs.export.SwingExportPanel
 import org.litvin.ui.tabs.adjustments.SwingColorAdjustmentsPanel
-import org.litvin.ui.tabs.adjustments.SwingCropRotatePanel
+import org.litvin.ui.tabs.crop.SwingCropRotatePanel
 
 
 /**
@@ -143,23 +143,27 @@ object SwingMainApp {
                 val cropRotatePanel = SwingCropRotatePanel()
                 val scoringPanel = SwingScoringPanel()
                 val exportPanel = SwingExportPanel()
+                lateinit var projectsPanel: SwingProjectsPanel
 
                 // Navigation helper with lifecycle wiring
                 var currentCard: String? = null
                 fun goTo(card: String) {
                     // Pause media on panels being left
                     when (currentCard) {
+                        CARD_PROJECTS -> projectsPanel.onDeactivated()
                         CARD_RALLIES -> ralliesPanel.onDeactivated()
                         CARD_ADJ_COLORS -> colorsPanel.onDeactivated()
-                        CARD_ADJ_CROP_ROTATE -> { /* no-op for now; add lifecycle hooks later */ }
+                        CARD_ADJ_CROP_ROTATE -> cropRotatePanel.onDeactivated()
                         CARD_SCORING -> scoringPanel.onDeactivated()
                     }
                     // Show target card
                     cl.show(cards, card)
                     // Activate the new panel (no autoplay)
                     when (card) {
+                        CARD_PROJECTS -> projectsPanel.onActivated()
                         CARD_RALLIES -> ralliesPanel.onActivated()
                         CARD_ADJ_COLORS -> colorsPanel.onActivated()
+                        CARD_ADJ_CROP_ROTATE -> cropRotatePanel.onActivated()
                         CARD_SCORING -> scoringPanel.onActivated()
                         CARD_EXPORT -> exportPanel.onActivated()
                     }
@@ -173,10 +177,11 @@ object SwingMainApp {
                     currentCard = card
                 }
 
-                val projectsPanel = SwingProjectsPanel().apply {
+                projectsPanel = SwingProjectsPanel().apply {
                     onProjectOpened = { path ->
                         ralliesPanel.setProjectManifest(path)
                         colorsPanel.setProjectManifest(path)
+                        cropRotatePanel.setProjectManifest(path)
                         scoringPanel.setProjectManifest(path)
                         exportPanel.setProjectManifest(path)
                         // Reveal other tabs now that a project is selected

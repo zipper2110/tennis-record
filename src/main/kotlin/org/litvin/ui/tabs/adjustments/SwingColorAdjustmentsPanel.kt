@@ -1,6 +1,6 @@
 package org.litvin.ui.tabs.adjustments
 
-import org.litvin.ManifestIO
+import org.litvin.projects.ManifestIO
 import org.litvin.media.PlayerStatus
 import org.litvin.media.VlcjSwingMediaPlayerAdapter
 import org.litvin.adjustments.AdjustmentsV1
