@@ -45,6 +45,7 @@ class Keybindings(
         bind("SPACE", "markup.toggle") { actions.toggle() }
         bind("C", "markup.pointStart") { actions.startAtPlayhead() }
         bind("V", "markup.pointEnd") { actions.endAtPlayhead() }
+        bind("A", "markup.toggleFavorite") { actions.toggleFavoriteSelected() }
         bind("DELETE", "markup.delete") { actions.deleteSelected() }
         // Seeks (nudge)
         bind("LEFT", "markup.seekLeft") { actions.nudge(-1_000) }
@@ -73,6 +74,7 @@ interface MarkupKeyActions {
     fun toggle()
     fun startAtPlayhead()
     fun endAtPlayhead()
+    fun toggleFavoriteSelected()
     fun deleteSelected()
     fun nudge(deltaMs: Long)
 }

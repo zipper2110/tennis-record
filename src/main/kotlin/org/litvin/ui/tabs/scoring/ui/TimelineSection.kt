@@ -1,6 +1,7 @@
 package org.litvin.ui.tabs.scoring.ui
 
 import org.litvin.markup.PointV1
+import org.litvin.scoring.Outcome
 import org.litvin.ui.tabs.scoring.NavigationActions
 import java.awt.BorderLayout
 import javax.swing.JPanel
@@ -29,11 +30,19 @@ class TimelineSection(
         list.onSelect = { idx, _ ->
             actions.navigateToPoint(idx)
         }
+        list.onToggleFavorite = { idx ->
+            actions.toggleFavorite(idx)
+        }
     }
 
     /** Provide list data to render (legacy DTOs used by the adapted list). */
-    fun setList(points: List<PointV1>, scoredIds: Set<String>) {
-        list.setData(points, scoredIds)
+    fun setList(
+        points: List<PointV1>,
+        outcomesByPointId: Map<String, Outcome>,
+        p1ColorHex: String,
+        p2ColorHex: String,
+    ) {
+        list.setData(points, outcomesByPointId, p1ColorHex, p2ColorHex)
     }
 
     /** Programmatically update selection (userInitiated controls behavior like scroll-focus). */

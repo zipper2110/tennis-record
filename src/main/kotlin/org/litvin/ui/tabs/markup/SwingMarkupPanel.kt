@@ -5,6 +5,7 @@ import org.litvin.projects.ManifestIO
 import org.litvin.adjustments.AdjustmentsStore
 import org.litvin.markup.EdlIO
 import org.litvin.markup.EdlV1
+import org.litvin.markup.PointV1
 import org.litvin.markup.components.MarkupDispatcher
 import org.litvin.media.PlayerStatus
 import org.litvin.media.VlcjSwingMediaPlayerAdapter
@@ -55,11 +56,12 @@ class SwingMarkupPanel : JPanel(BorderLayout()) {
     // UI controls
     private var transport: TransportControls
 
-    private val countBadge = JLabel("0 MARKED")
+    private val countBadge = JLabel("0 MARKED / 0 FAV")
 
     // Cards view (replaces legacy inline cards list)
     private var cardsView: PointsCardsView
     private var selectedVisualIndex: Int = -1 // visual index within composed list (pending at 0 when present)
+    private var reloadingPointsFromProject: Boolean = false
 
     // Consolidated keybindings helper
     private var keybindings: Keybindings? = null
@@ -76,7 +78,9 @@ class SwingMarkupPanel : JPanel(BorderLayout()) {
 
     // Lifecycle hooks controlled by navigation
     fun onActivated() {
+        refreshPointsFromProject()
         ensurePlayerLoaded()
+        player.activatePreview("markup activated")
         player.pause()
 
         // Do not auto-play; optionally restore focus to player area
@@ -86,7 +90,9 @@ class SwingMarkupPanel : JPanel(BorderLayout()) {
     }
 
     fun onDeactivated() {
+        saveNow()
         player.pause()
+        player.deactivatePreview("markup deactivated")
     }
 
     private fun ensurePlayerLoaded() {
@@ -101,9 +107,9 @@ class SwingMarkupPanel : JPanel(BorderLayout()) {
             isMediaLoaded = true
             // Re-apply current adjustments after media is loaded to ensure VLC picks them up
             try {
-                val cur = AdjustmentsStore.get()
-                player.applyColorAdjustments(cur)
-                player.applyGeometryAdjustments(cur)
+                val current = AdjustmentsStore.get()
+                player.applyPreviewAdjustments(current)
+                geometryViewport.refreshGeometry()
             } catch (_: Throwable) { /* ignore */ }
         } catch (t: Throwable) {
             if (!loadErrorShown) {
@@ -123,7 +129,12 @@ class SwingMarkupPanel : JPanel(BorderLayout()) {
 
         val dto = list.map { p ->
             PointDto(
-                id = p.id, startMs = p.startMs.toLong(), endMs = p.endMs.toLong(), label = p.label, flags = emptySet()
+                id = p.id,
+                startMs = p.startMs.toLong(),
+                endMs = p.endMs.toLong(),
+                label = p.label,
+                flags = emptySet(),
+                favorite = p.favorite,
             )
         }
         val autos = AutosaveState(pending = autosave.isPending(), lastSavedAtMs = autosave.lastSavedAtMs)
@@ -229,6 +240,10 @@ class SwingMarkupPanel : JPanel(BorderLayout()) {
             override fun deletePoint(id: String) { /* not used here */
             }
 
+            override fun toggleFavorite(id: String) {
+                this@SwingMarkupPanel.toggleFavorite(id)
+            }
+
             override fun selectByVisualIndex(index: Int) {
                 this@SwingMarkupPanel.setSelectedVisualAndScroll(index)
             }
@@ -265,15 +280,13 @@ class SwingMarkupPanel : JPanel(BorderLayout()) {
         center.leftComponent = leftColumn
         // Subscribe to central adjustments store to live-apply color and geometry
         val unsub = AdjustmentsStore.subscribe { adj ->
-            player.applyColorAdjustments(adj)
-            player.applyGeometryAdjustments(adj)
+            player.applyPreviewAdjustments(adj)
+            geometryViewport.refreshGeometry()
         }
         // Apply current state immediately
-        val cur = AdjustmentsStore.get()
-        player.applyColorAdjustments(cur)
-        player.applyGeometryAdjustments(cur)
-        // Store unsubscribe handle on the component for cleanup on removal
-        geometryViewport.putClientProperty("adj_unsub", unsub)
+        val currentAdjustments = AdjustmentsStore.get()
+        player.applyPreviewAdjustments(currentAdjustments)
+        geometryViewport.refreshGeometry()
 
         val rightPanel = JPanel(BorderLayout())
         rightPanel.minimumSize = Dimension(RIGHT_PANEL_WIDTH, 0)
@@ -327,6 +340,10 @@ class SwingMarkupPanel : JPanel(BorderLayout()) {
                 dispatcher.deletePoint(id)
             }
 
+            override fun toggleFavorite(id: String) {
+                this@SwingMarkupPanel.toggleFavorite(id)
+            }
+
             override fun selectByVisualIndex(index: Int) {
                 setSelectedVisualAndScroll(index)
             }
@@ -377,12 +394,13 @@ class SwingMarkupPanel : JPanel(BorderLayout()) {
 
         // Dispatcher callback to refresh UI for all leaf components
         dispatcher.onPointsChanged = {
+            val skipAutosave = reloadingPointsFromProject
             EventQueue.invokeLater {
                 val pts = dispatcher.getCompletedPoints()
-                countBadge.text = "${pts.size} MARKED"
+                updateCountBadge(pts)
                 pushCardsState()
                 timeline.repaint()
-                scheduleAutosave()
+                if (!skipAutosave) scheduleAutosave()
             }
         }
 
@@ -409,6 +427,10 @@ class SwingMarkupPanel : JPanel(BorderLayout()) {
                 player.seek(newTime)
                 EventQueue.invokeLater { refreshUiAtCurrentTime(); player.component.requestFocusInWindow() }
 
+            }
+
+            override fun toggleFavoriteSelected() {
+                toggleFavoriteSelectedPoint()
             }
         })
 
@@ -450,7 +472,41 @@ class SwingMarkupPanel : JPanel(BorderLayout()) {
     // Build cards list based on dispatcher state (pending + completed)
     private fun rebuildCards() {
         // Delegated to leaf components now
+        updateCountBadge(dispatcher.getCompletedPoints())
         pushCardsState()
+    }
+
+    private fun updateCountBadge(points: List<PointV1>) {
+        countBadge.text = "${points.size} MARKED / ${points.count { it.favorite }} FAV"
+    }
+
+    private fun refreshPointsFromProject() {
+        val dir = projectDir ?: return
+        val currentPoints = dispatcher.getCompletedPoints()
+        val selectedId = currentPoints.getOrNull(selectedVisualIndex)?.id
+        val wasPendingSelected = dispatcher.getPendingStart() != null && selectedVisualIndex == currentPoints.size
+        try {
+            val edl = EdlIO.readForProjectDir(dir)
+            reloadingPointsFromProject = true
+            dispatcher.setPoints(edl.points)
+        } catch (t: Throwable) {
+            Dialogs.showError(this, t, "Failed to refresh point markers")
+            return
+        } finally {
+            reloadingPointsFromProject = false
+        }
+
+        val refreshedPoints = dispatcher.getCompletedPoints()
+        val restoredIndex = selectedId?.let { id -> refreshedPoints.indexOfFirst { it.id == id } } ?: -1
+        when {
+            restoredIndex >= 0 -> setSelectedVisualAndScroll(restoredIndex)
+            wasPendingSelected && dispatcher.getPendingStart() != null -> setSelectedVisualAndScroll(refreshedPoints.size)
+            selectedVisualIndex in refreshedPoints.indices -> setSelectedVisual(selectedVisualIndex)
+            else -> setSelectedVisual(-1)
+        }
+        updateCountBadge(refreshedPoints)
+        pushCardsState()
+        timeline.repaint()
     }
 
 
@@ -487,6 +543,22 @@ class SwingMarkupPanel : JPanel(BorderLayout()) {
         val p = pts[dataIndex]
         player.seek(p.startMs.toLong())
         EventQueue.invokeLater { refreshUiAtCurrentTime(); player.component.requestFocusInWindow() }
+    }
+
+    private fun toggleFavoriteSelectedPoint() {
+        val sel = selectedVisualIndex
+        if (sel < 0) return
+        val pts = dispatcher.getCompletedPoints()
+        if (sel !in pts.indices) return
+        toggleFavorite(pts[sel].id)
+    }
+
+    private fun toggleFavorite(id: String) {
+        if (dispatcher.toggleFavorite(id)) {
+            pushCardsState()
+            timeline.repaint()
+            scheduleAutosave()
+        }
     }
 
     private fun autoActivatePoint(t: Long) {

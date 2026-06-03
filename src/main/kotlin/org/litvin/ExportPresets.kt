@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.SerializationFeature
 import com.fasterxml.jackson.module.kotlin.KotlinModule
 import com.fasterxml.jackson.module.kotlin.readValue
+import io.github.oshai.kotlinlogging.KotlinLogging
 import java.io.File
 
 // Lightweight DTOs for export presets (Task 3.2)
@@ -40,6 +41,8 @@ data class ExportPreset(
 )
 
 object ExportPresetsIO {
+    private val logger = KotlinLogging.logger {}
+
     private val mapper: ObjectMapper = ObjectMapper()
         .registerModule(KotlinModule.Builder().build())
         .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
@@ -102,7 +105,7 @@ object ExportPresetsIO {
             val f = File(path)
             if (!f.exists()) defaultPresets() else mapper.readValue(f)
         } catch (t: Throwable) {
-            System.err.println("[WARN] Failed to read presets from $path: ${t.message}. Using defaults.")
+            logger.warn(t) { "Failed to read presets from $path. Using defaults." }
             defaultPresets()
         }
     }

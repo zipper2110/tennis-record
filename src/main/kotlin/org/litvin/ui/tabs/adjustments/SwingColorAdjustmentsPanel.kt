@@ -1,5 +1,6 @@
 package org.litvin.ui.tabs.adjustments
 
+import org.litvin.GeometryViewportPanel
 import org.litvin.projects.ManifestIO
 import org.litvin.media.PlayerStatus
 import org.litvin.media.VlcjSwingMediaPlayerAdapter
@@ -51,6 +52,7 @@ class SwingColorAdjustmentsPanel : JPanel(BorderLayout()) {
         background = java.awt.Color.BLACK
         minimumSize = Dimension(640, 360)
     }
+    private val geometryViewport = GeometryViewportPanel(player.component)
     private val transportPanel = JPanel(java.awt.BorderLayout()).apply {
         name = "adj-color-transport"
         isOpaque = true
@@ -96,8 +98,8 @@ class SwingColorAdjustmentsPanel : JPanel(BorderLayout()) {
     }
 
     init {
-        // Embed VLCJ video component into viewport
-        viewportPanel.add(player.component, BorderLayout.CENTER)
+        // Embed VLCJ video component through the shared geometry viewport.
+        viewportPanel.add(geometryViewport, BorderLayout.CENTER)
 
         // Populate transport: play/pause, time labels, seek slider
         playPauseBtn = UiStyles.squarePrimaryButton(UiStyles.playIcon(28)) { togglePlayPause() }.apply {
@@ -152,7 +154,7 @@ class SwingColorAdjustmentsPanel : JPanel(BorderLayout()) {
         colorResetBtn =
             JButton("Reset").apply { name = "adj-color-reset"; toolTipText = "Reset Color Grade to defaults" }
         colorResetBtn.addActionListener {
-            AdjustmentsStore.set { prev -> AdjustmentsUiConverter.DEFAULTS }
+            AdjustmentsStore.set { prev -> mergeColorInto(prev, AdjustmentsUiConverter.DEFAULTS) }
         }
         val headerRight2 = JPanel(java.awt.FlowLayout(java.awt.FlowLayout.RIGHT, 8, 4)).apply {
             isOpaque = true
@@ -214,9 +216,10 @@ class SwingColorAdjustmentsPanel : JPanel(BorderLayout()) {
         sliders.forEach { slider ->
             slider.addChangeListener {
                 if (!updatingFromModel) {
-                    val adjustments = uiToModel()
+                    val color = uiToModel()
+                    val adjustments = mergeColorInto(AdjustmentsStore.get(), color)
                     applyPreview(adjustments)
-                    AdjustmentsStore.set { prev -> adjustments }
+                    AdjustmentsStore.set { prev -> mergeColorInto(prev, color) }
                 }
             }
         }
@@ -254,7 +257,8 @@ class SwingColorAdjustmentsPanel : JPanel(BorderLayout()) {
     }
 
     fun applyPreview(adjustments: AdjustmentsV1) {
-        player.applyColorAdjustments(adjustments)
+        player.applyPreviewAdjustments(adjustments)
+        geometryViewport.refreshGeometry()
     }
 
     // Build right controls for T4
@@ -297,8 +301,8 @@ class SwingColorAdjustmentsPanel : JPanel(BorderLayout()) {
             saturationSlider.value = sliderValues.saturation.coerceIn(saturationSlider.minimum, saturationSlider.maximum)
             tempSlider.value = sliderValues.temperature
             tintSlider.value = sliderValues.tint
-            // Also update live preview
-            applyPreview(uiToModel())
+            // Also update live preview, preserving geometry from the shared model.
+            applyPreview(adjustments)
         } finally {
             updatingFromModel = false
         }
@@ -362,6 +366,7 @@ class SwingColorAdjustmentsPanel : JPanel(BorderLayout()) {
                     scrubBar.setRange(0L, dur)
                     scrubBar.setPosition(player.currentTimeMs())
                 }
+                applyPreview(AdjustmentsStore.get())
                 updatePlayPauseUi()
             }
         }
@@ -426,6 +431,8 @@ class SwingColorAdjustmentsPanel : JPanel(BorderLayout()) {
     }
 
     fun onActivated() {
+        ensurePlayerLoaded()
+        player.activatePreview("color adjustments activated")
         // Subscribe to adjustments changes to reflect external updates and live-apply preview (T6)
         unsubscribeStore?.invoke()
         unsubscribeStore = AdjustmentsStore.subscribe { adj ->
@@ -437,10 +444,20 @@ class SwingColorAdjustmentsPanel : JPanel(BorderLayout()) {
 
     fun onDeactivated() {
         player.pause()
+        player.deactivatePreview("color adjustments deactivated")
         unsubscribeStore?.invoke(); unsubscribeStore = null
         // Persist current adjustments immediately when leaving the tab
         val dir = projectManifestPath?.let { File(it).parentFile?.absolutePath }
         AdjustmentsStore.save(dir)
+    }
+
+    private fun mergeColorInto(base: AdjustmentsV1, color: AdjustmentsV1): AdjustmentsV1 {
+        return base.copy(
+            brightness = color.brightness,
+            contrast = color.contrast,
+            saturation = color.saturation,
+            whiteBalance = color.whiteBalance,
+        )
     }
 
 }

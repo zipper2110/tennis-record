@@ -42,6 +42,7 @@ interface NavigationActions {
     // Timeline / selection
     fun navigateToPoint(index: Int)
     fun advanceToNextPoint()
+    fun toggleFavorite(index: Int)
 }
 
 /** Immutable snapshot of the Scoring tab state consumed by components. */

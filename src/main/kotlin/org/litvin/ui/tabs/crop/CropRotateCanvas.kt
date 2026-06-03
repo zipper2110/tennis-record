@@ -1,5 +1,6 @@
 package org.litvin.ui.tabs.crop
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import org.litvin.adjustments.AdjustmentsV1
 import org.litvin.adjustments.CropGeometryMath
 import org.litvin.adjustments.CropRect
@@ -28,6 +29,10 @@ import kotlin.math.max
 class CropRotateCanvas(
     private val onAdjustmentsChanged: (AdjustmentsV1) -> Unit,
 ) : JComponent() {
+    private companion object {
+        private val logger = KotlinLogging.logger {}
+    }
+
     private enum class HitTarget {
         NONE, MOVE, N, S, E, W, NW, NE, SW, SE, ROTATE
     }
@@ -84,7 +89,7 @@ class CropRotateCanvas(
             g2.dispose()
             if (System.getProperty("tennisrecord.crop.debug") == "true") {
                 val paintMs = (System.nanoTime() - start) / 1_000_000L
-                if (paintMs > 16L) println("Crop/rotate paint=${paintMs}ms")
+                if (paintMs > 16L) logger.debug { "Crop/rotate paint=${paintMs}ms" }
             }
         }
     }

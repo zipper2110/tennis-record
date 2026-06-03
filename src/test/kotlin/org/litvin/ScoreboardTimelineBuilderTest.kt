@@ -77,4 +77,29 @@ class ScoreboardTimelineBuilderTest {
         // And points should be reset to 0/0, so avoid showing 15/30/40/Ad; check for "pts 0"
         assertTrue(t5.contains("pts 0"), "Expected points reset in new game: $t5")
     }
+
+    @Test
+    fun timeline_exportFilter_emitsOnlyFavoritesButScoresFromAllPoints() {
+        val points = listOf(
+            pts("A", 0, 1_000),
+            pts("B", 2_000, 3_000),
+            pts("C", 4_000, 5_000),
+        )
+        val outcomes = mapOf(
+            "A" to Outcome.P1,
+            "B" to Outcome.P1,
+        )
+
+        val spans = ScoreboardTimelineBuilder.build(
+            points = points,
+            outcomes = outcomes,
+            idleTrim = true,
+            exportedPointIds = setOf("C"),
+        )
+
+        assertEquals(1, spans.size)
+        assertEquals(0L, spans[0].startMs)
+        assertEquals(1_000L, spans[0].endMs)
+        assertTrue(spans[0].text.contains("pts 30"), "Expected score before C to include A and B outcomes: ${spans[0].text}")
+    }
 }

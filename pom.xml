@@ -101,6 +101,16 @@
             <artifactId>vlcj</artifactId>
             <version>4.12.1</version>
         </dependency>
+        <dependency>
+            <groupId>io.github.oshai</groupId>
+            <artifactId>kotlin-logging-jvm</artifactId>
+            <version>8.0.02</version>
+        </dependency>
+        <dependency>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>logback-classic</artifactId>
+            <version>1.5.18</version>
+        </dependency>
         <!-- JNA is required by VLCJ to access native libraries (VLC) -->
         <dependency>
             <groupId>com.formdev</groupId>
@@ -115,12 +125,12 @@
         <dependency>
             <groupId>net.java.dev.jna</groupId>
             <artifactId>jna</artifactId>
-            <version>5.14.0</version>
+            <version>5.18.1</version>
         </dependency>
         <dependency>
             <groupId>net.java.dev.jna</groupId>
             <artifactId>jna-platform</artifactId>
-            <version>5.14.0</version>
+            <version>5.18.1</version>
         </dependency>
         <dependency>
             <groupId>org.kordamp.ikonli</groupId>

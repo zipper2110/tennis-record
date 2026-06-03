@@ -1,6 +1,7 @@
 package org.litvin
 
 import com.formdev.flatlaf.FlatDarkLaf
+import io.github.oshai.kotlinlogging.KotlinLogging
 import org.litvin.ui.UiStyles
 import java.awt.*
 import java.util.prefs.Preferences
@@ -12,6 +13,7 @@ import org.litvin.ui.tabs.scoring.SwingScoringPanel
 import org.litvin.ui.tabs.export.SwingExportPanel
 import org.litvin.ui.tabs.adjustments.SwingColorAdjustmentsPanel
 import org.litvin.ui.tabs.crop.SwingCropRotatePanel
+import org.litvin.ui.tabs.test.SwingTestPanel
 
 
 /**
@@ -20,12 +22,15 @@ import org.litvin.ui.tabs.crop.SwingCropRotatePanel
  * This runs alongside the existing JavaFX app during migration.
  */
 object SwingMainApp {
+    private val logger = KotlinLogging.logger {}
+
     private const val CARD_PROJECTS = "projects"
     private const val CARD_RALLIES = "markup"
     private const val CARD_EXPORT = "export"
     private const val CARD_SCORING = "scoring"
     private const val CARD_ADJ_COLORS = "adjustments"
     private const val CARD_ADJ_CROP_ROTATE = "adjustments-crop-rotate"
+    private const val CARD_TEST = "test"
 
     @JvmStatic
     fun main(args: Array<String>) {
@@ -33,7 +38,7 @@ object SwingMainApp {
             UIManager.setLookAndFeel(FlatDarkLaf())
             UIManager.put("defaultFont", Font("Segoe UI", Font.PLAIN, 14))
         } catch (e: Exception) {
-            e.printStackTrace()
+            logger.warn(e) { "Failed to initialize FlatLaf look and feel." }
         }
 
         // HiDPI bootstrap — must be set BEFORE any AWT/Swing classes are initialized
@@ -95,7 +100,7 @@ object SwingMainApp {
             try {
                 // Global Swing uncaught error handler → show friendly dialog
                 Thread.setDefaultUncaughtExceptionHandler { _, e ->
-                    e.printStackTrace()
+                    logger.error(e) { "Unexpected uncaught Swing error." }
                     Dialogs.showError(null, e, "Unexpected error")
                 }
 
@@ -125,6 +130,7 @@ object SwingMainApp {
                 lateinit var btnScoring: UiStyles.SidebarButton
                 lateinit var btnExport: UiStyles.SidebarButton
                 lateinit var btnCropRotate: UiStyles.SidebarButton
+                var btnTest: UiStyles.SidebarButton? = null
 
                 fun addItem(b: UiStyles.SidebarButton) {
                     b.alignmentX = 0f
@@ -143,6 +149,8 @@ object SwingMainApp {
                 val cropRotatePanel = SwingCropRotatePanel()
                 val scoringPanel = SwingScoringPanel()
                 val exportPanel = SwingExportPanel()
+                val testEnabled = System.getProperty("test") == "true"
+                val testPanel = if (testEnabled) SwingTestPanel() else null
                 lateinit var projectsPanel: SwingProjectsPanel
 
                 // Navigation helper with lifecycle wiring
@@ -155,6 +163,7 @@ object SwingMainApp {
                         CARD_ADJ_COLORS -> colorsPanel.onDeactivated()
                         CARD_ADJ_CROP_ROTATE -> cropRotatePanel.onDeactivated()
                         CARD_SCORING -> scoringPanel.onDeactivated()
+                        CARD_TEST -> testPanel?.onDeactivated()
                     }
                     // Show target card
                     cl.show(cards, card)
@@ -166,6 +175,7 @@ object SwingMainApp {
                         CARD_ADJ_CROP_ROTATE -> cropRotatePanel.onActivated()
                         CARD_SCORING -> scoringPanel.onActivated()
                         CARD_EXPORT -> exportPanel.onActivated()
+                        CARD_TEST -> testPanel?.onActivated()
                     }
                     // Update sidebar active state to reflect selected tab
                     btnProjects.active = card == CARD_PROJECTS
@@ -174,6 +184,7 @@ object SwingMainApp {
                     btnCropRotate.active = card == CARD_ADJ_CROP_ROTATE
                     btnScoring.active = card == CARD_SCORING
                     btnExport.active = card == CARD_EXPORT
+                    btnTest?.active = card == CARD_TEST
                     currentCard = card
                 }
 
@@ -184,12 +195,14 @@ object SwingMainApp {
                         cropRotatePanel.setProjectManifest(path)
                         scoringPanel.setProjectManifest(path)
                         exportPanel.setProjectManifest(path)
+                        testPanel?.setProjectManifest(path)
                         // Reveal other tabs now that a project is selected
                         btnRallies.isVisible = true
                         btnColors.isVisible = true
                         btnCropRotate.isVisible = true
                         btnScoring.isVisible = true
                         btnExport.isVisible = true
+                        btnTest?.isVisible = true
                         sidebar.revalidate(); sidebar.repaint()
                         frame.title = "Tennis Record — Markup"
                         goTo(CARD_RALLIES)
@@ -202,6 +215,9 @@ object SwingMainApp {
                 cards.add(cropRotatePanel, CARD_ADJ_CROP_ROTATE)
                 cards.add(scoringPanel, CARD_SCORING)
                 cards.add(exportPanel, CARD_EXPORT)
+                if (testPanel != null) {
+                    cards.add(testPanel, CARD_TEST)
+                }
 
                 // Create sidebar items with icons and actions
                 btnProjects = UiStyles.sidebarButton("Projects", UiStyles.folderIcon()) {
@@ -239,6 +255,14 @@ object SwingMainApp {
                     goTo(CARD_EXPORT)
                 }
                 addItem(btnExport)
+
+                if (testEnabled) {
+                    btnTest = UiStyles.sidebarButton("Test", UiStyles.targetIcon()) {
+                        frame.title = "Tennis Record — Test"
+                        goTo(CARD_TEST)
+                    }
+                    addItem(btnTest!!)
+                }
 
                 // Hide all non-project tabs until a project is opened
                 btnRallies.isVisible = false
@@ -281,7 +305,7 @@ object SwingMainApp {
                     )
                 }
             } catch (t: Throwable) {
-                t.printStackTrace()
+                logger.error(t) { "Application startup failed." }
                 JOptionPane.showMessageDialog(null, t.message ?: t.toString(),
                     "Startup error", JOptionPane.ERROR_MESSAGE)
             }

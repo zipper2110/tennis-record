@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.SerializationFeature
 import com.fasterxml.jackson.module.kotlin.KotlinModule
 import com.fasterxml.jackson.module.kotlin.readValue
+import io.github.oshai.kotlinlogging.KotlinLogging
 import java.io.File
 import java.util.UUID
 
@@ -26,6 +27,7 @@ data class PointV1(
     val endMs: Int,
     val label: String? = null,
     val notes: String? = null,
+    val favorite: Boolean = false,
 )
 
 /**
@@ -42,6 +44,8 @@ data class EdlV1(
  * - Ignores unknown fields on read.
  */
 object EdlIO {
+    private val logger = KotlinLogging.logger {}
+
     private val mapper: ObjectMapper = ObjectMapper()
         .registerModule(KotlinModule.Builder().build())
         .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
@@ -79,7 +83,7 @@ object EdlIO {
     fun write(edlFilePath: String, edl: EdlV1) {
         val (fixedPoints, changed) = ensureUniqueIds(edl.points)
         if (changed) {
-            println("[EDL][NOTICE] Repaired missing/duplicate point ids before save; changes will be persisted")
+            logger.info { "Repaired missing/duplicate point ids before save; changes will be persisted" }
         }
         mapper.writeValue(File(edlFilePath), edl.copy(points = fixedPoints))
     }
@@ -91,7 +95,7 @@ object EdlIO {
         val raw: EdlV1 = mapper.readValue(f)
         val (fixedPoints, changed) = ensureUniqueIds(raw.points)
         if (changed) {
-            println("[EDL][NOTICE] Backfilled/repaired point ids while loading; will persist on next autosave")
+            logger.info { "Backfilled/repaired point ids while loading; will persist on next autosave" }
         }
         return raw.copy(points = fixedPoints)
     }

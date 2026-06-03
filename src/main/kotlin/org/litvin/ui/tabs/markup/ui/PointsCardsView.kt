@@ -237,6 +237,14 @@ class PointsCardsView(
                 isOpaque = false
                 layout = BoxLayout(this, BoxLayout.X_AXIS)
             }
+            val favBtn = UiStyles.smallIconButton(UiStyles.favoriteIcon(18, p.favorite), "Favorite [A]") {
+                actions.toggleFavorite(p.id)
+            }.apply {
+                name = "favorite-point-${p.id}"
+                text = "[A]"
+                font = font.deriveFont(Font.BOLD, 10f)
+                foreground = if (p.favorite) UiStyles.YELLOW else UiStyles.FG_SECONDARY
+            }
             val editBtn = UiStyles.smallIconButton(UiStyles.pencilIcon(), "Edit times/label") {
                 try {
                     EditPointDialog.show(this@PointsCardsView, p, actions)
@@ -250,17 +258,24 @@ class PointsCardsView(
                 } catch (_: Throwable) {
                 }
             }
+            actionsPanel.add(favBtn)
+            actionsPanel.add(Box.createHorizontalStrut(8))
             actionsPanel.add(editBtn)
             actionsPanel.add(Box.createHorizontalStrut(8))
             actionsPanel.add(delBtn)
-            actionsPanel.isVisible = false
+            favBtn.isVisible = p.favorite
+            editBtn.isVisible = false
+            delBtn.isVisible = false
+            actionsPanel.isVisible = true
             card.add(actionsPanel, BorderLayout.EAST)
 
             // Hover behavior: show actions on hover; hide only when mouse truly leaves the card area (not when moving to children)
             val toggle = object : MouseAdapter() {
                 private fun show() {
-                    if (!actionsPanel.isVisible) {
-                        actionsPanel.isVisible = true
+                    if (!favBtn.isVisible || !editBtn.isVisible || !delBtn.isVisible) {
+                        favBtn.isVisible = true
+                        editBtn.isVisible = true
+                        delBtn.isVisible = true
                         card.revalidate(); card.repaint()
                     }
                 }
@@ -275,7 +290,9 @@ class PointsCardsView(
                                 if (rect.contains(pointer)) return@invokeLater // still inside the card → keep visible
                             }
                         } catch (_: Throwable) { }
-                        actionsPanel.isVisible = false
+                        favBtn.isVisible = p.favorite
+                        editBtn.isVisible = false
+                        delBtn.isVisible = false
                         card.revalidate(); card.repaint()
                     }
                 }
@@ -285,6 +302,7 @@ class PointsCardsView(
             // Attach to card and key children so moving between them doesn't hide the panel
             card.addMouseListener(toggle)
             actionsPanel.addMouseListener(toggle)
+            favBtn.addMouseListener(toggle)
             editBtn.addMouseListener(toggle)
             delBtn.addMouseListener(toggle)
         }

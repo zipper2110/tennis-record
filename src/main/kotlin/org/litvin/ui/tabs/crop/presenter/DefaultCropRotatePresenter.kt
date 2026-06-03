@@ -1,5 +1,6 @@
 package org.litvin.ui.tabs.crop.presenter
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import org.litvin.adjustments.AdjustmentsStore
 import org.litvin.adjustments.AdjustmentsV1
 import org.litvin.media.StillFrameCaptureService
@@ -16,6 +17,10 @@ import java.util.concurrent.atomic.AtomicInteger
 class DefaultCropRotatePresenter(
     private val frameService: StillFrameCaptureService = VlcjStillFrameCaptureService(),
 ) : CropRotatePresenter {
+    private companion object {
+        private val logger = KotlinLogging.logger {}
+    }
+
     private val executor: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor { runnable ->
         Thread(runnable, "crop-rotate-frame-capture").apply { isDaemon = true }
     }
@@ -219,6 +224,6 @@ class DefaultCropRotatePresenter(
         if (samples.isEmpty()) return
         val p50 = samples[(samples.size * 0.50).toInt().coerceIn(0, samples.lastIndex)]
         val p95 = samples[(samples.size * 0.95).toInt().coerceIn(0, samples.lastIndex)]
-        println("Crop/rotate seek->frame p50=${p50}ms p95=${p95}ms samples=${samples.size}")
+        logger.debug { "Crop/rotate seek->frame p50=${p50}ms p95=${p95}ms samples=${samples.size}" }
     }
 }

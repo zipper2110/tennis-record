@@ -1,6 +1,7 @@
 package org.litvin.ui.tabs.scoring.ui
 
 import org.litvin.markup.PointV1
+import org.litvin.scoring.Outcome
 import org.litvin.ui.tabs.scoring.NavigationActions
 import org.litvin.ui.tabs.scoring.ScoringActions
 import java.awt.BorderLayout
@@ -55,7 +56,7 @@ class LeftListPanel(
     init {
         background = Color(0x15, 0x15, 0x15)
         border = BorderFactory.createMatteBorder(0, 0, 0, 1, Color(0x48, 0x48, 0x47, 0x33))
-        preferredSize = Dimension(240, 0) // Fixed left list width per spec (was ~320 px)
+        preferredSize = Dimension(280, 0)
 
         add(timeline, BorderLayout.CENTER)
 
@@ -244,8 +245,13 @@ class LeftListPanel(
     }
 
     // API
-    fun setList(points: List<PointV1>, scoredIds: Set<String>) {
-        timeline.setList(points, scoredIds)
+    fun setList(
+        points: List<PointV1>,
+        outcomesByPointId: Map<String, Outcome>,
+        p1ColorHex: String,
+        p2ColorHex: String,
+    ) {
+        timeline.setList(points, outcomesByPointId, p1ColorHex, p2ColorHex)
     }
 
     fun setSelectedIndex(index: Int, userInitiated: Boolean) {

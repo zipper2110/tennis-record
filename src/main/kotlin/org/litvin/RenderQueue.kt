@@ -1,5 +1,6 @@
 package org.litvin
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import org.litvin.markup.PointV1
 import java.util.UUID
 import java.util.concurrent.CopyOnWriteArrayList
@@ -30,6 +31,7 @@ data class RenderJob(
     val outHeight: Int,
     val encoderLabel: String,
     val idleTrim: Boolean,
+    val favoriteOnly: Boolean = false,
     val includeScoreboard: Boolean = false,
     val overlayTimeline: List<OverlaySpan> = emptyList(),
     val outputPath: String,
@@ -56,6 +58,8 @@ data class ActiveQueueSnapshot(
  * Exposes observer callbacks for UI to refresh immediately on state changes.
  */
 object RenderQueueManager {
+    private val logger = KotlinLogging.logger {}
+
     // public read-only view
     @Volatile private var currentJob: RenderJob? = null
     private val queue = LinkedBlockingQueue<RenderJob>()
@@ -75,11 +79,25 @@ object RenderQueueManager {
         val proc = currentProc
         val job = currentJob
         if (proc != null && job != null && job.status == RenderStatus.RUNNING) {
-            println("[QUEUE] Cancel requested for id=${job.id}")
+            logger.info { "Cancel requested for render job id=${job.id}" }
             currentCanceled = true
             try { proc.destroy() } catch (_: Throwable) { }
             try { proc.destroyForcibly() } catch (_: Throwable) { }
         }
+    }
+
+    /** Cancel a job that is still waiting in the queue. */
+    fun cancelQueued(jobId: String): Boolean {
+        val job = queue.toList().firstOrNull { it.id == jobId && it.status == RenderStatus.QUEUED }
+            ?: return false
+        val removed = queue.remove(job)
+        if (removed) {
+            logger.info { "Canceled queued render job id=${job.id}" }
+            job.status = RenderStatus.CANCELED
+            job.updatedAtEpochMs = System.currentTimeMillis()
+            notifyObservers()
+        }
+        return removed
     }
 
     fun addObserver(cb: (ActiveQueueSnapshot) -> Unit) {
@@ -105,7 +123,7 @@ object RenderQueueManager {
     }
 
     fun enqueue(job: RenderJob) {
-        println("[QUEUE] Enqueue job id=${job.id} → ${job.outputPath}")
+        logger.info { "Enqueue render job id=${job.id} -> ${job.outputPath}" }
         job.status = RenderStatus.QUEUED
         job.updatedAtEpochMs = System.currentTimeMillis()
         queue.put(job)
@@ -116,7 +134,7 @@ object RenderQueueManager {
     private fun ensureWorker() {
         if (started.compareAndSet(false, true)) {
             Thread({ workerLoop() }, "RenderQueue-Worker").apply { isDaemon = true }.start()
-            println("[QUEUE] Worker started")
+            logger.info { "Render queue worker started" }
         }
     }
 
@@ -127,7 +145,7 @@ object RenderQueueManager {
                 currentJob = job
                 job.status = RenderStatus.RUNNING
                 job.updatedAtEpochMs = System.currentTimeMillis()
-                println("[QUEUE] RUNNING id=${job.id} → ${job.outputPath} (${job.encoderLabel} / ${job.outWidth}x${job.outHeight})")
+                logger.info { "Render job running id=${job.id} -> ${job.outputPath} (${job.encoderLabel} / ${job.outWidth}x${job.outHeight})" }
                 notifyObservers()
 
                 // Task 3.8.1 — Actual rendering engine (ffmpeg execution)
@@ -144,7 +162,7 @@ object RenderQueueManager {
                     job.failureReason = "Source file missing: ${job.sourcePath}"
                     job.stderrTail = null
                     job.updatedAtEpochMs = System.currentTimeMillis()
-                    println("[QUEUE][ERROR] ${job.failureReason}")
+                    logger.error { job.failureReason.orEmpty() }
                     notifyObservers()
                     currentJob = null
                     notifyObservers()
@@ -162,7 +180,7 @@ object RenderQueueManager {
                     job.failureReason = "Cannot write to output directory: ${outDir.absolutePath} — ${ex.javaClass.simpleName}: ${ex.message}"
                     job.stderrTail = null
                     job.updatedAtEpochMs = System.currentTimeMillis()
-                    System.err.println("[QUEUE][ERROR] ${job.failureReason}")
+                    logger.error(ex) { job.failureReason.orEmpty() }
                     notifyObservers()
                     currentJob = null
                     notifyObservers()
@@ -176,7 +194,7 @@ object RenderQueueManager {
                         assFile = java.io.File(partOut.absolutePath + ".ass")
                         AssOverlayWriter.write(assFile!!, job.overlayTimeline, job.outWidth, job.outHeight)
                     } catch (t: Throwable) {
-                        System.err.println("[QUEUE][WARN] Failed to prepare overlay ASS: ${t.message}; proceeding without overlay")
+                        logger.warn(t) { "Failed to prepare overlay ASS; proceeding without overlay" }
                         assFile = null
                     }
                 }
@@ -232,7 +250,7 @@ object RenderQueueManager {
                         adjustments = try { org.litvin.adjustments.AdjustmentsStore.get() } catch (_: Throwable) { null }
                     )
                 )
-                println("[DEBUG] ffmpeg command: ${build.preview}")
+                logger.debug { "ffmpeg command: ${build.preview}" }
 
                 // Resolve ffmpeg executable (FFMPEG_PATH env var overrides PATH)
                 fun ffmpegExe(): String {
@@ -248,7 +266,7 @@ object RenderQueueManager {
                 pb.redirectErrorStream(false)
                 pb.directory(finalOut.parentFile)
                 val proc = try { pb.start() } catch (ex: Throwable) {
-                    System.err.println("[QUEUE][ERROR] Failed to start ffmpeg: ${ex.message}")
+                    logger.error(ex) { "Failed to start ffmpeg" }
                     job.status = RenderStatus.FAILED
                     job.failureReason = "Failed to start FFmpeg: ${ex.javaClass.simpleName}: ${ex.message}. Ensure ffmpeg is installed and on PATH or set FFMPEG_PATH."
                     job.stderrTail = null
@@ -437,7 +455,7 @@ object RenderQueueManager {
                     if (partOut.exists()) partOut.delete()
                     // Remove temp ASS if any
                     try { java.io.File(partOut.absolutePath + ".ass").delete() } catch (_: Throwable) {}
-                    println("[QUEUE] CANCELED id=${job.id}")
+                    logger.info { "Render job canceled id=${job.id}" }
                     // Notify UI about final state before clearing current
                     notifyObservers()
                 } else if (exit == 0) {
@@ -449,7 +467,7 @@ object RenderQueueManager {
                             java.nio.file.StandardCopyOption.REPLACE_EXISTING
                         )
                     } catch (mv: Throwable) {
-                        System.err.println("[QUEUE][ERROR] Failed to finalize output move: ${mv.message}")
+                        logger.error(mv) { "Failed to finalize output move for render job ${job.id}" }
                         job.status = RenderStatus.FAILED
                         val tailCopy = try { synchronized(errTail) { errTail.joinToString("\n") } } catch (_: Throwable) { null }
                         job.stderrTail = tailCopy
@@ -467,7 +485,7 @@ object RenderQueueManager {
                     job.bytesWritten = if (finalOut.exists()) finalOut.length() else 0
                     job.progress = 1.0
                     job.status = RenderStatus.COMPLETED
-                    println("[QUEUE] COMPLETED id=${job.id}")
+                    logger.info { "Render job completed id=${job.id}" }
                     // Remove temp ASS if any
                     try { java.io.File(partOut.absolutePath + ".ass").delete() } catch (_: Throwable) {}
                     // Persist to Completed store (Task 3.11)
@@ -489,7 +507,7 @@ object RenderQueueManager {
                     } else {
                         "ffmpeg exited with code $exit (see logs)"
                     }
-                    System.err.println("[QUEUE][ERROR] ffmpeg exited with code $exit for job ${job.id}. Stderr tail:\n$tailCopy")
+                    logger.error { "ffmpeg exited with code $exit for job ${job.id}. Stderr tail:\n$tailCopy" }
                 }
 
                 // Clear current and notify
@@ -499,11 +517,10 @@ object RenderQueueManager {
                 // exiting
                 break
             } catch (t: Throwable) {
-                System.err.println("[QUEUE][ERROR] Worker failure: ${t.message}")
-                t.printStackTrace()
+                logger.error(t) { "Render queue worker failure" }
                 // Attempt to continue loop
             }
         }
-        println("[QUEUE] Worker stopped")
+        logger.info { "Render queue worker stopped" }
     }
 }

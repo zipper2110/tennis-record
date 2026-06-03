@@ -6,7 +6,9 @@ import java.awt.BorderLayout
 import java.awt.Color
 import java.awt.Container
 import java.awt.FlowLayout
+import javax.swing.Box
 import javax.swing.JButton
+import javax.swing.JComponent
 import javax.swing.JPanel
 import javax.swing.border.EmptyBorder
 
@@ -22,6 +24,8 @@ import javax.swing.border.EmptyBorder
  *   through `ScoringActions` provided by the container.
  */
 class ControlsToolbar(
+    private val centerContent: JComponent? = null,
+    private val centerContentOffsetPx: Int = 0,
     private val onHelp: (() -> Unit)? = null,
 ) : JPanel(BorderLayout()) {
 
@@ -32,8 +36,12 @@ class ControlsToolbar(
 
         val left = JPanel(FlowLayout(FlowLayout.LEFT, 8, 0))
         left.isOpaque = false
-        val center = JPanel(FlowLayout(FlowLayout.CENTER, 8, 0))
+        val center = JPanel(FlowLayout(FlowLayout.LEFT, 8, 0))
         center.isOpaque = false
+        centerContent?.let {
+            if (centerContentOffsetPx > 0) center.add(Box.createHorizontalStrut(centerContentOffsetPx))
+            center.add(it)
+        }
         val right = JPanel(FlowLayout(FlowLayout.RIGHT, 8, 0))
         right.isOpaque = false
 

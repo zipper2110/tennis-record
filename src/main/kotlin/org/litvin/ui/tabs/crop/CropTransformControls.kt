@@ -6,6 +6,8 @@ import org.litvin.ui.UiStyles
 import java.awt.BorderLayout
 import java.awt.Dimension
 import java.awt.FlowLayout
+import java.awt.event.FocusAdapter
+import java.awt.event.FocusEvent
 import javax.swing.BorderFactory
 import javax.swing.Box
 import javax.swing.BoxLayout
@@ -24,7 +26,7 @@ class CropTransformControls(
     private val onChanged: (AdjustmentsV1) -> Unit,
     private val onResetTransform: () -> Unit,
 ) : JPanel(BorderLayout()) {
-    private val zoomSlider = JSlider(0, 200, 100).apply {
+    private val zoomSlider = JSlider(10, 400, 100).apply {
         name = "adj-zoom"
         toolTipText = "Zoom"
     }
@@ -134,6 +136,13 @@ class CropTransformControls(
             }
         }
 
+        fun syncReadoutFromSlider() {
+            val value = displayValue()
+            if (readout.text != value) {
+                readout.text = value
+            }
+        }
+
         fun publishFromSlider() {
             if (updating) return
             current = when (slider) {
@@ -147,10 +156,17 @@ class CropTransformControls(
         }
 
         slider.addChangeListener {
-            readout.text = displayValue()
+            if (!readout.hasFocus()) {
+                syncReadoutFromSlider()
+            }
             publishFromSlider()
         }
-        readout.text = displayValue()
+        syncReadoutFromSlider()
+        readout.addFocusListener(object : FocusAdapter() {
+            override fun focusLost(e: FocusEvent) {
+                syncReadoutFromSlider()
+            }
+        })
         readout.document.addDocumentListener(object : DocumentListener {
             override fun insertUpdate(e: DocumentEvent) = updateFromText()
             override fun removeUpdate(e: DocumentEvent) = updateFromText()
@@ -189,19 +205,10 @@ class CropTransformControls(
     }
 
     private fun zoomSliderToModel(value: Int): Float {
-        return if (value <= 100) {
-            (0.1f + (value.coerceAtLeast(0) / 100.0f) * 0.9f).coerceIn(0.1f, 1.0f)
-        } else {
-            (1.0f + ((value - 100) / 100.0f) * 3.0f).coerceIn(1.0f, 4.0f)
-        }
+        return (value / 100.0f).coerceIn(0.1f, 4.0f)
     }
 
     private fun modelZoomToSlider(adjustments: AdjustmentsV1): Int {
-        val zoom = adjustments.zoom.coerceIn(0.1f, 4.0f)
-        return if (zoom <= 1.0f) {
-            (((zoom - 0.1f) / 0.9f) * 100.0f).toInt()
-        } else {
-            (100.0f + ((zoom - 1.0f) / 3.0f) * 100.0f).toInt()
-        }
+        return (adjustments.zoom.coerceIn(0.1f, 4.0f) * 100.0f).toInt()
     }
 }

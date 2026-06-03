@@ -29,6 +29,7 @@ class SwingScoringPanelHotkeysTest {
         // Action name as bound in installKeyBindings()
         val action = p.actionMap.get("togglePlayPause")
         assertNotNull(action, "togglePlayPause action should be installed in ActionMap")
+        assertNotNull(p.actionMap.get("toggleFavorite"), "toggleFavorite action should be installed in ActionMap")
 
         // Try invoking the action; if underlying VLC causes issues, skip rather than fail
         try {

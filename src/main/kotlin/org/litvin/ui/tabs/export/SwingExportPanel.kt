@@ -40,6 +40,9 @@ class SwingExportPanel : JPanel(BorderLayout()) {
     private val presetCombo = JComboBox(presets.map { it.label }.toTypedArray())
     private val resCombo = JComboBox(arrayOf("1920x1080", "3840x2160"))
     private val idleTrimCheck = JCheckBox("Cut idle time between points", true)
+    private val favoriteOnlyCheck = JCheckBox("Only favorite points", false).apply {
+        toolTipText = "Render only points marked with a star. Requires idle-trim because the export is assembled from point intervals."
+    }
     private val scoreboardCheck = JCheckBox("Include Scoreboard", false).apply {
         toolTipText = "Burn in a simple scoreboard overlay that updates after each point. Uses current Scoring data; fixed English labels in v0.1.0."
     }
@@ -53,6 +56,7 @@ class SwingExportPanel : JPanel(BorderLayout()) {
     private var lastFailureNotifiedJobId: String? = null
     private var lastFailureJob: RenderJob? = null
 
+    private val renderQueue = RenderQueueList()
     private val completed = CompletedRendersList()
 
     // Theming — reuse UiStyles palette
@@ -80,9 +84,9 @@ class SwingExportPanel : JPanel(BorderLayout()) {
         left.border = EmptyBorder(12, 12, 12, 16)
         left.background = CARD_BG
         left.foreground = FG_PRIMARY
-        left.preferredSize = Dimension(320, 10)
-        left.minimumSize = Dimension(280, 10)
-        left.maximumSize = Dimension(360, Int.MAX_VALUE)
+        left.preferredSize = Dimension(420, 10)
+        left.minimumSize = Dimension(320, 10)
+        left.maximumSize = Dimension(420, Int.MAX_VALUE)
 
         val title = JLabel("Export Settings").apply {
             font = font.deriveFont(Font.BOLD)
@@ -138,6 +142,8 @@ class SwingExportPanel : JPanel(BorderLayout()) {
         // Idle-trim + EDL info
         UiStyles.styleCheckBox(idleTrimCheck)
         left.add(idleTrimCheck)
+        UiStyles.styleCheckBox(favoriteOnlyCheck)
+        left.add(favoriteOnlyCheck)
         UiStyles.styleCheckBox(scoreboardCheck)
         left.add(scoreboardCheck)
         left.add(Box.createRigidArea(Dimension(0, 12)))
@@ -193,7 +199,21 @@ class SwingExportPanel : JPanel(BorderLayout()) {
         stats.isVisible = false
 
         val activeCardPanel = UiStyles.card("Active Renders", activeBody)
-        right.add(activeCardPanel, BorderLayout.NORTH)
+
+        val renderQueueCardPanel = UiStyles.card("Render Queue", renderQueue.component()).apply {
+            isVisible = false
+            maximumSize = Dimension(Int.MAX_VALUE, 190)
+        }
+
+        val rightTop = JPanel()
+        rightTop.layout = BoxLayout(rightTop, BoxLayout.Y_AXIS)
+        rightTop.background = DARK_BG
+        activeCardPanel.alignmentX = 0f
+        renderQueueCardPanel.alignmentX = 0f
+        rightTop.add(activeCardPanel)
+        rightTop.add(Box.createRigidArea(Dimension(0, 10)))
+        rightTop.add(renderQueueCardPanel)
+        right.add(rightTop, BorderLayout.NORTH)
 
         // Completed card takes the rest of vertical space
         val completedCardPanel = UiStyles.card("Completed Renders", completed.component())
@@ -239,6 +259,7 @@ class SwingExportPanel : JPanel(BorderLayout()) {
         }
         updateResolutionPreview()
         updatePointsSummary()
+        updateFavoriteOnlyAvailability()
 
         presetCombo.addActionListener {
             val idx = presetCombo.selectedIndex
@@ -255,7 +276,16 @@ class SwingExportPanel : JPanel(BorderLayout()) {
             if (idleTrimCheck.isSelected && !hasAnyMarkedPoints()) {
                 idleTrimCheck.isSelected = false
                 JOptionPane.showMessageDialog(this, "Cannot cut idle time: there are no marked points in the current project.", "Idle-trim unavailable", JOptionPane.INFORMATION_MESSAGE)
-                return@addActionListener
+            }
+            if (!idleTrimCheck.isSelected) favoriteOnlyCheck.isSelected = false
+            updateFavoriteOnlyAvailability()
+            updatePointsSummary()
+            updateInitButtonState()
+        }
+        favoriteOnlyCheck.addActionListener {
+            if (favoriteOnlyCheck.isSelected && (!idleTrimCheck.isSelected || validFavoriteCount() <= 0)) {
+                favoriteOnlyCheck.isSelected = false
+                JOptionPane.showMessageDialog(this, "Favorite-only export requires idle-trim and at least one valid favorite point.", "Favorite export unavailable", JOptionPane.INFORMATION_MESSAGE)
             }
             updatePointsSummary()
             updateInitButtonState()
@@ -328,7 +358,13 @@ class SwingExportPanel : JPanel(BorderLayout()) {
                     }
                 }
                 val q = snap.queued.size
+                renderQueue.setJobs(snap.queued)
+                renderQueueCardPanel.isVisible = q > 0
                 activeCardPanel.toolTipText = if (q > 0) "queued: $q" else null
+                renderQueueCardPanel.revalidate()
+                renderQueueCardPanel.repaint()
+                rightTop.revalidate()
+                rightTop.repaint()
             }
         }
     }
@@ -336,6 +372,7 @@ class SwingExportPanel : JPanel(BorderLayout()) {
     fun setProjectManifest(path: String?) {
         manifestPath = path
         updatePointsSummary()
+        updateFavoriteOnlyAvailability()
         updateInitButtonState()
         try {
             val mp = manifestPath
@@ -369,12 +406,22 @@ class SwingExportPanel : JPanel(BorderLayout()) {
 
         val projectDir = if (manifestPath != null) EdlIO.projectDirFromManifest(manifestPath) else null
         val edl = try { if (projectDir != null) EdlIO.readForProjectDir(projectDir) else null } catch (_: Throwable) { null }
-        val validated = validateEdl(edl)
-        val keeps: List<PointV1> = if (idleTrimCheck.isSelected) validated else emptyList()
+        val allValidPoints = validateEdl(edl)
+        val favoriteOnly = favoriteOnlyCheck.isSelected
+        val keeps: List<PointV1> = if (idleTrimCheck.isSelected) {
+            if (favoriteOnly) allValidPoints.filter { it.favorite } else allValidPoints
+        } else emptyList()
+        if (favoriteOnly && keeps.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Cannot render only favorite points: no valid favorite points are available.", "Favorite export unavailable", JOptionPane.INFORMATION_MESSAGE)
+            updateFavoriteOnlyAvailability()
+            updateInitButtonState()
+            return
+        }
         if (idleTrimCheck.isSelected && keeps.isEmpty()) {
             val r = JOptionPane.showConfirmDialog(this, "EDL is empty or invalid. Continue with full render?", "EDL warning", JOptionPane.YES_NO_OPTION)
             if (r != JOptionPane.YES_OPTION) return
         }
+        val effectiveIdleTrim = idleTrimCheck.isSelected && keeps.isNotEmpty()
 
         // Choose output path
         val initialDir = projectDir?.let { File(it) } ?: File(source).parentFile
@@ -401,15 +448,19 @@ class SwingExportPanel : JPanel(BorderLayout()) {
         val includeSb = scoreboardCheck.isSelected
         val overlayTimeline = if (includeSb) {
                 val score = if (projectDir != null) ScoreIO.readForProjectDir(projectDir) else ScoreV1()
-                val edlPoints = validated.ifEmpty { edl?.points ?: emptyList() }
+                val scoringPoints = allValidPoints.ifEmpty { edl?.points ?: emptyList() }
+                val overlayPoints = if (effectiveIdleTrim) keeps else scoringPoints
                 ScoreboardTimelineBuilder.build(
-                    edlPoints,
+                    scoringPoints,
                     score.outcomes,
-                    idleTrimCheck.isSelected,
+                    effectiveIdleTrim,
                     score.player1Name,
                     score.player2Name,
                     score.player1ColorHex,
-                    score.player2ColorHex
+                    score.player2ColorHex,
+                    exportedPointIds = if (effectiveIdleTrim && overlayPoints.isNotEmpty()) {
+                        overlayPoints.map { it.id }.toSet()
+                    } else null
                 )
         } else emptyList()
 
@@ -422,7 +473,8 @@ class SwingExportPanel : JPanel(BorderLayout()) {
             outWidth = w,
             outHeight = h,
             encoderLabel = encoderLabel,
-            idleTrim = idleTrimCheck.isSelected,
+            idleTrim = effectiveIdleTrim,
+            favoriteOnly = favoriteOnly,
             includeScoreboard = includeSb,
             overlayTimeline = overlayTimeline,
             outputPath = out.absolutePath,
@@ -531,6 +583,28 @@ class SwingExportPanel : JPanel(BorderLayout()) {
         }
     }
 
+    private fun validFavoriteCount(): Int {
+        return try {
+            val mp = manifestPath
+            val projectDir = if (!mp.isNullOrBlank()) EdlIO.projectDirFromManifest(mp) else null
+            val edl = try { if (projectDir != null) EdlIO.readForProjectDir(projectDir) else null } catch (_: Throwable) { null }
+            validateEdl(edl).count { it.favorite }
+        } catch (_: Throwable) {
+            0
+        }
+    }
+
+    private fun updateFavoriteOnlyAvailability() {
+        val available = idleTrimCheck.isSelected && validFavoriteCount() > 0
+        favoriteOnlyCheck.isEnabled = available
+        if (!available) favoriteOnlyCheck.isSelected = false
+        favoriteOnlyCheck.toolTipText = if (available) {
+            "Render only points marked with a star."
+        } else {
+            "Requires idle-trim and at least one valid favorite point."
+        }
+    }
+
     private fun hasAnyScoredPoints(): Boolean {
         return try {
             val mp = manifestPath
@@ -552,7 +626,11 @@ class SwingExportPanel : JPanel(BorderLayout()) {
             val projectDir = if (!mp.isNullOrBlank()) EdlIO.projectDirFromManifest(mp) else null
             val edl = try { if (projectDir != null) EdlIO.readForProjectDir(projectDir) else null } catch (_: Throwable) { null }
             val points = edl?.points ?: emptyList()
+            val validFavorites = validateEdl(edl).filter { it.favorite }
+            val favoriteCount = validFavorites.size
             val totalMs = points.fold(0L) { acc, p -> acc + (p.endMs - p.startMs) }
+            val favoriteTotalMs = validFavorites
+                .fold(0L) { acc, p -> acc + (p.endMs - p.startMs) }
             val pointsCount = points.size
 
             val score = try { if (projectDir != null) ScoreIO.readForProjectDir(projectDir) else ScoreV1() } catch (_: Throwable) { ScoreV1() }
@@ -572,18 +650,20 @@ class SwingExportPanel : JPanel(BorderLayout()) {
             }
 
             // Set texts
-            pointsCountLabel.text = "$pointsCount points"
-            pointsTotalLabel.text = "total ${formatSeconds(totalMs)}"
+            pointsCountLabel.text = "$pointsCount points / $favoriteCount favorites"
+            pointsTotalLabel.text = "total ${formatSeconds(totalMs)} / favorites ${formatSeconds(favoriteTotalMs)}"
             pointsScoredLabel.text = "scored ${scoredCount}/${pointsCount}"
 
             // Colors
             pointsCountLabel.foreground = if (pointsCount == 0) UiStyles.YELLOW else FG_PRIMARY
             pointsScoredLabel.foreground = if (allScored) UiStyles.GREEN else FG_PRIMARY
             pointsTotalLabel.foreground = FG_PRIMARY
+            updateFavoriteOnlyAvailability()
         } catch (_: Throwable) {
             pointsCountLabel.text = ""
             pointsTotalLabel.text = ""
             pointsScoredLabel.text = ""
+            updateFavoriteOnlyAvailability()
         }
     }
 
@@ -613,8 +693,11 @@ class SwingExportPanel : JPanel(BorderLayout()) {
                     if (idleTrimCheck.isSelected) {
                         val projectDir = EdlIO.projectDirFromManifest(mp)
                         val edl = try { EdlIO.readForProjectDir(projectDir) } catch (_: Throwable) { null }
-                        val keeps = validateEdl(edl)
-                        if (keeps.isEmpty()) {
+                        val allValidPoints = validateEdl(edl)
+                        val keeps = if (favoriteOnlyCheck.isSelected) allValidPoints.filter { it.favorite } else allValidPoints
+                        if (favoriteOnlyCheck.isSelected && keeps.isEmpty()) {
+                            reason = "Favorite-only export is ON but no valid favorite points are available."
+                        } else if (keeps.isEmpty()) {
                             reason = "EDL is empty/invalid while Idle‑trim is ON. Add keep intervals or turn Idle‑trim OFF."
                         } else {
                             enabled = true

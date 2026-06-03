@@ -43,9 +43,13 @@ object ScoreboardTimelineBuilder {
         player2Name: String = "Player 2",
         player1ColorHex: String? = null,
         player2ColorHex: String? = null,
+        exportedPointIds: Set<String>? = null,
     ): List<OverlaySpan> {
         if (points.isEmpty()) return emptyList()
         val ordered = points.sortedBy { it.startMs }
+        val shouldEmit = BooleanArray(ordered.size) { i ->
+            exportedPointIds == null || ordered[i].id in exportedPointIds
+        }
 
         // Precompute output-time mapping for each source point interval
         val startsOut = LongArray(ordered.size)
@@ -54,9 +58,14 @@ object ScoreboardTimelineBuilder {
             var acc: Long = 0
             ordered.forEachIndexed { i, p ->
                 val dur = (p.endMs - p.startMs).toLong().coerceAtLeast(0)
-                startsOut[i] = acc
-                endsOut[i] = acc + dur
-                acc += dur
+                if (shouldEmit[i]) {
+                    startsOut[i] = acc
+                    endsOut[i] = acc + dur
+                    acc += dur
+                } else {
+                    startsOut[i] = acc
+                    endsOut[i] = acc
+                }
             }
         } else {
             ordered.forEachIndexed { i, p ->
@@ -79,6 +88,7 @@ object ScoreboardTimelineBuilder {
         val n1 = player1Name.ifBlank { "Player 1" }
         val n2 = player2Name.ifBlank { "Player 2" }
         for (i in ordered.indices) {
+            if (!shouldEmit[i]) continue
             val start = startsOut[i]
             val end = endsOut[i]
             if (end <= start) continue

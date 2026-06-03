@@ -1,5 +1,6 @@
 package org.litvin
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import java.io.BufferedReader
 import java.io.InputStreamReader
 
@@ -11,6 +12,8 @@ import java.io.InputStreamReader
  * so a restart is recommended after a change is applied.
  */
 object WindowsGpuPreference {
+    private val logger = KotlinLogging.logger {}
+
     @Volatile private var applied = false
     @Volatile private var failedReason: String? = null
 
@@ -36,12 +39,12 @@ object WindowsGpuPreference {
                     val ok = writeRegistryValue(regPath, exePath, desired)
                     if (ok) {
                         anyChanged = true
-                        println("[GPU] Set HighPerformance preference for $exePath")
+                        logger.info { "Set HighPerformance GPU preference for $exePath" }
                     } else {
-                        println("[GPU] Failed to set preference for $exePath")
+                        logger.warn { "Failed to set HighPerformance GPU preference for $exePath" }
                     }
                 } else {
-                    println("[GPU] Preference already set for $exePath")
+                    logger.debug { "HighPerformance GPU preference already set for $exePath" }
                 }
             }
             applied = anyChanged
@@ -50,6 +53,7 @@ object WindowsGpuPreference {
             }
         } catch (t: Throwable) {
             failedReason = t.message
+            logger.warn(t) { "Failed to ensure HighPerformance GPU preference." }
         }
     }
 

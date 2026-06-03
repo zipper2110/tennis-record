@@ -11,6 +11,7 @@ import java.awt.GradientPaint
 import java.awt.Graphics
 import java.awt.Graphics2D
 import java.awt.RenderingHints
+import java.awt.geom.Path2D
 import javax.swing.AbstractButton
 import javax.swing.BorderFactory
 import javax.swing.BoxLayout
@@ -31,6 +32,9 @@ import org.kordamp.ikonli.material2.Material2AL
 import org.kordamp.ikonli.material2.Material2MZ
 import org.kordamp.ikonli.material2.Material2RoundMZ
 import org.kordamp.ikonli.swing.FontIcon
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.sin
 
 /**
  * Shared Swing UI styles to match the mock (projects.html):
@@ -47,6 +51,39 @@ object UiStyles {
     fun pencilIcon(size: Int = 18): Icon = ikon(Material2AL.EDIT, size, LIME)
 
     fun crossIcon(size: Int = 18): Icon = ikon(Material2AL.BACKSPACE, size, Color(0xCC, 0x46, 0x46))
+
+    fun favoriteIcon(size: Int = 18, selected: Boolean = true): Icon = object : Icon {
+        override fun getIconWidth(): Int = size
+        override fun getIconHeight(): Int = size
+        override fun paintIcon(c: Component?, g: Graphics?, x: Int, y: Int) {
+            val g2 = (g as? Graphics2D)?.create() as? Graphics2D ?: return
+            try {
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+                val cx = x + size / 2.0
+                val cy = y + size / 2.0
+                val outer = size * 0.46
+                val inner = size * 0.20
+                val path = Path2D.Double()
+                for (i in 0 until 10) {
+                    val radius = if (i % 2 == 0) outer else inner
+                    val angle = -PI / 2.0 + i * PI / 5.0
+                    val px = cx + cos(angle) * radius
+                    val py = cy + sin(angle) * radius
+                    if (i == 0) path.moveTo(px, py) else path.lineTo(px, py)
+                }
+                path.closePath()
+                if (selected) {
+                    g2.color = YELLOW
+                    g2.fill(path)
+                }
+                g2.color = if (selected) YELLOW else FG_SECONDARY
+                g2.stroke = BasicStroke((size / 9f).coerceAtLeast(1.2f))
+                g2.draw(path)
+            } finally {
+                g2.dispose()
+            }
+        }
+    }
 
     fun smallIconButton(icon: Icon, tooltip: String? = null, onClick: () -> Unit): JButton = JButton().apply {
         this.icon = icon

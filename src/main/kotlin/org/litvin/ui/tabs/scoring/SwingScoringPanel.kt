@@ -5,6 +5,7 @@ import org.litvin.projects.ManifestIO
 import org.litvin.SessionSettings
 import org.litvin.adjustments.AdjustmentsStore
 import org.litvin.markup.EdlIO
+import org.litvin.markup.EdlV1
 import org.litvin.markup.PointV1
 import org.litvin.media.PlayerStatus
 import org.litvin.media.VlcjSwingMediaPlayerAdapter
@@ -14,6 +15,7 @@ import org.litvin.scoring.ScoreV1
 import org.litvin.scoring.ScoringEngine
 import org.litvin.scoring.ScoringEngine.MatchState
 import org.litvin.scoring.ScoringEngine.SetScore
+import org.litvin.ui.UiStyles
 import org.litvin.ui.commons.AspectPanel
 import org.litvin.ui.commons.Dialogs
 import org.litvin.ui.commons.uiSafe
@@ -97,6 +99,10 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
         override fun advanceToNextPoint() {
             this@SwingScoringPanel.advanceToNextPoint()
         }
+
+        override fun toggleFavorite(index: Int) {
+            this@SwingScoringPanel.toggleFavorite(index)
+        }
     }
 
     // Active state controlled by navigation
@@ -105,6 +111,7 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
     fun onActivated() = uiSafe {
         isActive = true
         ensurePlayerLoaded()
+        player.activatePreview("scoring activated")
         player.pause()
         // Refresh points every time the tab is opened to reflect latest Markup changes
         refreshPointsFromProject()
@@ -115,6 +122,7 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
     fun onDeactivated() = uiSafe {
         isActive = false
         player.pause()
+        player.deactivatePreview("scoring deactivated")
         // Flush pending autosave when leaving the tab
         saveNow()
     }
@@ -140,9 +148,13 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
             player.load(videoFile)
             player.pause()
             isMediaLoaded = true
-            // Re-apply current color adjustments after media is loaded to ensure VLC picks them up
+            // Re-apply current adjustments after media is loaded to ensure VLC picks them up
             try {
-                player.applyColorAdjustments(AdjustmentsStore.get())
+                val current = AdjustmentsStore.get()
+                player.applyPreviewAdjustments(current)
+                if (::geometryViewport.isInitialized) {
+                    geometryViewport.refreshGeometry()
+                }
             } catch (_: Throwable) { /* ignore */ }
         } catch (t: Throwable) {
             Dialogs.showError(this, t, "Failed to load project")
@@ -184,6 +196,9 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
     // Scrub/UI refs in center
     private lateinit var segmentScrub: ScrubPanel
     private lateinit var videoFrame: JComponent
+    private lateinit var geometryViewport: GeometryViewportPanel
+    private lateinit var currentPointLabel: JLabel
+    private lateinit var currentPointFavoriteBtn: JButton
 
     // Speed combo is now encapsulated within VideoSyncPanel; no direct reference here
 
@@ -272,11 +287,15 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
         layout = BorderLayout()
 
         // Top toolbar with global actions (E-SC-001 T3)
-        val toolbar = ControlsToolbar { showHelpDialog() }
+        val toolbar = ControlsToolbar(
+            centerContent = pointHeaderPanel(),
+            centerContentOffsetPx = 270,
+            onHelp = { showHelpDialog() },
+        )
         add(toolbar, BorderLayout.NORTH)
 
         // Root content: left list (fixed width) + center content
-        leftListPanel = org.litvin.ui.tabs.scoring.ui.LeftListPanel(navigationActions,
+        leftListPanel = LeftListPanel(navigationActions,
             onNamesChanged = { p1, p2 ->
                 player1Name = p1
                 player2Name = p2
@@ -289,6 +308,7 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
                 // Apply immediately to point buttons
                 if (::leftPlayerPanel.isInitialized) leftPlayerPanel.setAccentColorHex(player1ColorHex)
                 if (::rightPlayerPanel.isInitialized) rightPlayerPanel.setAccentColorHex(player2ColorHex)
+                rebuildPointsList()
                 try { namesSaveTimer.restart() } catch (_: Throwable) { saveNow() }
             }
         )
@@ -329,8 +349,9 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
 
     // Rebuild left points list from current 'points' and 'scoredPointIds'
     private fun rebuildPointsList() = uiSafe {
-        leftListPanel.setList(points, scoredPointIds)
+        leftListPanel.setList(points, outcomesByPointId, player1ColorHex, player2ColorHex)
         leftListPanel.setNextEnabled(points.isNotEmpty())
+        updateCurrentPointHeader()
     }
 
     private fun autoSelectInitial() {
@@ -343,7 +364,7 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
         else setSelectedIndex(0, userInitiated = false)
     }
 
-    private fun setSelectedIndex(index: Int, userInitiated: Boolean) {
+    private fun setSelectedIndex(index: Int, userInitiated: Boolean, autoPlay: Boolean = false) {
         // Avoid undesired auto-scrolling on user click; only scroll programmatically.
         if (index == selectedPointIndex) {
             // No-op on reselect; do not trigger any scrolling.
@@ -354,14 +375,15 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
         leftListPanel.setSelectedIndex(index, false)
         // When selection is changed programmatically (keyboard/auto-advance), ensure it's visible.
         if (!userInitiated) scrollRowIntoView(index)
-        onSelectionChanged()
+        onSelectionChanged(autoPlay)
     }
 
-    private fun onSelectionChanged() = uiSafe {
+    private fun onSelectionChanged(autoPlay: Boolean = false) = uiSafe {
         if (selectedPointIndex !in points.indices) {
             // Reset scrub labels
             segmentStartMs = 0L
             segmentEndMs = 0L
+            updateCurrentPointHeader()
             if (::segmentScrub.isInitialized) segmentScrub.reset()
             updateActionButtonsState(enable = false, selectedOutcome = null)
             // Disable Next on no selection or empty list
@@ -372,13 +394,14 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
             return@uiSafe
         }
         val p = points[selectedPointIndex]
+        updateCurrentPointHeader()
         // Update segment bounds
         segmentStartMs = p.startMs.toLong()
         segmentEndMs = p.endMs.toLong()
         // Update scrub panel to show segment start and end of the point
         if (::segmentScrub.isInitialized) segmentScrub.setSegment(segmentStartMs, segmentEndMs)
         updateScrubUi(segmentStartMs)
-        // Jump playback to start and pause; focus player when active
+        // Jump playback to start; callers can opt into autoplay after the preview frame is primed.
         player.pause()
         player.seek(segmentStartMs)
         // Prime a preview frame to avoid an initial black canvas on some systems
@@ -387,6 +410,7 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
         val nudge = (segmentStartMs + 1).coerceAtMost(maxPlayable)
         if (nudge != segmentStartMs) player.seek(nudge)
         player.seek(segmentStartMs)
+        if (autoPlay) player.play()
 
         if (isActive) player.component.requestFocusInWindow()
         // Update action buttons based on existing stored outcome and validity
@@ -412,9 +436,7 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
             if (::leftListPanel.isInitialized) leftListPanel.setNextEnabled(false)
             return@uiSafe
         }
-        // Keep playback paused and just move selection
-        player.pause()
-        setSelectedIndex(next, userInitiated = false)
+        setSelectedIndex(next, userInitiated = false, autoPlay = true)
         // Focus should remain in the player area for Space/arrows to work
         EventQueue.invokeLater { uiSafe { player.component.requestFocusInWindow() } }
     }
@@ -460,20 +482,21 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
         videoWrapper.add(videoPanel, BorderLayout.CENTER)
 
         // Add media player component wrapped into geometry viewport (stretched by AspectPanel)
-        val viewport = GeometryViewportPanel(player.component)
-        viewport.name = "video"
-        videoPanel.add(viewport)
+        geometryViewport = GeometryViewportPanel(player.component)
+        geometryViewport.name = "video"
+        videoPanel.add(geometryViewport)
 
-        // Apply color adjustments from the central store (parity with Markup tab)
+        // Apply adjustments from the central store (parity with Markup/Color tabs)
         val adjUnsub = AdjustmentsStore.subscribe { adj ->
-            player.applyColorAdjustments(adj)
+            player.applyPreviewAdjustments(adj)
+            geometryViewport.refreshGeometry()
         }
         // Apply current adjustments immediately
         try {
-            player.applyColorAdjustments(AdjustmentsStore.get())
+            val current = AdjustmentsStore.get()
+            player.applyPreviewAdjustments(current)
+            geometryViewport.refreshGeometry()
         } catch (_: Throwable) { /* ignore */ }
-        // Keep unsubscribe handle on the viewport for potential cleanup on removal
-        viewport.putClientProperty("adj_unsub", adjUnsub)
 
         return videoWrapper
     }
@@ -494,6 +517,49 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
         centerWithBottom.add(bottomPanel(), BorderLayout.SOUTH)
 
         return centerWithBottom
+    }
+
+    private fun pointHeaderPanel(): JPanel {
+        val header = JPanel(java.awt.FlowLayout(java.awt.FlowLayout.CENTER, 8, 0))
+        header.isOpaque = false
+
+        currentPointLabel = JLabel("No point selected")
+        currentPointLabel.foreground = Color.WHITE
+        currentPointLabel.font = currentPointLabel.font.deriveFont(java.awt.Font.BOLD, 13f)
+        header.add(currentPointLabel)
+
+        currentPointFavoriteBtn = UiStyles.smallIconButton(UiStyles.favoriteIcon(18, false), "Favorite [A]") {
+            toggleFavoriteSelectedPoint()
+            EventQueue.invokeLater { player.component.requestFocusInWindow() }
+        }.apply {
+            text = "[A]"
+            font = font.deriveFont(java.awt.Font.BOLD, 10f)
+            name = "current-point-favorite"
+        }
+        header.add(currentPointFavoriteBtn)
+
+        updateCurrentPointHeader()
+        return header
+    }
+
+    private fun updateCurrentPointHeader() = uiSafe {
+        if (!::currentPointLabel.isInitialized || !::currentPointFavoriteBtn.isInitialized) return@uiSafe
+
+        if (selectedPointIndex !in points.indices) {
+            currentPointLabel.text = "No point selected"
+            currentPointLabel.foreground = Color(0xAD, 0xAA, 0xAA)
+            currentPointFavoriteBtn.isEnabled = false
+            currentPointFavoriteBtn.icon = UiStyles.favoriteIcon(18, false)
+            currentPointFavoriteBtn.foreground = UiStyles.FG_SECONDARY
+            return@uiSafe
+        }
+
+        val point = points[selectedPointIndex]
+        currentPointLabel.text = "Point ${selectedPointIndex + 1} / ${points.size}"
+        currentPointLabel.foreground = Color.WHITE
+        currentPointFavoriteBtn.isEnabled = true
+        currentPointFavoriteBtn.icon = UiStyles.favoriteIcon(18, point.favorite)
+        currentPointFavoriteBtn.foreground = if (point.favorite) UiStyles.YELLOW else UiStyles.FG_SECONDARY
     }
 
     fun bottomPanel(): JPanel {
@@ -528,9 +594,23 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
 
     private fun togglePlayPause() {
         val wasPlaying = player.status() == PlayerStatus.PLAYING
-        if (wasPlaying) player.pause() else player.play()
+        if (wasPlaying) {
+            player.pause()
+        } else {
+            if (shouldRestartSegmentForPlay()) {
+                player.seek(segmentStartMs)
+                updateScrubUi(segmentStartMs)
+            }
+            player.play()
+        }
         updateVideoControls()
         player.component.requestFocusInWindow()
+    }
+
+    private fun shouldRestartSegmentForPlay(): Boolean {
+        if (segmentEndMs <= segmentStartMs) return false
+        val maxPlayable = (segmentEndMs - 1).coerceAtLeast(segmentStartMs)
+        return player.currentTimeMs() >= maxPlayable
     }
 
     private fun updateVideoControls() {
@@ -612,8 +692,9 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
         bind("Q", "scoreP1") { setOutcomeForSelectedPoint(Outcome.P1) }
         bind("W", "scoreNone") { setOutcomeForSelectedPoint(Outcome.NONE) }
         bind("E", "scoreP2") { setOutcomeForSelectedPoint(Outcome.P2) }
-        // Next Point navigation (Task 4.10): R advances to next index without auto-play
+        // Next Point navigation (Task 4.10): R advances to next index and starts playback
         bind("R", "nextPoint") { advanceToNextPoint() }
+        bind("A", "toggleFavorite") { toggleFavoriteSelectedPoint() }
         // Help dialog (v0.3.1): F1 opens contextual help
         bind("F1", "openHelp") { showHelpDialog() }
         // Frame-by-frame toggle: F
@@ -647,6 +728,26 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
             SessionSettings.playbackSpeedIndex = next
             player.setRate(SessionSettings.toRate(next))
             updateVideoControls()
+        }
+    }
+
+    private fun toggleFavoriteSelectedPoint() {
+        toggleFavorite(selectedPointIndex)
+    }
+
+    private fun toggleFavorite(index: Int) = uiSafe {
+        if (index !in points.indices) return@uiSafe
+        val dir = projectDir ?: return@uiSafe
+        val pointId = points[index].id
+        val updated = points.map { p ->
+            if (p.id == pointId) p.copy(favorite = !p.favorite) else p
+        }.sortedBy { it.startMs }
+        try {
+            EdlIO.writeForProjectDir(dir, EdlV1(points = updated, version = 1))
+            points = updated
+            rebuildPointsList()
+        } catch (t: Throwable) {
+            Dialogs.showError(this, t, "Failed to save favorite")
         }
     }
 

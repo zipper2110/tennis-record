@@ -1,5 +1,6 @@
 package org.litvin
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.util.concurrent.TimeUnit
@@ -11,6 +12,8 @@ import java.util.concurrent.TimeUnit
  * Detection is best-effort; failures simply return an empty set (software still available).
  */
 object FFmpegCapabilities {
+    private val logger = KotlinLogging.logger {}
+
     private var cached: Set<String>? = null
 
     /** Clear cached detection result to force a re-probe. */
@@ -62,9 +65,9 @@ object FFmpegCapabilities {
         val lines = text.lineSequence().count()
         val cmdShown = cmd.joinToString(" ")
         if (timedOut) {
-            System.err.println("[FFMPEG][Probe] TIMEOUT after ${dur}ms while running: $cmdShown  (captured $lines lines, ${bytes} bytes)")
+            logger.warn { "FFmpeg probe timed out after ${dur}ms while running: $cmdShown (captured $lines lines, $bytes bytes)" }
         } else {
-            println("[FFMPEG][Probe] Exit=${exitCode ?: "?"} after ${dur}ms: $cmdShown  (captured $lines lines, ${bytes} bytes)")
+            logger.debug { "FFmpeg probe exit=${exitCode ?: "?"} after ${dur}ms: $cmdShown (captured $lines lines, $bytes bytes)" }
         }
         return Triple(text, exitCode, timedOut)
     }
@@ -87,7 +90,7 @@ object FFmpegCapabilities {
         val timeoutMs = System.getProperty("tr.ffmpeg.probe.timeout.ms")?.toLongOrNull() ?: 10_000L
         try {
             val exe = ffmpegCmd().joinToString(" ")
-            println("[FFMPEG] Probing encoders using: $exe -hide_banner -encoders (timeout=${timeoutMs}ms)")
+            logger.info { "Probing FFmpeg encoders using: $exe -hide_banner -encoders (timeout=${timeoutMs}ms)" }
             // Attempt 1 — consume output concurrently to avoid pipe deadlock
             val (text1, exit1, to1) = runAndCapture(ffmpegCmd() + listOf("-hide_banner", "-encoders"), timeoutMs)
             if (text1.isNotBlank()) {
@@ -105,14 +108,13 @@ object FFmpegCapabilities {
                 }
             }
         } catch (t: Throwable) {
-            System.err.println("[FFMPEG] Encoder probe failed: ${t.javaClass.simpleName}: ${t.message}")
-            t.printStackTrace()
+            logger.warn(t) { "FFmpeg encoder probe failed." }
         }
         cached = set
         if (set.isEmpty()) {
-            println("[FFMPEG] No hardware H.264 encoders detected (probe parsed none). Software (libx264) only. If unexpected, ensure ffmpeg with NVENC/QSV/AMF is on PATH or set FFMPEG_PATH / -Dtr.ffmpeg.path.")
+            logger.info { "No hardware H.264 encoders detected (probe parsed none). Software (libx264) only. If unexpected, ensure ffmpeg with NVENC/QSV/AMF is on PATH or set FFMPEG_PATH / -Dtr.ffmpeg.path." }
         } else {
-            println("[FFMPEG] Detected H.264 encoders: ${set.joinToString()}")
+            logger.info { "Detected H.264 encoders: ${set.joinToString()}" }
         }
         return set
     }

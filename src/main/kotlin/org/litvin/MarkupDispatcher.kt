@@ -1,5 +1,6 @@
 package org.litvin.markup.components
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import org.litvin.markup.EdlIO
 import org.litvin.markup.PointV1
 import org.litvin.shared.util.Timecode
@@ -12,6 +13,10 @@ import org.litvin.shared.util.Timecode
  * - Validates duration >= 200 ms and start < end on finalize
  */
 class MarkupDispatcher {
+    private companion object {
+        private val logger = KotlinLogging.logger {}
+    }
+
     data class UiRow(val title: String, val startMs: Int?, val endMs: Int?, val isPending: Boolean)
 
     private val points = mutableListOf<PointV1>()
@@ -24,8 +29,7 @@ class MarkupDispatcher {
 
     private fun notifyUser(msg: String) {
         userMessage = msg
-        // Also log to console for dev visibility
-        println("[MARKUP][HINT] $msg")
+        logger.info { "User hint: $msg" }
     }
 
     fun consumeUserMessage(): String? {
@@ -80,7 +84,7 @@ class MarkupDispatcher {
             pendingId = EdlIO.generateId()
         }
         pendingStartMs = t
-        println("[MARKUP] Pending Start set at $pendingStartMs ms (id=${pendingId})")
+        logger.debug { "Pending Start set at $pendingStartMs ms (id=${pendingId})" }
         // Notify UI so it can render/update the pending row immediately
         onPointsChanged?.invoke()
     }
@@ -122,7 +126,7 @@ class MarkupDispatcher {
         // Clear pending after successful creation
         pendingStartMs = null
         pendingId = null
-        println("[MARKUP] Point created: $id [$s, $e]")
+        logger.debug { "Point created: $id [$s, $e]" }
         onPointsChanged?.invoke()
     }
 
@@ -132,6 +136,16 @@ class MarkupDispatcher {
         points.clear()
         points.addAll(newPoints.sortedBy { it.startMs })
         onPointsChanged?.invoke()
+    }
+
+    /** Toggle favorite status for a completed point by id. Returns true if updated. */
+    fun toggleFavorite(id: String): Boolean {
+        val idx = points.indexOfFirst { it.id == id }
+        if (idx < 0) return false
+        val p = points[idx]
+        points[idx] = p.copy(favorite = !p.favorite)
+        onPointsChanged?.invoke()
+        return true
     }
 
     fun getPendingStart(): Int? = pendingStartMs
@@ -164,7 +178,7 @@ class MarkupDispatcher {
     }
 
     // Transport telemetry (optional logging)
-    fun onPlayPauseClicked() { println("[MARKUP] Play/Pause clicked") }
-    fun onJumpBackClicked() { println("[MARKUP] Jump Back clicked") }
-    fun onJumpForwardClicked() { println("[MARKUP] Jump Forward clicked") }
+    fun onPlayPauseClicked() { logger.debug { "Play/Pause clicked" } }
+    fun onJumpBackClicked() { logger.debug { "Jump Back clicked" } }
+    fun onJumpForwardClicked() { logger.debug { "Jump Forward clicked" } }
 }

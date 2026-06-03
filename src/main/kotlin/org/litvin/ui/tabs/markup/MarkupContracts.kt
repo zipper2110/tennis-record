@@ -16,6 +16,7 @@ interface MarkupActions {
     fun createPointAt(ms: Long)
     fun editPoint(id: String, patch: PointPatch)
     fun deletePoint(id: String)
+    fun toggleFavorite(id: String)
 
     /**
      * Selects an item by its visual index (index within the composed view list).
@@ -42,6 +43,7 @@ data class PointDto(
     val endMs: Long?,
     val label: String?,
     val flags: Set<String> = emptySet(),
+    val favorite: Boolean = false,
 )
 
 /** Partial update to a point. Fields set to null are not modified. */
@@ -50,6 +52,7 @@ data class PointPatch(
     val endMs: Long? = null,
     val label: String? = null,
     val flags: Set<String>? = null,
+    val favorite: Boolean? = null,
 )
 
 /** Autosave status surfaced to the toolbar and other indicators. */

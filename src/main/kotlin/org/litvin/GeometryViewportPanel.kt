@@ -2,7 +2,9 @@ package org.litvin
 
 import org.litvin.adjustments.AdjustmentsV1
 import java.awt.*
-import javax.swing.*
+import java.awt.event.ComponentAdapter
+import java.awt.event.ComponentEvent
+import javax.swing.JPanel
 import kotlin.math.roundToInt
 
 /**
@@ -27,6 +29,15 @@ class GeometryViewportPanel(private val content: Component) : JPanel(null /* abs
         isOpaque = true
         background = Color.BLACK
         add(content)
+        addComponentListener(object : ComponentAdapter() {
+            override fun componentShown(e: ComponentEvent) {
+                scheduleApply()
+            }
+
+            override fun componentResized(e: ComponentEvent) {
+                scheduleApply()
+            }
+        })
     }
 
     fun applyGeometry(adj: AdjustmentsV1) {
@@ -38,7 +49,11 @@ class GeometryViewportPanel(private val content: Component) : JPanel(null /* abs
         if (zoom != z) { zoom = z; changed = true }
         if (panX != px) { panX = px; changed = true }
         if (panY != py) { panY = py; changed = true }
-        if (changed) scheduleApply()
+        if (changed || content.width <= 1 || content.height <= 1) scheduleApply()
+    }
+
+    fun refreshGeometry() {
+        scheduleApply()
     }
 
     private fun scheduleApply() {
@@ -55,6 +70,15 @@ class GeometryViewportPanel(private val content: Component) : JPanel(null /* abs
         applyLayoutNow()
     }
 
+    override fun addNotify() {
+        super.addNotify()
+        scheduleApply()
+    }
+
+    override fun getPreferredSize(): Dimension = Dimension(640, 360)
+
+    override fun getMinimumSize(): Dimension = Dimension(1, 1)
+
     private fun applyLayoutNow() {
         try {
             val W = width.coerceAtLeast(1)
@@ -62,15 +86,16 @@ class GeometryViewportPanel(private val content: Component) : JPanel(null /* abs
             val z = if (zoom <= 0f) 0.0001f else zoom
             val cropW = (W / z).toInt().coerceAtLeast(1)
             val cropH = (H / z).toInt().coerceAtLeast(1)
-            val offX = ((W - cropW) / 2f + panX * (W - cropW) / 2f).roundToInt()
-            val offY = ((H - cropH) / 2f - panY * (H - cropH) / 2f).roundToInt()
-            // We want to display the crop area scaled back to viewport size.
-            // Achieve by sizing the child to W*z x H*z and offsetting so that the
-            // crop rect (cropW x cropH at (offX,offY)) maps to viewport.
+            val cropX = ((W - cropW) / 2f + panX * (W - cropW) / 2f)
+                .coerceIn(0f, (W - cropW).toFloat())
+            val cropY = ((H - cropH) / 2f - panY * (H - cropH) / 2f)
+                .coerceIn(0f, (H - cropH).toFloat())
+            // Size the child to the zoomed frame and offset the crop origin to
+            // viewport (0,0). This keeps aspect stable and makes pan linear.
             val childW = (W * z).roundToInt()
             val childH = (H * z).roundToInt()
-            val childX = -((childW - W) / 2) + ((W - cropW) / 2 - offX)
-            val childY = -((childH - H) / 2) + ((H - cropH) / 2 - offY)
+            val childX = -(cropX * z).roundToInt()
+            val childY = -(cropY * z).roundToInt()
             content.setBounds(childX, childY, childW, childH)
             content.revalidate()
             content.repaint()

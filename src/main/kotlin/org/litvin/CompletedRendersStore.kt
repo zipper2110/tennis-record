@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.SerializationFeature
 import com.fasterxml.jackson.module.kotlin.KotlinModule
 import com.fasterxml.jackson.module.kotlin.readValue
+import io.github.oshai.kotlinlogging.KotlinLogging
 import java.io.File
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
@@ -29,6 +30,8 @@ data class CompletedRender(
 )
 
 object CompletedRendersStore {
+    private val logger = KotlinLogging.logger {}
+
     private val mapper: ObjectMapper = ObjectMapper()
         .registerModule(KotlinModule.Builder().build())
         .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
@@ -63,7 +66,7 @@ object CompletedRendersStore {
         return try {
             mapper.readValue(f)
         } catch (t: Throwable) {
-            System.err.println("[STORE][WARN] Failed to read completed renders: ${t.message}. Resetting store.")
+            logger.warn(t) { "Failed to read completed renders. Resetting store." }
             emptyList()
         }
     }
@@ -73,7 +76,7 @@ object CompletedRendersStore {
         try {
             mapper.writeValue(f, items)
         } catch (t: Throwable) {
-            System.err.println("[STORE][WARN] Failed to write completed renders: ${t.message}")
+            logger.warn(t) { "Failed to write completed renders." }
         }
     }
 

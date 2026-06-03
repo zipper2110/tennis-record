@@ -1,6 +1,10 @@
 package org.litvin.ui.commons
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import javax.swing.JComponent
+
+@PublishedApi
+internal val uiSafeLogger = KotlinLogging.logger {}
 
 /**
  * Minimal UI safety helpers to keep method bodies clean from try/catch noise.
@@ -27,7 +31,7 @@ inline fun <T> uiSafe(default: T, block: () -> T): T =
     try {
         block()
     } catch (e: Exception) {
-        e.printStackTrace()
+        uiSafeLogger.warn(e) { "UI operation failed; returning default value." }
         default
     }
 
