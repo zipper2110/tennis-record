@@ -59,6 +59,9 @@ object WindowsGpuPreference {
 
     private fun candidateExecutablePaths(): List<String> {
         return try {
+            val packagedLauncher = ApplicationLayout.current().packagedLauncher
+            if (packagedLauncher != null) return listOf(packagedLauncher.absolutePath)
+
             val javaHome = System.getProperty("java.home") ?: return emptyList()
             val javaw = java.nio.file.Paths.get(javaHome, "bin", "javaw.exe").toFile()
             val java = java.nio.file.Paths.get(javaHome, "bin", "java.exe").toFile()

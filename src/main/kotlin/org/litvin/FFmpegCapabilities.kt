@@ -20,15 +20,7 @@ object FFmpegCapabilities {
     @Synchronized
     fun refresh() { cached = null }
 
-    private fun ffmpegCmd(): List<String> {
-        val sysProp = System.getProperty("tr.ffmpeg.path")?.trim().orEmpty()
-        val envPath = System.getenv("FFMPEG_PATH")?.trim().orEmpty()
-        return when {
-            sysProp.isNotEmpty() -> listOf(sysProp)
-            envPath.isNotEmpty() -> listOf(envPath)
-            else -> listOf("ffmpeg")
-        }
-    }
+    private fun ffmpegCmd(): List<String> = listOf(ApplicationLayout.current().ffmpegExecutable)
 
     private fun runAndCapture(cmd: List<String>, timeoutMs: Long): Triple<String, Int?, Boolean> {
         val start = System.currentTimeMillis()
@@ -112,7 +104,7 @@ object FFmpegCapabilities {
         }
         cached = set
         if (set.isEmpty()) {
-            logger.info { "No hardware H.264 encoders detected (probe parsed none). Software (libx264) only. If unexpected, ensure ffmpeg with NVENC/QSV/AMF is on PATH or set FFMPEG_PATH / -Dtr.ffmpeg.path." }
+            logger.info { "No H.264 encoders were detected. Run the distribution diagnostics or verify the configured FFmpeg executable." }
         } else {
             logger.info { "Detected H.264 encoders: ${set.joinToString()}" }
         }

@@ -1,8 +1,10 @@
 package org.litvin.media
 
+import org.litvin.VlcBootstrap
 import uk.co.caprica.vlcj.player.base.MediaPlayer
 import uk.co.caprica.vlcj.player.base.State
 import uk.co.caprica.vlcj.player.component.CallbackMediaPlayerComponent
+import uk.co.caprica.vlcj.factory.MediaPlayerFactory
 import uk.co.caprica.vlcj.player.embedded.videosurface.callback.BufferFormat
 import uk.co.caprica.vlcj.player.embedded.videosurface.callback.BufferFormatCallbackAdapter
 import uk.co.caprica.vlcj.player.embedded.videosurface.callback.RenderCallbackAdapter
@@ -44,7 +46,7 @@ class VlcjStillFrameCaptureService : StillFrameCaptureService {
     }
 
     private val component = CallbackMediaPlayerComponent(
-        null,
+        MediaPlayerFactory(*VlcBootstrap.factoryArguments()),
         null,
         null,
         true,

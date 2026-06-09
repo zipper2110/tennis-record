@@ -14,6 +14,7 @@ class CompletedRendersStoreTest {
     fun setup() {
         tempDir = createTempDir(prefix = "trs-store-")
         System.setProperty("tennis.record.appDataDir", tempDir.absolutePath)
+        ApplicationLayout.resetForTests()
         // Ensure clean
         CompletedRendersStore.clear()
     }
@@ -22,6 +23,7 @@ class CompletedRendersStoreTest {
     fun tearDown() {
         try {
             System.clearProperty("tennis.record.appDataDir")
+            ApplicationLayout.resetForTests()
             tempDir.deleteRecursively()
         } catch (_: Throwable) {}
     }

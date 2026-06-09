@@ -203,19 +203,8 @@ object RenderQueueManager {
                 var probedDurationMs: Long? = null
                 if (!(job.idleTrim && job.edlSnapshot.isNotEmpty())) {
                     try {
-                        fun ffprobeExe(): String {
-                            val envPath = System.getenv("FFMPEG_PATH")?.trim().orEmpty()
-                            if (envPath.isNotEmpty()) {
-                                // Try to use sibling ffprobe when a full path to ffmpeg is provided
-                                val f = java.io.File(envPath)
-                                val dir = if (f.isFile) f.parentFile else f
-                                val candidate = java.io.File(dir, if (System.getProperty("os.name").lowercase().contains("win")) "ffprobe.exe" else "ffprobe")
-                                if (candidate.exists()) return candidate.absolutePath
-                            }
-                            return "ffprobe"
-                        }
                         val pbProbe = ProcessBuilder(
-                            ffprobeExe(),
+                            ApplicationLayout.current().ffprobeExecutable,
                             "-v", "error",
                             "-show_entries", "format=duration",
                             "-of", "default=nk=1:nw=1",
@@ -252,15 +241,9 @@ object RenderQueueManager {
                 )
                 logger.debug { "ffmpeg command: ${build.preview}" }
 
-                // Resolve ffmpeg executable (FFMPEG_PATH env var overrides PATH)
-                fun ffmpegExe(): String {
-                    val envPath = System.getenv("FFMPEG_PATH")?.trim().orEmpty()
-                    return if (envPath.isNotEmpty()) envPath else "ffmpeg"
-                }
-
                 // Start process
                 val cmd = mutableListOf<String>()
-                cmd += ffmpegExe()
+                cmd += ApplicationLayout.current().ffmpegExecutable
                 cmd += build.args
                 val pb = ProcessBuilder(cmd)
                 pb.redirectErrorStream(false)
@@ -268,7 +251,7 @@ object RenderQueueManager {
                 val proc = try { pb.start() } catch (ex: Throwable) {
                     logger.error(ex) { "Failed to start ffmpeg" }
                     job.status = RenderStatus.FAILED
-                    job.failureReason = "Failed to start FFmpeg: ${ex.javaClass.simpleName}: ${ex.message}. Ensure ffmpeg is installed and on PATH or set FFMPEG_PATH."
+                    job.failureReason = "Failed to start FFmpeg: ${ex.javaClass.simpleName}: ${ex.message}. Run Tennis Record distribution diagnostics for details."
                     job.stderrTail = null
                     job.updatedAtEpochMs = System.currentTimeMillis()
                     notifyObservers()

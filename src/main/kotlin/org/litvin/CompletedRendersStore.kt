@@ -41,19 +41,7 @@ object CompletedRendersStore {
     private val lock = ReentrantLock()
 
     private fun appDataDir(): File {
-        // Test override: if system property is set, prefer it
-        val override = System.getProperty("tennis.record.appDataDir")?.trim().orEmpty()
-        if (override.isNotEmpty()) {
-            val d = File(override)
-            if (!d.exists()) d.mkdirs()
-            return d
-        }
-        val win = System.getenv("APPDATA")?.trim().orEmpty()
-        val dir = if (win.isNotEmpty()) {
-            File(win, "tennis-record")
-        } else {
-            File(System.getProperty("user.home"), ".tennis-record")
-        }
+        val dir = ApplicationLayout.current().appDataDirectory
         if (!dir.exists()) dir.mkdirs()
         return dir
     }

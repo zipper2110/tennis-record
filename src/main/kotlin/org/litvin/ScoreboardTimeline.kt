@@ -34,6 +34,36 @@ data class OverlaySpan(
 )
 
 object ScoreboardTimelineBuilder {
+    private const val PREVIEW_SUBTITLE_PREROLL_MS = 250L
+
+    fun buildSourcePointSpans(
+        points: List<PointV1>,
+        outcomes: Map<String, Outcome>,
+        player1Name: String = "Player 1",
+        player2Name: String = "Player 2",
+        player1ColorHex: String? = null,
+        player2ColorHex: String? = null,
+    ): List<OverlaySpan> {
+        val ordered = points.sortedBy { it.startMs }
+        val base = build(
+            points = ordered,
+            outcomes = outcomes,
+            idleTrim = false,
+            player1Name = player1Name,
+            player2Name = player2Name,
+            player1ColorHex = player1ColorHex,
+            player2ColorHex = player2ColorHex,
+        )
+        return base.mapIndexedNotNull { index, span ->
+            val point = ordered.getOrNull(index) ?: return@mapIndexedNotNull null
+            if (point.endMs <= point.startMs) return@mapIndexedNotNull null
+            span.copy(
+                startMs = (point.startMs.toLong() - PREVIEW_SUBTITLE_PREROLL_MS).coerceAtLeast(0L),
+                endMs = point.endMs.toLong(),
+            )
+        }
+    }
+
     /** Builds overlay spans in OUTPUT time domain. */
     fun build(
         points: List<PointV1>,

@@ -34,6 +34,11 @@ object SwingMainApp {
 
     @JvmStatic
     fun main(args: Array<String>) {
+        if (args.contains("--diagnostics")) {
+            kotlin.system.exitProcess(DistributionDiagnostics.run())
+        }
+        VlcBootstrap.ensureConfigured()
+
         try {
             UIManager.setLookAndFeel(FlatDarkLaf())
             UIManager.put("defaultFont", Font("Segoe UI", Font.PLAIN, 14))
@@ -110,7 +115,7 @@ object SwingMainApp {
                 // Base theming (Phase 0.4)
                 applyBaseTheme()
 
-                val frame = JFrame("Tennis Record — Swing (Skeleton)")
+                val frame = JFrame(AppInfo.displayName)
                 frame.defaultCloseOperation = JFrame.EXIT_ON_CLOSE
                 frame.layout = BorderLayout()
 

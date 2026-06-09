@@ -15,19 +15,25 @@ object AssOverlayWriter {
      * Write an ASS file using the given video resolution and spans.
      * Fonts, sizes, paddings are scaled relative to 1080p.
      */
-    fun write(file: File, spans: List<OverlaySpan>, outWidth: Int, outHeight: Int) {
+    fun write(
+        file: File,
+        spans: List<OverlaySpan>,
+        outWidth: Int,
+        outHeight: Int,
+        style: ScoreboardStyle = ScoreboardStyles.default(),
+    ) {
         val playResX = outWidth.coerceAtLeast(16)
         val playResY = outHeight.coerceAtLeast(16)
         val scale = (playResY / 1080.0).coerceAtLeast(0.25)
 
         // Layout metrics per spec (1080p → scale proportionally)
-        val marginTL = (48 * scale).toInt()
-        val panelW = (420 * scale).toInt()
-        val panelH = (200 * scale).toInt()
+        val marginTL = (style.layout.marginBase * scale).toInt()
+        val panelW = (style.layout.panelWidthBase * scale).toInt()
+        val panelH = (style.layout.panelHeightBase * scale).toInt()
         val radius = (12 * scale).toInt() // rounded corners omitted in MVP (ASS limitation)
 
         // Header
-        val headerH = (56 * scale).toInt()
+        val headerH = (style.layout.headerHeightBase * scale).toInt()
         val dotSize = (16 * scale).toInt()
         val titleFont = (28 * scale).coerceIn(14.0, 96.0)
 
@@ -44,15 +50,9 @@ object AssOverlayWriter {
 
         file.parentFile?.mkdirs()
         file.bufferedWriter(Charsets.UTF_8).use { w ->
-            // Use per-span colors when provided; fall back to defaults
-            fun parseHexRgbOrDefault(hex: String?, defRgb: Int): Int {
-                val sHex = hex?.trim()?.removePrefix("#") ?: return defRgb
-                return try {
-                    if (sHex.length == 6) sHex.toInt(16) else defRgb
-                } catch (_: Throwable) { defRgb }
-            }
-            val c1Rgb = parseHexRgbOrDefault(spans.first().p1ColorHex, 0x4DA3FF)
-            val c2Rgb = parseHexRgbOrDefault(spans.first().p2ColorHex, 0xFF6B6B)
+            // Use per-span colors when provided; fall back to the selected style.
+            val c1Rgb = ScoreboardComponent.parseHexRgbOrDefault(spans.first().p1ColorHex, style.palette.player1Rgb)
+            val c2Rgb = ScoreboardComponent.parseHexRgbOrDefault(spans.first().p2ColorHex, style.palette.player2Rgb)
 
             // Header
             w.appendLine("[Script Info]")
@@ -66,25 +66,25 @@ object AssOverlayWriter {
             w.appendLine("[V4+ Styles]")
             w.appendLine("Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding")
             // Colors use &HAABBGGRR (AA: 00 opaque, FF transparent)
-            val neon = assColor(0xC4FF4D, 0x00)
-            val textPrimary = assColor(0xE7ECEF, 0x13) // ~92% opacity
-            val textMuted = assColor(0xCCCCCC, 0x00)
-            val panelBg = assColor(0x0E1116, 0x80) // 50% opacity background
+            val neon = assColor(style.palette.accentRgb, 0x00)
+            val textPrimary = assColor(style.palette.textPrimaryRgb, 0x13) // ~92% opacity
+            val textMuted = assColor(style.palette.textMutedRgb, 0x00)
+            val panelBg = assColor(style.palette.panelBgRgb, 0x80) // 50% opacity background
             val white = assColor(0xFFFFFF, 0x00)
             val black = assColor(0x000000, 0x00)
             val p1Square = assColor(c1Rgb, 0x30)
             val p2Square = assColor(c2Rgb, 0x30)
 
             // Base styles
-            w.appendLine("Style: Title,Arial,${fmt(titleFont)},$neon,&H000000FF,&H00000000,$black,1,0,0,0,100,100,2,0,1,1.5,0,7,0,0,0,0")
-            w.appendLine("Style: Name,Arial,${fmt(nameFont)},$textPrimary,&H000000FF,&H00000000,$white,0,0,0,0,100,100,0,0,1,1.2,0,7,0,0,0,0")
-            w.appendLine("Style: Cell,Arial,${fmt(setFont)},$textMuted,&H000000FF,&H00000000,$white,0,0,0,0,100,100,0,0,1,0.2,0,7,0,0,0,0")
-            w.appendLine("Style: BigScore,Arial,${fmt(bigScoreFont)},$neon,&H000000FF,&H00000000,$white,1,0,0,0,100,100,0,0,1,0.2,0,9,0,0,0,0")
-            w.appendLine("Style: BigScoreDim,Arial,${fmt(bigScoreFont)},$neon,&H000000FF,&H00000000,$black,1,0,0,0,100,100,0,0,1,1.2,0,9,0,0,0,0")
-            w.appendLine("Style: Dot,Arial,${fmt(nameFont)},$neon,&H000000FF,&H00000000,$black,1,0,0,0,100,100,0,0,1,1.2,0,7,0,0,0,0")
-            w.appendLine("Style: Panel,Arial,20,${withAlpha(black, 0x50)},&H000000FF,&H00000000,$black,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,0")
-            w.appendLine("Style: SquareP1,Arial,20,${withAlpha(p1Square, 0x30)},&H000000FF,&H00000000,$black,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,0")
-            w.appendLine("Style: SquareP2,Arial,20,${withAlpha(p2Square, 0x30)},&H000000FF,&H00000000,$black,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,0")
+            w.appendLine("Style: Title,${style.fontFamily},${fmt(titleFont)},$neon,&H000000FF,&H00000000,$black,1,0,0,0,100,100,2,0,1,1.5,0,7,0,0,0,0")
+            w.appendLine("Style: Name,${style.fontFamily},${fmt(nameFont)},$textPrimary,&H000000FF,&H00000000,$white,0,0,0,0,100,100,0,0,1,1.2,0,7,0,0,0,0")
+            w.appendLine("Style: Cell,${style.fontFamily},${fmt(setFont)},$textMuted,&H000000FF,&H00000000,$white,0,0,0,0,100,100,0,0,1,0.2,0,7,0,0,0,0")
+            w.appendLine("Style: BigScore,${style.fontFamily},${fmt(bigScoreFont)},$neon,&H000000FF,&H00000000,$white,1,0,0,0,100,100,0,0,1,0.2,0,9,0,0,0,0")
+            w.appendLine("Style: BigScoreDim,${style.fontFamily},${fmt(bigScoreFont)},$neon,&H000000FF,&H00000000,$black,1,0,0,0,100,100,0,0,1,1.2,0,9,0,0,0,0")
+            w.appendLine("Style: Dot,${style.fontFamily},${fmt(nameFont)},$neon,&H000000FF,&H00000000,$black,1,0,0,0,100,100,0,0,1,1.2,0,7,0,0,0,0")
+            w.appendLine("Style: Panel,${style.fontFamily},20,${withAlpha(black, 0x50)},&H000000FF,&H00000000,$black,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,0")
+            w.appendLine("Style: SquareP1,${style.fontFamily},20,${withAlpha(p1Square, 0x30)},&H000000FF,&H00000000,$black,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,0")
+            w.appendLine("Style: SquareP2,${style.fontFamily},20,${withAlpha(p2Square, 0x30)},&H000000FF,&H00000000,$black,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,0")
             w.appendLine()
 
             // Events
@@ -125,6 +125,21 @@ object AssOverlayWriter {
                         tbP2 = 0,
                     )
                 }
+                val display = ScoreboardComponent.display(
+                    s.copy(
+                        p1Pts = st.p1Pts,
+                        p2Pts = st.p2Pts,
+                        gamesP1 = st.gamesP1,
+                        gamesP2 = st.gamesP2,
+                        setsP1 = st.setsP1,
+                        setsP2 = st.setsP2,
+                        completedSets = st.completedSets,
+                        isTiebreak = st.isTiebreak,
+                        tbP1 = st.tbP1,
+                        tbP2 = st.tbP2,
+                    ),
+                    style,
+                )
 
                 // Panel background (simple rectangle; rounded/shadow omitted in MVP)
                 val px = marginTL
@@ -139,7 +154,7 @@ object AssOverlayWriter {
                 w.appendLine("Dialogue: 1,$start,$end,Dot,,0,0,0,,{\\pos(${dotX},${dotY})}•")
                 val titleX = dotX + dotSize + (12 * scale).toInt()
                 val titleY = py + (headerH * 0.5).toInt()
-                w.appendLine("Dialogue: 1,$start,$end,Title,,0,0,0,,{\\an7} {\\pos(${titleX},${titleY})}TennisRecord app")
+                w.appendLine("Dialogue: 1,$start,$end,Title,,0,0,0,,{\\an7} {\\pos(${titleX},${titleY})}${display.style.title}")
 
                 // Player rows positions
                 val row1Y = py + headerH + (15 * scale).toInt()
@@ -152,17 +167,9 @@ object AssOverlayWriter {
                 w.appendLine("Dialogue: 1,$start,$end,SquareP1,,0,0,0,,{\\p1}\\1c${assColor(0x000000, 0x00)}$icon1{\\p0}")
                 w.appendLine("Dialogue: 1,$start,$end,SquareP2,,0,0,0,,{\\p1}\\1c${assColor(0x000000, 0x00)}$icon2{\\p0}")
 
-                // Names (use provided names with fallback; uppercase at render time; apply simple ellipsis)
                 val nameX = contentX + iconSize + (12 * scale).toInt()
-                val p1Name = (s.p1Name ?: "Player 1").ifBlank { "Player 1" }
-                val p2Name = (s.p2Name ?: "Player 2").ifBlank { "Player 2" }
-                val maxChars = 20
-                fun ellipsizeName(n: String): String {
-                    val up = n.uppercase()
-                    return if (up.length <= maxChars) up else up.substring(0, maxChars - 1) + "\u2026"
-                }
-                w.appendLine("Dialogue: 2,$start,$end,Name,,0,0,0,,{\\an7} {\\pos(${nameX},${row1Y})}${ellipsizeName(p1Name)}")
-                w.appendLine("Dialogue: 2,$start,$end,Name,,0,0,0,,{\\an7} {\\pos(${nameX},${row2Y})}${ellipsizeName(p2Name)}")
+                w.appendLine("Dialogue: 2,$start,$end,Name,,0,0,0,,{\\an7} {\\pos(${nameX},${row1Y})}${display.player1Name}")
+                w.appendLine("Dialogue: 2,$start,$end,Name,,0,0,0,,{\\an7} {\\pos(${nameX},${row2Y})}${display.player2Name}")
 
                 // Reserve right side for big score and compute cell block bounds
                 val rightPad = (24 * scale).toInt()
@@ -171,7 +178,7 @@ object AssOverlayWriter {
 
                 // Set cells (last two sets)
                 val cell1X = nameX + nameCellGap
-                val sets = st.completedSets.takeLast(2)
+                val sets = display.completedSets
                 val totalCells = sets.size + 1 // +1 for current games column
                 val totalCellsW = totalCells * cellW + (totalCells - 1) * cellGap
                 var cx = cell1X
@@ -183,28 +190,18 @@ object AssOverlayWriter {
                 }
 
                 // Current games per set (ongoing set) shown as additional cells; during tiebreak show 6–6 per spec
-                val g1 = if (st.isTiebreak) 6 else st.gamesP1
-                val g2 = if (st.isTiebreak) 6 else st.gamesP2
-                w.appendLine("Dialogue: 2,$start,$end,Cell,,0,0,0,,{\\an7} {\\pos(${cx},${row1Y})}${g1}")
-                w.appendLine("Dialogue: 2,$start,$end,Cell,,0,0,0,,{\\an7} {\\pos(${cx},${row2Y})}${g2}")
+                w.appendLine("Dialogue: 2,$start,$end,Cell,,0,0,0,,{\\an7} {\\pos(${cx},${row1Y})}${display.player1Games}")
+                w.appendLine("Dialogue: 2,$start,$end,Cell,,0,0,0,,{\\an7} {\\pos(${cx},${row2Y})}${display.player2Games}")
                 cx += cellW + cellGap
 
                 // Big point score at the right (top-right aligned, anchored to panel right pad)
                 val scoreX = scoreRightX
                 val scoreY1 = row1Y - 4
                 val scoreY2 = row2Y - 4
-                val p1Lead = if (st.isTiebreak) st.tbP1 > st.tbP2 else isP1LeadingLegacy(st.p1Pts, st.p2Pts)
-                val style1 = if (p1Lead) "BigScore" else "BigScoreDim"
-                val style2 = if (p1Lead) "BigScoreDim" else "BigScore"
-                if (st.isTiebreak) {
-                    w.appendLine("Dialogue: 3,$start,$end,$style1,,0,0,0,,{\\an9} {\\pos(${scoreX},${scoreY1})}${st.tbP1}")
-                    w.appendLine("Dialogue: 3,$start,$end,$style2,,0,0,0,,{\\an9} {\\pos(${scoreX},${scoreY2})}${st.tbP2}")
-                } else {
-                    val p1PtsTxt = pointsLabel(st.p1Pts, st.p2Pts)
-                    val p2PtsTxt = pointsLabel(st.p2Pts, st.p1Pts)
-                    w.appendLine("Dialogue: 3,$start,$end,$style1,,0,0,0,,{\\an9} {\\pos(${scoreX},${scoreY1})}${p1PtsTxt}")
-                    w.appendLine("Dialogue: 3,$start,$end,$style2,,0,0,0,,{\\an9} {\\pos(${scoreX},${scoreY2})}${p2PtsTxt}")
-                }
+                val style1 = if (display.player1Leading) "BigScore" else "BigScoreDim"
+                val style2 = if (display.player1Leading) "BigScoreDim" else "BigScore"
+                w.appendLine("Dialogue: 3,$start,$end,$style1,,0,0,0,,{\\an9} {\\pos(${scoreX},${scoreY1})}${display.player1PointText}")
+                w.appendLine("Dialogue: 3,$start,$end,$style2,,0,0,0,,{\\an9} {\\pos(${scoreX},${scoreY2})}${display.player2PointText}")
             }
         }
     }

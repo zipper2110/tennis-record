@@ -1,5 +1,7 @@
 package org.litvin.ui.tabs.test
 
+import org.litvin.AssOverlayWriter
+import org.litvin.OverlaySpan
 import org.litvin.media.PlayerStatus
 import org.litvin.media.VlcjSwingMediaPlayerAdapter
 import org.litvin.ui.UiStyles
@@ -25,6 +27,11 @@ class SwingTestPanel : JPanel(BorderLayout()) {
     private val player = VlcjSwingMediaPlayerAdapter()
     private var pendingVideoFile: File? = null
     private var projectManifestPath: String? = null
+    private var testP1Pts: Int = 0
+    private var testP2Pts: Int = 0
+    private var testP1Games: Int = 0
+    private var testP2Games: Int = 0
+    private var subtitleGeneration: Int = 0
 
     private val playPauseButton: JButton = UiStyles.squarePrimaryButton(UiStyles.playIcon(26), size = 52) {
         togglePlayPause()
@@ -38,6 +45,9 @@ class SwingTestPanel : JPanel(BorderLayout()) {
 
     private val projectLabel = JLabel("No project loaded").apply {
         foreground = UiStyles.FG_SECONDARY
+    }
+    private val scoreLabel = JLabel("Score: 0 - 0").apply {
+        foreground = UiStyles.FG_PRIMARY
     }
     private val rotationValueLabel = JLabel("0.0 deg").apply {
         foreground = UiStyles.FG_PRIMARY
@@ -98,10 +108,29 @@ class SwingTestPanel : JPanel(BorderLayout()) {
             alignmentX = LEFT_ALIGNMENT
             maximumSize = Dimension(Int.MAX_VALUE, 36)
         }
+        val pointP1Button = UiStyles.primarySmallButton("Point Player 1") {
+            giveTestPoint(playerOne = true)
+        }.apply {
+            alignmentX = LEFT_ALIGNMENT
+            maximumSize = Dimension(Int.MAX_VALUE, 36)
+        }
+        val pointP2Button = UiStyles.primarySmallButton("Point Player 2") {
+            giveTestPoint(playerOne = false)
+        }.apply {
+            alignmentX = LEFT_ALIGNMENT
+            maximumSize = Dimension(Int.MAX_VALUE, 36)
+        }
+        val resetScoreButton = UiStyles.primarySmallButton("Reset Test Score") {
+            resetTestScore()
+        }.apply {
+            alignmentX = LEFT_ALIGNMENT
+            maximumSize = Dimension(Int.MAX_VALUE, 36)
+        }
 
         playPauseButton.alignmentX = LEFT_ALIGNMENT
         fileLabel.alignmentX = LEFT_ALIGNMENT
         projectLabel.alignmentX = LEFT_ALIGNMENT
+        scoreLabel.alignmentX = LEFT_ALIGNMENT
         rotationValueLabel.alignmentX = LEFT_ALIGNMENT
         rotationSlider.alignmentX = LEFT_ALIGNMENT
         rotationSlider.maximumSize = Dimension(Int.MAX_VALUE, 44)
@@ -123,6 +152,19 @@ class SwingTestPanel : JPanel(BorderLayout()) {
         rightPanel.add(rotationValueLabel)
         rightPanel.add(Box.createRigidArea(Dimension(0, 10)))
         rightPanel.add(applyRotationButton)
+        rightPanel.add(Box.createRigidArea(Dimension(0, 20)))
+        rightPanel.add(JLabel("Subtitle Scoreboard").apply {
+            foreground = UiStyles.FG_SECONDARY
+            alignmentX = LEFT_ALIGNMENT
+        })
+        rightPanel.add(Box.createRigidArea(Dimension(0, 8)))
+        rightPanel.add(pointP1Button)
+        rightPanel.add(Box.createRigidArea(Dimension(0, 8)))
+        rightPanel.add(pointP2Button)
+        rightPanel.add(Box.createRigidArea(Dimension(0, 8)))
+        rightPanel.add(resetScoreButton)
+        rightPanel.add(Box.createRigidArea(Dimension(0, 8)))
+        rightPanel.add(scoreLabel)
         rightPanel.add(Box.createRigidArea(Dimension(0, 20)))
         rightPanel.add(fileLabel)
         rightPanel.add(Box.createRigidArea(Dimension(0, 8)))
@@ -170,8 +212,10 @@ class SwingTestPanel : JPanel(BorderLayout()) {
         pendingVideoFile = file
         fileLabel.text = file.name
         scrubBar.reset()
+        resetTestScoreState()
         player.load(file)
         player.pause()
+        refreshTestSubtitleOverlay()
         updatePlayPauseUi()
     }
 
@@ -196,6 +240,7 @@ class SwingTestPanel : JPanel(BorderLayout()) {
         player.onReady = {
             EventQueue.invokeLater {
                 refreshScrub()
+                refreshTestSubtitleOverlay()
                 updatePlayPauseUi()
             }
         }
@@ -224,5 +269,102 @@ class SwingTestPanel : JPanel(BorderLayout()) {
         val playing = player.status() == PlayerStatus.PLAYING
         playPauseButton.icon = if (playing) UiStyles.pauseIcon(26) else UiStyles.playIcon(26)
         playPauseButton.toolTipText = if (playing) "Pause" else "Play"
+    }
+
+    private fun giveTestPoint(playerOne: Boolean) {
+        if (playerOne) {
+            val result = advancePoint(testP1Pts, testP2Pts, testP1Games)
+            testP1Pts = result.minePts
+            testP2Pts = result.otherPts
+            testP1Games = result.mineGames
+        } else {
+            val result = advancePoint(testP2Pts, testP1Pts, testP2Games)
+            testP2Pts = result.minePts
+            testP1Pts = result.otherPts
+            testP2Games = result.mineGames
+        }
+        refreshTestSubtitleOverlay()
+    }
+
+    private data class PointAdvanceResult(
+        val minePts: Int,
+        val otherPts: Int,
+        val mineGames: Int,
+    )
+
+    private fun advancePoint(minePts: Int, otherPts: Int, mineGames: Int): PointAdvanceResult {
+        if (minePts >= 3 && otherPts >= 3) {
+            return when {
+                minePts == otherPts -> PointAdvanceResult(4, otherPts, mineGames)
+                minePts > otherPts -> PointAdvanceResult(0, 0, mineGames + 1)
+                else -> PointAdvanceResult(3, 3, mineGames)
+            }
+        }
+        val next = minePts + 1
+        return if (next >= 4) {
+            PointAdvanceResult(0, 0, mineGames + 1)
+        } else {
+            PointAdvanceResult(next, otherPts, mineGames)
+        }
+    }
+
+    private fun resetTestScore() {
+        resetTestScoreState()
+        refreshTestSubtitleOverlay()
+    }
+
+    private fun resetTestScoreState() {
+        testP1Pts = 0
+        testP2Pts = 0
+        testP1Games = 0
+        testP2Games = 0
+        updateScoreLabel()
+    }
+
+    private fun refreshTestSubtitleOverlay() {
+        val file = pendingVideoFile ?: return
+        if (!file.exists()) return
+
+        val duration = player.totalDurationMs().takeIf { it > 0L } ?: (6L * 60L * 60L * 1000L)
+        val assFile = File(
+            System.getProperty("java.io.tmpdir"),
+            "tennis-record-test-scoreboard-${System.nanoTime()}-${subtitleGeneration++}.ass"
+        )
+        AssOverlayWriter.write(
+            assFile,
+            listOf(
+                OverlaySpan(
+                    startMs = 0L,
+                    endMs = duration,
+                    text = "",
+                    p1Name = "Player 1",
+                    p2Name = "Player 2",
+                    p1ColorHex = "#4DA3FF",
+                    p2ColorHex = "#FF6B6B",
+                    p1Pts = testP1Pts,
+                    p2Pts = testP2Pts,
+                    gamesP1 = testP1Games,
+                    gamesP2 = testP2Games,
+                    setsP1 = 0,
+                    setsP2 = 0,
+                )
+            ),
+            outWidth = 1920,
+            outHeight = 1080,
+        )
+        assFile.deleteOnExit()
+        player.setSubtitleFile(assFile)
+        updateScoreLabel()
+    }
+
+    private fun updateScoreLabel() {
+        scoreLabel.text = "Score: ${pointsLabel(testP1Pts, testP2Pts)} - ${pointsLabel(testP2Pts, testP1Pts)}   Games: $testP1Games - $testP2Games"
+    }
+
+    private fun pointsLabel(mine: Int, other: Int): String {
+        val base = arrayOf("0", "15", "30", "40")
+        if (mine < 4 && other < 4) return base[mine.coerceIn(0, 3)]
+        if (mine == other) return "40"
+        return if (mine > other) "Ad" else "40"
     }
 }

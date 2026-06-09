@@ -1,6 +1,7 @@
 package org.litvin.media
 
 import io.github.oshai.kotlinlogging.KotlinLogging
+import org.litvin.VlcBootstrap
 import org.litvin.adjustments.AdjustmentsV1
 import org.litvin.ui.tabs.adjustments.AdjustmentsUiConverter
 import uk.co.caprica.vlcj.player.base.MediaPlayer
@@ -100,7 +101,7 @@ class VlcjSwingMediaPlayerAdapter(
     }.apply { isRepeats = false }
 
     private fun createEmbeddedComponent(rotationDeg: Float, playerId: Int): EmbeddedMediaPlayerComponent {
-        val args = VlcPreviewMediaOptions.factoryArguments(rotationDeg)
+        val args = VlcBootstrap.factoryArguments(VlcPreviewMediaOptions.factoryArguments(rotationDeg))
         logger.info {
             "Creating VLCJ preview component #$playerId: rotationDeg=$rotationDeg, " +
                 "factoryArgs=${formatOptions(args)}"
@@ -513,6 +514,16 @@ class VlcjSwingMediaPlayerAdapter(
                 "loadedRotationDeg=$loadedRotationDeg"
         }
         playMedia(file, pendingRotationDeg, PlaybackRestore(0L, playing = false, rate = playbackRate), "load")
+    }
+
+    fun setSubtitleFile(file: File): Boolean {
+        val player = mediaPlayer ?: return false
+        return try {
+            player.subpictures().setSubTitleFile(file)
+        } catch (t: Throwable) {
+            logger.warn(t) { "Failed to attach VLC subtitle file: ${file.absolutePath}" }
+            false
+        }
     }
 
     private fun playMedia(file: File, rotationDeg: Float, restore: PlaybackRestore?, reason: String) {

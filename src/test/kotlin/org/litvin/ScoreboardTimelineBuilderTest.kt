@@ -52,6 +52,69 @@ class ScoreboardTimelineBuilderTest {
     }
 
     @Test
+    fun sourcePointSpans_coverActualPointStartForPausedPreviewSeeking() {
+        val points = listOf(
+            pts("A", 500, 1_000),
+            pts("B", 2_000, 3_000),
+            pts("C", 4_000, 5_000),
+        )
+        val spans = ScoreboardTimelineBuilder.buildSourcePointSpans(
+            points = points,
+            outcomes = mapOf("A" to Outcome.P1),
+        )
+
+        assertEquals(3, spans.size)
+        assertEquals(250L, spans[0].startMs); assertEquals(1_000L, spans[0].endMs)
+        assertEquals(1_750L, spans[1].startMs); assertEquals(3_000L, spans[1].endMs)
+        assertEquals(3_750L, spans[2].startMs); assertEquals(5_000L, spans[2].endMs)
+        assertTrue(spans[1].text.contains("Player 1: pts 15"), "Preview span should keep score-before-point semantics: ${spans[1].text}")
+        assertTrue(spans[1].text.contains("Player 2: pts 0"), "Preview span should not include point B outcome: ${spans[1].text}")
+    }
+
+    @Test
+    fun timeline_idleTrim_OFF_currentPointOutcome_doesNotChangeCurrentPointSpan() {
+        val points = listOf(
+            pts("A", 0, 1_000),
+            pts("B", 2_000, 3_000),
+            pts("C", 4_000, 5_000),
+        )
+        val spans = ScoreboardTimelineBuilder.build(
+            points = points,
+            outcomes = mapOf(
+                "A" to Outcome.P1,
+                "B" to Outcome.P2,
+            ),
+            idleTrim = false,
+        )
+
+        assertEquals(3, spans.size)
+        assertTrue(spans[1].text.contains("Player 1: pts 15"), "Point B should show score before B outcome: ${spans[1].text}")
+        assertTrue(spans[1].text.contains("Player 2: pts 0"), "Point B should not include B outcome yet: ${spans[1].text}")
+        assertTrue(spans[2].text.contains("Player 1: pts 15"), "Point C should include previous P1 outcome: ${spans[2].text}")
+        assertTrue(spans[2].text.contains("Player 2: pts 15"), "Point C should include previous P2 outcome: ${spans[2].text}")
+    }
+
+    @Test
+    fun timeline_ignoresOutcomeForDeletedOrMissingPoint() {
+        val points = listOf(
+            pts("A", 0, 1_000),
+            pts("C", 4_000, 5_000),
+        )
+        val spans = ScoreboardTimelineBuilder.build(
+            points = points,
+            outcomes = mapOf(
+                "A" to Outcome.P1,
+                "B-deleted" to Outcome.P1,
+            ),
+            idleTrim = false,
+        )
+
+        assertEquals(2, spans.size)
+        assertTrue(spans[1].text.contains("Player 1: pts 15"), "Deleted point outcome should not be counted: ${spans[1].text}")
+        assertTrue(spans[1].text.contains("Player 2: pts 0"), "Deleted point outcome should not affect player 2 either: ${spans[1].text}")
+    }
+
+    @Test
     fun timeline_advances_games_when_enough_points_to_win_game() {
         // Four consecutive P1 point wins → one game up, then displays 0 points at next interval
         val points = listOf(

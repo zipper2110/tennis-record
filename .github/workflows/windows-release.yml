@@ -1,0 +1,140 @@
+name: Windows release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  windows-installer:
+    runs-on: windows-2022
+    environment: windows-release
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v5
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      - name: Validate release gates
+        shell: pwsh
+        run: |
+          if ("${{ github.ref_name }}" -notmatch '^v\d+\.\d+\.\d+$') {
+            throw "Release tag must use vMAJOR.MINOR.PATCH."
+          }
+          ./distribution/windows/Validate-Release.ps1
+
+      - name: Install WiX Toolset 3
+        shell: pwsh
+        run: choco install wixtoolset --version=3.14.1 --yes --no-progress
+
+      - name: Run tests
+        shell: pwsh
+        run: mvn -B test
+
+      - name: Assemble verified native dependencies
+        shell: pwsh
+        run: ./distribution/windows/Get-NativeDependencies.ps1
+
+      - name: Build application image
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}".TrimStart("v")
+          ./distribution/windows/Build-AppImage.ps1 -Version $version
+
+      - name: Run packaged diagnostics
+        shell: pwsh
+        run: |
+          & "${{ github.workspace }}\target\package\app-image\Tennis Record\Tennis Record Diagnostics.cmd"
+          if ($LASTEXITCODE -ne 0) { throw "Packaged diagnostics failed." }
+
+      - name: Sign in to Azure
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Sign application launchers
+        uses: azure/artifact-signing-action@v2
+        with:
+          endpoint: ${{ vars.ARTIFACT_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.ARTIFACT_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ vars.ARTIFACT_SIGNING_PROFILE }}
+          files: ${{ github.workspace }}\target\package\app-image\Tennis Record\Tennis Record.exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+          description: Tennis Record
+          timeout: 900
+
+      - name: Build EXE installer
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}".TrimStart("v")
+          ./distribution/windows/Build-Installer.ps1 -Version $version
+
+      - name: Sign EXE installer
+        uses: azure/artifact-signing-action@v2
+        with:
+          endpoint: ${{ vars.ARTIFACT_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.ARTIFACT_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ vars.ARTIFACT_SIGNING_PROFILE }}
+          files-folder: ${{ github.workspace }}\target\package\installer
+          files-folder-filter: exe
+          files-folder-recurse: false
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+          description: Tennis Record installer
+          timeout: 900
+
+      - name: Verify signatures and stage release files
+        shell: pwsh
+        run: |
+          $releaseDir = New-Item -ItemType Directory -Force target/release
+          $launchers = @("target/package/app-image/Tennis Record/Tennis Record.exe")
+          $installer = Get-ChildItem target/package/installer -Filter *.exe | Select-Object -First 1
+          if (-not $installer) { throw "Installer not found." }
+          foreach ($file in $launchers + $installer.FullName) {
+            $signature = Get-AuthenticodeSignature -LiteralPath $file
+            if ($signature.Status -ne "Valid") {
+              throw "Invalid Authenticode signature for $file`: $($signature.Status)"
+            }
+          }
+          Copy-Item -LiteralPath $installer.FullName -Destination $releaseDir
+          Copy-Item distribution/THIRD-PARTY-NOTICES.txt -Destination $releaseDir
+          Copy-Item LICENSE -Destination (Join-Path $releaseDir "LICENSE.txt")
+          Copy-Item LICENSE-NOTICE -Destination (Join-Path $releaseDir "LICENSE-NOTICE.txt")
+          Copy-Item distribution/windows/native-dependencies.json -Destination $releaseDir
+          Copy-Item target/tennis-record-sbom.json -Destination $releaseDir
+          Copy-Item target/distribution/sources/* -Destination $releaseDir
+          $sourceArchive = Join-Path $releaseDir "tennis-record-${{ github.ref_name }}-source.zip"
+          git archive --format=zip --output=$sourceArchive "${{ github.ref_name }}"
+          if ($LASTEXITCODE -ne 0) { throw "Source archive creation failed." }
+          $publishedInstaller = Join-Path $releaseDir $installer.Name
+          $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $publishedInstaller).Hash.ToLowerInvariant()
+          "$hash *$($installer.Name)" | Set-Content -Encoding ascii (Join-Path $releaseDir "$($installer.Name).sha256")
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tennis-record-${{ github.ref_name }}-windows-x64
+          path: target/release/*
+          if-no-files-found: error
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: target/release/*
+          fail_on_unmatched_files: true

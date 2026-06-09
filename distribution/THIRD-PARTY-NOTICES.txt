@@ -1,0 +1,45 @@
+TENNIS RECORD THIRD-PARTY NOTICES
+
+This distribution contains third-party software. The authoritative license
+texts shipped inside dependency archives and JAR files remain controlling.
+
+VLC media player / libVLC 3.0.23
+Copyright VideoLAN and VLC contributors.
+License: GNU Lesser General Public License v2.1 or later, with individual VLC
+modules potentially under compatible licenses.
+Source and license information: https://www.videolan.org/vlc/
+The bundled libVLC files are unmodified and remain replaceable in the
+installation directory.
+
+FFmpeg n7.1.4-6-g181cfa1008, BtbN win64-lgpl-shared-7.1 build
+Copyright FFmpeg developers and dependency authors.
+License: GNU Lesser General Public License v2.1 or later for this selected
+build variant. Source/build information:
+https://github.com/BtbN/FFmpeg-Builds
+https://ffmpeg.org/
+The shared libraries and executables are unmodified and remain replaceable in
+the installation directory.
+
+vlcj 4.12.1 and vlcj-natives 4.12.0
+Copyright Caprica Software Limited and contributors.
+License: GNU General Public License v3 or later.
+https://github.com/caprica/vlcj
+Exact source JARs are published alongside each Tennis Record binary release.
+
+Eclipse Temurin OpenJDK 17 runtime
+Copyright Eclipse Foundation and OpenJDK contributors.
+License: GNU General Public License v2 with the Classpath Exception.
+https://adoptium.net/
+
+Additional Java dependencies
+This application also includes Kotlin, Jackson, JNA, FlatLaf, Logback, SLF4J,
+Kotlin Logging, and Ikonli artifacts. Their license metadata and license texts
+are retained in their distributed JAR files. The release includes a
+CycloneDX software bill of materials for the exact Maven dependency set.
+
+Tennis Record
+Copyright (c) 2026 Tennis Record contributors.
+License: GNU General Public License v3 or later.
+The complete license text is in LICENSE.txt. The corresponding source code
+for the Tennis Record application is published alongside the Windows
+installer.

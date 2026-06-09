@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "architecture": "windows-x64",
+  "vlc": {
+    "version": "3.0.23",
+    "archiveName": "vlc-3.0.23-win64.zip",
+    "url": "https://download.videolan.org/pub/videolan/vlc/3.0.23/win64/vlc-3.0.23-win64.zip",
+    "sha256": "992d19dbd0b8a7cde9167d2f7780b1ef6f92acc8a71acfa736101a21f35181e1",
+    "extractedDirectory": "vlc-3.0.23"
+  },
+  "ffmpeg": {
+    "version": "n7.1.4-6-g181cfa1008",
+    "variant": "win64-lgpl-shared-7.1",
+    "archiveName": "ffmpeg-n7.1.4-6-g181cfa1008-win64-lgpl-shared-7.1.zip",
+    "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-05-27-14-06/ffmpeg-n7.1.4-6-g181cfa1008-win64-lgpl-shared-7.1.zip",
+    "sha256": "9283bf0048c50fa6f9c1afa1845adb96d46aa06b7ad046d881ce800d31d47c29",
+    "extractedDirectory": "ffmpeg-n7.1.4-6-g181cfa1008-win64-lgpl-shared-7.1"
+  }
+}

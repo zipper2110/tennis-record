@@ -68,6 +68,10 @@ See: [docs/solution-outline.md](docs/solution-outline.md)
 - Keep EDL/score models versioned and migration‑ready.
 
 ## Licensing & third‑party components
+- Tennis Record is free software licensed under the GNU General Public License
+  version 3 or later. See [LICENSE](LICENSE).
+- Binary releases include the application source, vlcj source JARs, an SBOM,
+  native dependency provenance, and third-party notices.
 - libVLC (LGPL) — shipped unmodified and replaceable by users.
 - FFmpeg — prefer LGPL builds unless GPL filters/codecs are explicitly required.
 - Fonts — ensure redistribution rights (e.g., OFL fonts like Roboto).

@@ -1,6 +1,8 @@
 package org.litvin.ui.tabs.scoring
 
 import org.litvin.GeometryViewportPanel
+import org.litvin.AssPreviewScoreboardWriter
+import org.litvin.ScoreboardTimelineBuilder
 import org.litvin.projects.ManifestIO
 import org.litvin.SessionSettings
 import org.litvin.adjustments.AdjustmentsStore
@@ -133,6 +135,7 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
     // Deferred media loading
     private var pendingMediaFile: File? = null
     private var isMediaLoaded: Boolean = false
+    private var scoreboardSubtitleGeneration: Int = 0
 
     override fun addNotify() = uiSafe {
         super.addNotify()
@@ -148,6 +151,7 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
             player.load(videoFile)
             player.pause()
             isMediaLoaded = true
+            refreshVideoScoreboardOverlay()
             // Re-apply current adjustments after media is loaded to ensure VLC picks them up
             try {
                 val current = AdjustmentsStore.get()
@@ -252,6 +256,7 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
             isMediaLoaded = false
             ensurePlayerLoaded()
         }
+        refreshVideoScoreboardOverlay()
     }
 
     // Reload points from the project's EDL and refresh UI; invoked on tab activation
@@ -279,6 +284,7 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
             else -> { /* keep current selection (or none) */
             }
         }
+        refreshVideoScoreboardOverlay()
     }
 
     init {
@@ -300,6 +306,7 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
                 player1Name = p1
                 player2Name = p2
                 refreshNameDependentUi()
+                refreshVideoScoreboardOverlay()
                 try { namesSaveTimer.restart() } catch (_: Throwable) { saveNow() }
             },
             onColorsChanged = { c1, c2 ->
@@ -309,6 +316,7 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
                 if (::leftPlayerPanel.isInitialized) leftPlayerPanel.setAccentColorHex(player1ColorHex)
                 if (::rightPlayerPanel.isInitialized) rightPlayerPanel.setAccentColorHex(player2ColorHex)
                 rebuildPointsList()
+                refreshVideoScoreboardOverlay()
                 try { namesSaveTimer.restart() } catch (_: Throwable) { saveNow() }
             }
         )
@@ -343,6 +351,7 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
                     }
                 }
                 updateVideoControls()
+                refreshVideoScoreboardOverlay()
             }
         }
     }
@@ -401,15 +410,11 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
         // Update scrub panel to show segment start and end of the point
         if (::segmentScrub.isInitialized) segmentScrub.setSegment(segmentStartMs, segmentEndMs)
         updateScrubUi(segmentStartMs)
+        refreshVideoScoreboardOverlay()
         // Jump playback to start; callers can opt into autoplay after the preview frame is primed.
         player.pause()
         player.seek(segmentStartMs)
         // Prime a preview frame to avoid an initial black canvas on some systems
-
-        val maxPlayable = (segmentEndMs - 1).coerceAtLeast(segmentStartMs)
-        val nudge = (segmentStartMs + 1).coerceAtMost(maxPlayable)
-        if (nudge != segmentStartMs) player.seek(nudge)
-        player.seek(segmentStartMs)
         if (autoPlay) player.play()
 
         if (isActive) player.component.requestFocusInWindow()
@@ -808,6 +813,7 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
         setSelectedIndex(keepIndex, userInitiated = false)
         scheduleScoreAutosave()
         updateScore(keepIndex)
+        refreshVideoScoreboardOverlay()
 
         EventQueue.invokeLater {
             player.component.requestFocusInWindow()
@@ -838,6 +844,38 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
         val name2 = displayNameP2()
         if (::leftPlayerPanel.isInitialized) leftPlayerPanel.setPlayerName(name1)
         if (::rightPlayerPanel.isInitialized) rightPlayerPanel.setPlayerName(name2)
+    }
+
+    private fun refreshVideoScoreboardOverlay() {
+        val videoFile = pendingMediaFile ?: return
+        if (!videoFile.exists() || points.isEmpty()) return
+
+        try {
+            val spans = ScoreboardTimelineBuilder.buildSourcePointSpans(
+                points = points,
+                outcomes = outcomesByPointId,
+                player1Name = displayNameP1(),
+                player2Name = displayNameP2(),
+                player1ColorHex = player1ColorHex,
+                player2ColorHex = player2ColorHex,
+            )
+            if (spans.isEmpty()) return
+
+            val assFile = File(
+                System.getProperty("java.io.tmpdir"),
+                "tennis-record-scoring-scoreboard-${System.nanoTime()}-${scoreboardSubtitleGeneration++}.ass"
+            )
+            AssPreviewScoreboardWriter.write(
+                assFile,
+                spans,
+                outWidth = 1920,
+                outHeight = 1080,
+            )
+            assFile.deleteOnExit()
+            player.setSubtitleFile(assFile)
+        } catch (_: Throwable) {
+            // Preview subtitles are best-effort; scoring/export data remains authoritative.
+        }
     }
 
     private fun updateScore(index: Int) {
