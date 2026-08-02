@@ -1,5 +1,6 @@
 package org.litvin.ui.tabs.markup.components
 
+import org.litvin.ui.commons.AppShortcuts
 import java.awt.event.ActionEvent
 import javax.swing.*
 
@@ -42,16 +43,16 @@ class Keybindings(
 
     private fun install() {
         // Primary controls
-        bind("SPACE", "markup.toggle") { actions.toggle() }
-        bind("C", "markup.pointStart") { actions.startAtPlayhead() }
-        bind("V", "markup.pointEnd") { actions.endAtPlayhead() }
-        bind("A", "markup.toggleFavorite") { actions.toggleFavoriteSelected() }
-        bind("DELETE", "markup.delete") { actions.deleteSelected() }
+        bind(AppShortcuts.PLAY_PAUSE.keyStroke, "markup.toggle") { actions.toggle() }
+        bind(AppShortcuts.POINT_START.keyStroke, "markup.pointStart") { actions.startAtPlayhead() }
+        bind(AppShortcuts.POINT_END.keyStroke, "markup.pointEnd") { actions.endAtPlayhead() }
+        bind(AppShortcuts.TOGGLE_FAVORITE.keyStroke, "markup.toggleFavorite") { actions.toggleFavoriteSelected() }
+        bind(AppShortcuts.DELETE.keyStroke, "markup.delete") { actions.deleteSelected() }
         // Seeks (nudge)
-        bind("LEFT", "markup.seekLeft") { actions.nudge(-1_000) }
-        bind("RIGHT", "markup.seekRight") { actions.nudge(+1_000) }
-        bind("shift LEFT", "markup.seekLeftBig") { actions.nudge(-10_000) }
-        bind("shift RIGHT", "markup.seekRightBig") { actions.nudge(+10_000) }
+        bind(AppShortcuts.LEFT.keyStroke, "markup.seekLeft") { actions.nudge(-1_000) }
+        bind(AppShortcuts.RIGHT.keyStroke, "markup.seekRight") { actions.nudge(+1_000) }
+        bind(AppShortcuts.SHIFT_LEFT.keyStroke, "markup.seekLeftBig") { actions.nudge(-5_000) }
+        bind(AppShortcuts.SHIFT_RIGHT.keyStroke, "markup.seekRightBig") { actions.nudge(+5_000) }
     }
 
     fun uninstall() {

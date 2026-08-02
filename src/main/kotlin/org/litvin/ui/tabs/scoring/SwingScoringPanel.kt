@@ -1,7 +1,7 @@
 package org.litvin.ui.tabs.scoring
 
 import org.litvin.GeometryViewportPanel
-import org.litvin.AssPreviewScoreboardWriter
+import org.litvin.ScoreboardComponent
 import org.litvin.ScoreboardTimelineBuilder
 import org.litvin.projects.ManifestIO
 import org.litvin.SessionSettings
@@ -21,6 +21,7 @@ import org.litvin.ui.UiStyles
 import org.litvin.ui.commons.AspectPanel
 import org.litvin.ui.commons.Dialogs
 import org.litvin.ui.commons.uiSafe
+import org.litvin.ui.commons.AppShortcuts
 import org.litvin.ui.tabs.scoring.ui.*
 import java.awt.BorderLayout
 import java.awt.Color
@@ -48,7 +49,7 @@ import javax.swing.border.EmptyBorder
  * - entry/ScoreEntryPanel — primary scoring inputs (points, undo/redo)
  * - toolbar/ControlsToolbar — top-level actions (reset/save/settings)
  * - timeline/TimelineSection — wraps existing PointsListPanel
- * - help/HotkeysHelpPanel — compact legend of scoring hotkeys
+ * - app-level contextual Help opened from the toolbar
  * - video/VideoSyncPanel — basic video/timecode sync controls for scoring
  *
  * Shared contracts for wiring (defined in `org.litvin.ui.tabs.scoring`):
@@ -58,7 +59,9 @@ import javax.swing.border.EmptyBorder
  * SwingScoringPanel remains the container that composes leaves and binds them to domain services,
  * while leaves depend only on the above contracts, per architecture rules.
  */
-class SwingScoringPanel : JPanel(BorderLayout()) {
+class SwingScoringPanel(
+    private val onHelp: () -> Unit = {},
+) : JPanel(BorderLayout()) {
 
     private val videoPlayerActions = object : VideoPlayerActions {
         override fun playPause() {
@@ -135,7 +138,6 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
     // Deferred media loading
     private var pendingMediaFile: File? = null
     private var isMediaLoaded: Boolean = false
-    private var scoreboardSubtitleGeneration: Int = 0
 
     override fun addNotify() = uiSafe {
         super.addNotify()
@@ -296,7 +298,7 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
         val toolbar = ControlsToolbar(
             centerContent = pointHeaderPanel(),
             centerContentOffsetPx = 270,
-            onHelp = { showHelpDialog() },
+            onHelp = onHelp,
         )
         add(toolbar, BorderLayout.NORTH)
 
@@ -397,6 +399,7 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
             updateActionButtonsState(enable = false, selectedOutcome = null)
             // Disable Next on no selection or empty list
             if (::leftListPanel.isInitialized) leftListPanel.setNextEnabled(false)
+            player.setPreviewOverlayImage(null)
             // Clear bottom panels and overlay
             val zero = MatchState(0, 0, 0, 0, 0, 0, null, null, false)
             updateBottomPanels(zero)
@@ -592,11 +595,6 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
 
     // buildPlayerPanel extracted into org.litvin.ui.tabs.scoring.ui.PlayerPanel
 
-    private fun showHelpDialog() {
-        val dlg = ScoringHelpDialog(this, { displayNameP1() }, { displayNameP2() })
-        dlg.isVisible = true
-    }
-
     private fun togglePlayPause() {
         val wasPlaying = player.status() == PlayerStatus.PLAYING
         if (wasPlaying) {
@@ -659,51 +657,51 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
             })
         }
         // Space toggles play/pause
-        bind("SPACE", "togglePlayPause") { togglePlayPause() }
+        bind(AppShortcuts.PLAY_PAUSE.keyStroke, "togglePlayPause") { togglePlayPause() }
         // Arrow keys:
         // Default (frameStepWhenPaused == false): Left/Right = ±1s regardless of paused state; Shift = ±5s.
         // When frameStepWhenPaused == true: if paused → Left/Right step 1 frame; if playing → ±1s.
-        bind("LEFT", "seekLeftOrPrevFrame") {
+        bind(AppShortcuts.LEFT.keyStroke, "seekLeftOrPrevFrame") {
             val paused = player.status() == PlayerStatus.PAUSED
             if (SessionSettings.frameStepWhenPaused && paused) {
-                // Approximate previous frame
-                try { player.stepFrameBackward() } catch (_: Throwable) { /* ignore */ }
-                updateScrubUi(player.currentTimeMs())
+                val target = player.stepFrameBackward(segmentStartMs)
+                updateScrubUi(target)
             } else {
                 seekBy(-1_000)
             }
         }
-        bind("RIGHT", "seekRightOrNextFrame") {
+        bind(AppShortcuts.RIGHT.keyStroke, "seekRightOrNextFrame") {
             val paused = player.status() == PlayerStatus.PAUSED
             if (SessionSettings.frameStepWhenPaused && paused) {
-                try { player.stepFrameForward() } catch (_: Throwable) { /* ignore */ }
-                updateScrubUi(player.currentTimeMs())
+                val maxPlayable = (segmentEndMs - 1).coerceAtLeast(segmentStartMs)
+                val target = player.stepFrameForward(maxPlayable)
+                updateScrubUi(target)
             } else {
                 seekBy(1_000)
             }
         }
-        bind("shift LEFT", "seekLeft5s") { seekBy(-5_000) }
-        bind("shift RIGHT", "seekRight5s") { seekBy(5_000) }
+        bind(AppShortcuts.SHIFT_LEFT.keyStroke, "seekLeft5s") { seekBy(-5_000) }
+        bind(AppShortcuts.SHIFT_RIGHT.keyStroke, "seekRight5s") { seekBy(5_000) }
         // Speed control via keyboard: Up/Down when player area has focus
-        bind("UP", "speedUp") {
+        bind(AppShortcuts.UP.keyStroke, "speedUp") {
             if (!isPlayerAreaFocus()) return@bind
             changeSpeedBy(-1) // presets ordered high→low; Up means go to higher preset → lower index
         }
-        bind("DOWN", "speedDown") {
+        bind(AppShortcuts.DOWN.keyStroke, "speedDown") {
             if (!isPlayerAreaFocus()) return@bind
             changeSpeedBy(1)
         }
         // Scoring hotkeys: Q = P1, W = No Point, E = P2 (Task 4.6)
-        bind("Q", "scoreP1") { setOutcomeForSelectedPoint(Outcome.P1) }
-        bind("W", "scoreNone") { setOutcomeForSelectedPoint(Outcome.NONE) }
-        bind("E", "scoreP2") { setOutcomeForSelectedPoint(Outcome.P2) }
+        bind(AppShortcuts.SCORE_PLAYER_1.keyStroke, "scoreP1") { setOutcomeForSelectedPoint(Outcome.P1) }
+        bind(AppShortcuts.SCORE_NO_POINT.keyStroke, "scoreNone") { setOutcomeForSelectedPoint(Outcome.NONE) }
+        bind(AppShortcuts.SCORE_PLAYER_2.keyStroke, "scoreP2") { setOutcomeForSelectedPoint(Outcome.P2) }
         // Next Point navigation (Task 4.10): R advances to next index and starts playback
-        bind("R", "nextPoint") { advanceToNextPoint() }
-        bind("A", "toggleFavorite") { toggleFavoriteSelectedPoint() }
-        // Help dialog (v0.3.1): F1 opens contextual help
-        bind("F1", "openHelp") { showHelpDialog() }
+        bind(AppShortcuts.NEXT_POINT.keyStroke, "nextPoint") { advanceToNextPoint() }
+        bind(AppShortcuts.TOGGLE_FAVORITE.keyStroke, "toggleFavorite") { toggleFavoriteSelectedPoint() }
         // Frame-by-frame toggle: F
-        bind("F", "toggleFrameStep") { videoPlayerActions.setFrameStepEnabled(!SessionSettings.frameStepWhenPaused) }
+        bind(AppShortcuts.TOGGLE_FRAME_STEP.keyStroke, "toggleFrameStep") {
+            videoPlayerActions.setFrameStepEnabled(!SessionSettings.frameStepWhenPaused)
+        }
     }
 
     private fun isTextEditingFocus(): Boolean {
@@ -847,8 +845,10 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
     }
 
     private fun refreshVideoScoreboardOverlay() {
-        val videoFile = pendingMediaFile ?: return
-        if (!videoFile.exists() || points.isEmpty()) return
+        if (points.isEmpty() || selectedPointIndex !in points.indices) {
+            player.setPreviewOverlayImage(null)
+            return
+        }
 
         try {
             val spans = ScoreboardTimelineBuilder.buildSourcePointSpans(
@@ -859,22 +859,15 @@ class SwingScoringPanel : JPanel(BorderLayout()) {
                 player1ColorHex = player1ColorHex,
                 player2ColorHex = player2ColorHex,
             )
-            if (spans.isEmpty()) return
-
-            val assFile = File(
-                System.getProperty("java.io.tmpdir"),
-                "tennis-record-scoring-scoreboard-${System.nanoTime()}-${scoreboardSubtitleGeneration++}.ass"
-            )
-            AssPreviewScoreboardWriter.write(
-                assFile,
-                spans,
-                outWidth = 1920,
-                outHeight = 1080,
-            )
-            assFile.deleteOnExit()
-            player.setSubtitleFile(assFile)
+            val span = spans.getOrNull(selectedPointIndex)
+            if (span == null) {
+                player.setPreviewOverlayImage(null)
+                return
+            }
+            val display = ScoreboardComponent.display(span)
+            player.setPreviewOverlayImage(PreviewScoreboardRenderer.render(display))
         } catch (_: Throwable) {
-            // Preview subtitles are best-effort; scoring/export data remains authoritative.
+            // Preview overlay is best-effort; scoring/export data remains authoritative.
         }
     }
 

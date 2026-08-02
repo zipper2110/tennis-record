@@ -110,4 +110,42 @@ object FFmpegCapabilities {
         }
         return set
     }
+
+    fun preferredH264Encoder(encoders: Set<String>): String? {
+        return preferredH264Encoder(encoders, detectVideoAdapters())
+    }
+
+    internal fun preferredH264Encoder(encoders: Set<String>, videoAdapters: String): String? {
+        val adapters = videoAdapters.lowercase()
+        return when {
+            ("nvidia" in adapters || "geforce" in adapters) && "h264_nvenc" in encoders -> "h264_nvenc"
+            ("amd" in adapters || "radeon" in adapters) && "h264_amf" in encoders -> "h264_amf"
+            "intel" in adapters && "h264_qsv" in encoders -> "h264_qsv"
+            "h264_nvenc" in encoders -> "h264_nvenc"
+            "h264_amf" in encoders -> "h264_amf"
+            "h264_qsv" in encoders -> "h264_qsv"
+            else -> null
+        }
+    }
+
+    private fun detectVideoAdapters(): String {
+        val os = System.getProperty("os.name")?.lowercase().orEmpty()
+        if (!os.contains("windows")) return ""
+        return try {
+            val (output, exitCode, timedOut) = runAndCapture(
+                listOf(
+                    "powershell.exe",
+                    "-NoProfile",
+                    "-NonInteractive",
+                    "-Command",
+                    "(Get-CimInstance Win32_VideoController).Name",
+                ),
+                3_000L,
+            )
+            if (!timedOut && exitCode == 0) output else ""
+        } catch (t: Throwable) {
+            logger.debug(t) { "Could not detect Windows video adapters." }
+            ""
+        }
+    }
 }

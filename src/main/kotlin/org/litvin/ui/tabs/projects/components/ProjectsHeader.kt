@@ -4,12 +4,15 @@ import org.litvin.ui.UiStyles
 import java.awt.BorderLayout
 import java.awt.Font
 import javax.swing.Box
+import javax.swing.BoxLayout
+import javax.swing.JButton
 import javax.swing.JComponent
 import javax.swing.JLabel
 import javax.swing.JPanel
 
 class ProjectsHeader(
     onImportNewMatch: () -> Unit,
+    onHelp: () -> Unit,
 ) : JPanel(BorderLayout()) {
     init {
         isOpaque = false
@@ -18,8 +21,20 @@ class ProjectsHeader(
             add(Box.createVerticalStrut(2))
             add(headerSubtitle("TENNIS VIDEO ANALYTICS & EDITING SUITE"))
         }
+        val actions = JPanel().apply {
+            isOpaque = false
+            layout = BoxLayout(this, BoxLayout.X_AXIS)
+            add(JButton("Help [F1]").apply {
+                name = "projects-help"
+                toolTipText = "F1 - Help"
+                UiStyles.styleSecondary(this)
+                addActionListener { onHelp() }
+            })
+            add(Box.createHorizontalStrut(8))
+            add(UiStyles.primaryButton("IMPORT NEW MATCH") { onImportNewMatch() })
+        }
         add(titleBox, BorderLayout.WEST)
-        add(UiStyles.primaryButton("IMPORT NEW MATCH") { onImportNewMatch() }, BorderLayout.EAST)
+        add(actions, BorderLayout.EAST)
     }
 
     private fun headerTitle(text: String): JComponent = JLabel(text).apply {

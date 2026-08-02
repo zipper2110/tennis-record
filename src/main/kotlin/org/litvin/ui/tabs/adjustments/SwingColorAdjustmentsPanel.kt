@@ -8,6 +8,7 @@ import org.litvin.adjustments.AdjustmentsV1
 import org.litvin.adjustments.AdjustmentsStore
 import org.litvin.ui.UiStyles
 import org.litvin.ui.commons.ScrubBar
+import org.litvin.ui.commons.AppShortcuts
 import java.awt.BorderLayout
 import java.awt.Color
 import java.awt.Dimension
@@ -27,7 +28,9 @@ import org.litvin.ui.commons.applyDarkScrollbar
  * - Play/Pause button, seek slider, time labels, and SPACE key toggle
  * Component IDs: adj-color-root, adj-color-left, adj-color-right, adj-color-viewport, adj-color-transport, adj-color-left-header
  */
-class SwingColorAdjustmentsPanel : JPanel(BorderLayout()) {
+class SwingColorAdjustmentsPanel(
+    private val onHelp: () -> Unit = {},
+) : JPanel(BorderLayout()) {
     private var projectManifestPath: String? = null
 
     // Adjustments store subscription and feedback guard (T6)
@@ -161,6 +164,12 @@ class SwingColorAdjustmentsPanel : JPanel(BorderLayout()) {
             background = UiStyles.DARK_BG
         }
 
+        headerRight2.add(JButton("Help [F1]").apply {
+            name = "colors-help"
+            toolTipText = "F1 - Help"
+            UiStyles.styleSecondary(this)
+            addActionListener { onHelp() }
+        })
         headerRight2.add(colorResetBtn)
         sectionHeader.add(sectionTitle, BorderLayout.WEST)
         sectionHeader.add(headerRight2, BorderLayout.EAST)
@@ -405,7 +414,7 @@ class SwingColorAdjustmentsPanel : JPanel(BorderLayout()) {
             })
         }
         // Space toggles play/pause
-        bind("SPACE", "adjTogglePlayPause") { togglePlayPause() }
+        bind(AppShortcuts.PLAY_PAUSE.keyStroke, "adjTogglePlayPause") { togglePlayPause() }
     }
 
     fun setProjectManifest(path: String) {

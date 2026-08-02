@@ -4,11 +4,13 @@ import org.litvin.ui.UiStyles
 import org.litvin.ui.commons.TransportBar
 import org.litvin.ui.tabs.markup.MarkupActions
 import java.awt.BorderLayout
-import java.awt.Container
+import java.awt.Component
+import java.awt.Dimension
 import javax.swing.BorderFactory
 import javax.swing.Box
 import javax.swing.BoxLayout
 import javax.swing.JButton
+import javax.swing.JLabel
 import javax.swing.JPanel
 
 /**
@@ -28,6 +30,7 @@ class TransportControls(
 
     private val btnStart = JButton("Point Start [C]")
     private val btnEnd = JButton("Point End [V]")
+    private val timeLabel = JLabel("00:00:00.000")
 
     private val transportBar = TransportBar(
         onTogglePlayPause = { actions.togglePlayPause() },
@@ -42,19 +45,35 @@ class TransportControls(
         btnStart.addActionListener { actions.setStartAtPlayhead() }
         btnEnd.addActionListener { actions.setEndAtPlayhead() }
 
-        val bar = JPanel()
-        bar.isOpaque = false
-        bar.layout = BoxLayout(bar, BoxLayout.X_AXIS)
+        val pointActions = JPanel()
+        pointActions.name = "markup-point-actions"
+        pointActions.isOpaque = false
+        pointActions.layout = BoxLayout(pointActions, BoxLayout.X_AXIS)
+        pointActions.add(btnStart)
+        pointActions.add(Box.createHorizontalStrut(8))
+        pointActions.add(btnEnd)
 
-        // Left: Start/End
-        bar.add(btnStart)
-        bar.add(Box.createHorizontalStrut(8))
-        bar.add(btnEnd)
+        transportBar.name = "markup-video-controls"
 
-        // Center: shared transport bar
-        bar.add(Box.createHorizontalGlue())
-        bar.add(transportBar)
-        bar.add(Box.createHorizontalGlue())
+        val timePanel = JPanel()
+        timePanel.name = "markup-current-time"
+        timePanel.isOpaque = false
+        timePanel.layout = BoxLayout(timePanel, BoxLayout.X_AXIS)
+        val currentTimeLabel = JLabel("Current time:")
+        currentTimeLabel.foreground = UiStyles.FG_SECONDARY
+        timeLabel.foreground = UiStyles.FG_PRIMARY
+        timeLabel.preferredSize = Dimension(100, 24)
+        timePanel.add(Box.createHorizontalGlue())
+        timePanel.add(currentTimeLabel)
+        timePanel.add(Box.createHorizontalStrut(6))
+        timePanel.add(timeLabel)
+
+        // Matching side widths keep the transport group centered on the full panel.
+        val sideWidth = maxOf(pointActions.preferredSize.width, timePanel.preferredSize.width)
+        pointActions.preferredSize = Dimension(sideWidth, pointActions.preferredSize.height)
+        timePanel.preferredSize = Dimension(sideWidth, timePanel.preferredSize.height)
+
+        val bar = CenteredTransportPanel(pointActions, transportBar, timePanel, sideWidth)
 
         val controlsBar = JPanel(BorderLayout())
         controlsBar.isOpaque = true
@@ -73,6 +92,49 @@ class TransportControls(
     }
 
     fun setTimeText(text: String) {
-        transportBar.setTimeText(text)
+        timeLabel.text = text
+        timeLabel.repaint()
     }
+}
+
+private class CenteredTransportPanel(
+    private val left: Component,
+    private val center: Component,
+    private val right: Component,
+    private val sideWidth: Int,
+) : JPanel(null) {
+    init {
+        isOpaque = false
+        add(left)
+        add(center)
+        add(right)
+    }
+
+    override fun doLayout() {
+        val contentWidth = width
+        val contentHeight = height
+        val centerSize = center.preferredSize
+
+        left.setBounds(0, centeredY(left, contentHeight), sideWidth, left.preferredSize.height)
+        center.setBounds(
+            (contentWidth - centerSize.width) / 2,
+            centeredY(center, contentHeight),
+            centerSize.width,
+            centerSize.height,
+        )
+        right.setBounds(
+            contentWidth - sideWidth,
+            centeredY(right, contentHeight),
+            sideWidth,
+            right.preferredSize.height,
+        )
+    }
+
+    override fun getPreferredSize(): Dimension {
+        val height = maxOf(left.preferredSize.height, center.preferredSize.height, right.preferredSize.height)
+        return Dimension(sideWidth * 2 + center.preferredSize.width + 24, height)
+    }
+
+    private fun centeredY(component: Component, contentHeight: Int): Int =
+        (contentHeight - component.preferredSize.height) / 2
 }

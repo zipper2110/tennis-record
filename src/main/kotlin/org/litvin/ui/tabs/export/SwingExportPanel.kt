@@ -1,5 +1,13 @@
 package org.litvin.ui.tabs.export
-import org.litvin.*
+import org.litvin.ActiveQueueSnapshot
+import org.litvin.CompletedRender
+import org.litvin.ExportPresetsIO
+import org.litvin.RenderJob
+import org.litvin.RenderQueueManager
+import org.litvin.RenderStatus
+import org.litvin.export.ExportPlanner
+import org.litvin.export.ExportRenderPlanRequest
+import org.litvin.export.RenderFormatting
 import org.litvin.markup.EdlIO
 import org.litvin.markup.EdlV1
 import org.litvin.markup.PointV1
@@ -22,7 +30,12 @@ import javax.swing.border.EmptyBorder
  * Provides a Swing UI to configure and start an export job using the existing
  * FFmpegCommandBuilder and RenderQueueManager. Shows live progress with Cancel.
  */
-class SwingExportPanel : JPanel(BorderLayout()) {
+class SwingExportPanel(
+    private val settingsPreferences: ExportSettingsPreferences = ExportSettingsPreferences(),
+    private val onHelp: () -> Unit = {},
+) : JPanel(BorderLayout()) {
+    constructor(onHelp: () -> Unit) : this(ExportSettingsPreferences(), onHelp)
+
     fun onActivated() {
         // Ensure Completed list reflects latest persisted items (global across projects)
         refreshCompletedFromStore()
@@ -37,6 +50,7 @@ class SwingExportPanel : JPanel(BorderLayout()) {
 
     // Left controls
     private val presets = ExportPresetsIO.load()
+    private val savedVideoSettings = settingsPreferences.load()
     private val presetCombo = JComboBox(presets.map { it.label }.toTypedArray())
     private val resCombo = JComboBox(arrayOf("1920x1080", "3840x2160"))
     private val idleTrimCheck = JCheckBox("Cut idle time between points", true)
@@ -47,7 +61,7 @@ class SwingExportPanel : JPanel(BorderLayout()) {
         toolTipText = "Burn in a simple scoreboard overlay that updates after each point. Uses current Scoring data; fixed English labels in v0.1.0."
     }
     private val initButton = UiStyles.primaryButton("Initialize Render") { onInitializeRender() }
-    private val encoderPanel = EncoderSummaryPanel()
+    private val encoderPanel = EncoderSummaryPanel(savedVideoSettings.encoderId)
 
     // Right side — Active + Completed
     private val progressBar = JProgressBar(0, 100)
@@ -92,40 +106,23 @@ class SwingExportPanel : JPanel(BorderLayout()) {
             font = font.deriveFont(Font.BOLD)
             foreground = FG_PRIMARY
         }
-        left.add(title)
+        left.add(JPanel(BorderLayout()).apply {
+            isOpaque = false
+            alignmentX = 0f
+            maximumSize = Dimension(Int.MAX_VALUE, 36)
+            add(title, BorderLayout.WEST)
+            add(JButton("Help [F1]").apply {
+                name = "export-help"
+                toolTipText = "F1 - Help"
+                UiStyles.styleSecondary(this)
+                addActionListener { onHelp() }
+            }, BorderLayout.EAST)
+        })
         left.add(Box.createRigidArea(Dimension(0, 8)))
         left.add(JSeparator())
         left.add(Box.createRigidArea(Dimension(0, 12)))
 
-        // Preset section
-        left.add(sectionLabel("Preset"))
-        presetCombo.selectedIndex = ExportPresetsIO.defaultBalancedIndex(presets)
-        presetCombo.maximumSize = Dimension(Short.MAX_VALUE.toInt(), 28)
-        UiStyles.styleComboBox(presetCombo)
-        left.add(presetCombo)
-        UiStyles.styleHelper(qualityLabel)
-        qualityLabel.text = ""
-        left.add(Box.createRigidArea(Dimension(0, 4)))
-        left.add(qualityLabel)
-        left.add(Box.createRigidArea(Dimension(0, 12)))
-
-        // Resolution section
-        left.add(sectionLabel("Resolution"))
-        // Match JavaFX choices
-        val resModel = DefaultComboBoxModel(arrayOf("1080p", "4K"))
-        resCombo.model = resModel
-        resCombo.maximumSize = Dimension(Short.MAX_VALUE.toInt(), 28)
-        UiStyles.styleComboBox(resCombo)
-        left.add(resCombo)
-        UiStyles.styleHelper(resSummaryLabel)
-        UiStyles.styleMono(scalePlanLabel)
-        left.add(Box.createRigidArea(Dimension(0, 6)))
-        left.add(resSummaryLabel)
-        left.add(scalePlanLabel)
-        left.add(Box.createRigidArea(Dimension(0, 4)))
-        left.add(Box.createRigidArea(Dimension(0, 12)))
-
-        // Points summary — prominent block above checkboxes (each on its own row)
+        // Points and timing summary
         fun stylePointsLabel(l: JLabel) {
             l.alignmentX = 0f
             l.foreground = FG_PRIMARY
@@ -148,7 +145,32 @@ class SwingExportPanel : JPanel(BorderLayout()) {
         left.add(scoreboardCheck)
         left.add(Box.createRigidArea(Dimension(0, 12)))
 
-        // Encoder section
+        // Video settings
+        left.add(sectionLabel("Video Settings"))
+        left.add(Box.createRigidArea(Dimension(0, 8)))
+        left.add(sectionLabel("Preset"))
+        presetCombo.maximumSize = Dimension(Short.MAX_VALUE.toInt(), 28)
+        UiStyles.styleComboBox(presetCombo)
+        left.add(presetCombo)
+        UiStyles.styleHelper(qualityLabel)
+        qualityLabel.text = ""
+        left.add(Box.createRigidArea(Dimension(0, 4)))
+        left.add(qualityLabel)
+        left.add(Box.createRigidArea(Dimension(0, 12)))
+
+        left.add(sectionLabel("Resolution"))
+        val resModel = DefaultComboBoxModel(arrayOf("1080p", "4K"))
+        resCombo.model = resModel
+        resCombo.maximumSize = Dimension(Short.MAX_VALUE.toInt(), 28)
+        UiStyles.styleComboBox(resCombo)
+        left.add(resCombo)
+        UiStyles.styleHelper(resSummaryLabel)
+        UiStyles.styleMono(scalePlanLabel)
+        left.add(Box.createRigidArea(Dimension(0, 6)))
+        left.add(resSummaryLabel)
+        left.add(scalePlanLabel)
+        left.add(Box.createRigidArea(Dimension(0, 12)))
+
         left.add(sectionLabel("Encoder"))
         left.add(this.encoderPanel.component())
         left.add(Box.createVerticalGlue())
@@ -249,13 +271,18 @@ class SwingExportPanel : JPanel(BorderLayout()) {
             resSummaryLabel.text = "Output: $w x $h ($sel)"
         }
 
-        // Initial defaults mirroring FX
+        // Restore the last video settings, falling back to the original defaults.
         val defIdx = ExportPresetsIO.defaultBalancedIndex(presets)
         if (presets.isNotEmpty()) {
-            presetCombo.selectedIndex = defIdx
-            val res = defaultResForPreset(presets[defIdx].id)
+            val restoredPresetIndex = presets.indexOfFirst { it.id == savedVideoSettings.presetId }
+                .takeIf { it >= 0 }
+                ?: defIdx
+            presetCombo.selectedIndex = restoredPresetIndex
+            val res = savedVideoSettings.resolution
+                ?.takeIf { it == "1080p" || it == "4K" }
+                ?: defaultResForPreset(presets[restoredPresetIndex].id)
             resCombo.selectedItem = res
-            updateQualitySummary(defIdx)
+            updateQualitySummary(restoredPresetIndex)
         }
         updateResolutionPreview()
         updatePointsSummary()
@@ -268,9 +295,17 @@ class SwingExportPanel : JPanel(BorderLayout()) {
                 resCombo.selectedItem = res
                 updateQualitySummary(idx)
                 updateResolutionPreview()
+                settingsPreferences.savePreset(presets[idx].id)
+                settingsPreferences.saveResolution(res)
             }
         }
-        resCombo.addActionListener { updateResolutionPreview() }
+        resCombo.addActionListener {
+            updateResolutionPreview()
+            (resCombo.selectedItem as? String)?.let(settingsPreferences::saveResolution)
+        }
+        encoderPanel.addChangeListener {
+            settingsPreferences.saveEncoder(encoderPanel.selectedEncoderId())
+        }
         idleTrimCheck.addActionListener {
             // If user tries to enable idle-trim with no marked points, prevent and explain
             if (idleTrimCheck.isSelected && !hasAnyMarkedPoints()) {
@@ -333,7 +368,7 @@ class SwingExportPanel : JPanel(BorderLayout()) {
                     progressBar.value = (cur.progress * 100).toInt()
                     progressBar.string = "${(cur.progress * 100).toInt()}%"
                     val eta = cur.etaSeconds?.let { formatEta(it) } ?: "--"
-                    val sz = formatSize(cur.bytesWritten)
+                    val sz = RenderFormatting.formatSize(cur.bytesWritten)
                     cancelButton.isEnabled = cur.status == RenderStatus.RUNNING
                     when (cur.status) {
                         RenderStatus.FAILED -> {
@@ -406,11 +441,13 @@ class SwingExportPanel : JPanel(BorderLayout()) {
 
         val projectDir = if (manifestPath != null) EdlIO.projectDirFromManifest(manifestPath) else null
         val edl = try { if (projectDir != null) EdlIO.readForProjectDir(projectDir) else null } catch (_: Throwable) { null }
-        val allValidPoints = validateEdl(edl)
+        val allValidPoints = ExportPlanner.validateEdl(edl)
         val favoriteOnly = favoriteOnlyCheck.isSelected
-        val keeps: List<PointV1> = if (idleTrimCheck.isSelected) {
-            if (favoriteOnly) allValidPoints.filter { it.favorite } else allValidPoints
-        } else emptyList()
+        val keeps: List<PointV1> = ExportPlanner.selectedKeepPoints(
+            validPoints = allValidPoints,
+            idleTrim = idleTrimCheck.isSelected,
+            favoriteOnly = favoriteOnly,
+        )
         if (favoriteOnly && keeps.isEmpty()) {
             JOptionPane.showMessageDialog(this, "Cannot render only favorite points: no valid favorite points are available.", "Favorite export unavailable", JOptionPane.INFORMATION_MESSAGE)
             updateFavoriteOnlyAvailability()
@@ -421,111 +458,60 @@ class SwingExportPanel : JPanel(BorderLayout()) {
             val r = JOptionPane.showConfirmDialog(this, "EDL is empty or invalid. Continue with full render?", "EDL warning", JOptionPane.YES_NO_OPTION)
             if (r != JOptionPane.YES_OPTION) return
         }
-        val effectiveIdleTrim = idleTrimCheck.isSelected && keeps.isNotEmpty()
-
         // Choose output path
-        val initialDir = projectDir?.let { File(it) } ?: File(source).parentFile
+        val initialDir = settingsPreferences.loadOutputDirectory()
+            ?: projectDir?.let { File(it) }
+            ?: File(source).parentFile
+        val selPreset = presets.getOrNull(presetCombo.selectedIndex) ?: presets[ExportPresetsIO.defaultBalancedIndex(presets)]
         val chooser = JFileChooser(initialDir)
         chooser.dialogTitle = "Save Export As…"
-        chooser.selectedFile = File(suggestFilename(manifest?.name ?: File(source).nameWithoutExtension))
+        chooser.selectedFile = File(
+            initialDir,
+            ExportPlanner.suggestFilename(
+                projectName = manifest?.name ?: File(source).nameWithoutExtension,
+                presetId = selPreset.id,
+                resolutionLabel = resCombo.selectedItem as String,
+            )
+        )
         val res = chooser.showSaveDialog(this)
         if (res != JFileChooser.APPROVE_OPTION) return
         var out = chooser.selectedFile
+        settingsPreferences.saveOutputDirectory(out)
         // Ensure extension if user omitted
-        val selPreset = presets.getOrNull(presetCombo.selectedIndex) ?: presets[ExportPresetsIO.defaultBalancedIndex(presets)]
         val defaultExt = selPreset.container?.format?.lowercase()?.let { if (it.startsWith(".")) it.drop(1) else it } ?: "mp4"
-        out = ensureExtension(out, defaultExt)
+        out = ExportPlanner.ensureExtension(out, defaultExt)
 
         if (out.exists()) {
             val ow = JOptionPane.showConfirmDialog(this, "File exists. Overwrite?", "Confirm overwrite", JOptionPane.YES_NO_OPTION)
             if (ow != JOptionPane.YES_OPTION) return
         }
 
-        val (w, h) = parseDims(resCombo.selectedItem as String)
+        val resolution = ExportPlanner.parseResolution(resCombo.selectedItem as String)
         val encoderLabel = encoderPanel.selectedEncoderLabel().substringBefore(" — ")
 
-        // Build overlay timeline if requested
-        val includeSb = scoreboardCheck.isSelected
-        val overlayTimeline = if (includeSb) {
-                val score = if (projectDir != null) ScoreIO.readForProjectDir(projectDir) else ScoreV1()
-                val scoringPoints = allValidPoints.ifEmpty { edl?.points ?: emptyList() }
-                val overlayPoints = if (effectiveIdleTrim) keeps else scoringPoints
-                ScoreboardTimelineBuilder.build(
-                    scoringPoints,
-                    score.outcomes,
-                    effectiveIdleTrim,
-                    score.player1Name,
-                    score.player2Name,
-                    score.player1ColorHex,
-                    score.player2ColorHex,
-                    exportedPointIds = if (effectiveIdleTrim && overlayPoints.isNotEmpty()) {
-                        overlayPoints.map { it.id }.toSet()
-                    } else null
-                )
-        } else emptyList()
-
-        val job = RenderJob(
-            projectId = manifest?.id,
-            projectName = manifest?.name,
-            sourcePath = source,
-            edlSnapshot = if (idleTrimCheck.isSelected) keeps else emptyList(),
-            presetId = selPreset.id,
-            outWidth = w,
-            outHeight = h,
-            encoderLabel = encoderLabel,
-            idleTrim = effectiveIdleTrim,
-            favoriteOnly = favoriteOnly,
-            includeScoreboard = includeSb,
-            overlayTimeline = overlayTimeline,
-            outputPath = out.absolutePath,
+        val score = try {
+            if (projectDir != null) ScoreIO.readForProjectDir(projectDir) else ScoreV1()
+        } catch (_: Throwable) {
+            ScoreV1()
+        }
+        val plan = ExportPlanner.buildRenderPlan(
+            ExportRenderPlanRequest(
+                manifest = manifest,
+                sourcePath = source,
+                edl = edl,
+                score = score,
+                preset = selPreset,
+                resolution = resolution,
+                encoderLabel = encoderLabel,
+                idleTrim = idleTrimCheck.isSelected,
+                favoriteOnly = favoriteOnly,
+                includeScoreboard = scoreboardCheck.isSelected,
+                outputPath = out.absolutePath,
+            )
         )
 
-        RenderQueueManager.enqueue(job)
+        RenderQueueManager.enqueue(plan.job)
         JOptionPane.showMessageDialog(this, "Render initialized: ${out.name}")
-    }
-
-    private fun validateEdl(raw: EdlV1?): List<PointV1> {
-        if (raw == null) return emptyList()
-        val pts = raw.points.sortedBy { it.startMs }
-        val keeps = ArrayList<PointV1>()
-        var lastEnd = -1
-        for (p in pts) {
-            if (p.startMs >= p.endMs) continue
-            if (lastEnd >= 0 && p.startMs < lastEnd) continue // overlap, skip
-            keeps += p
-            lastEnd = p.endMs
-        }
-        return keeps
-    }
-
-    private fun suggestFilename(projectName: String): String {
-        val label = presets.getOrNull(presetCombo.selectedIndex)?.id ?: "balanced"
-        val dims = resCombo.selectedItem as String
-        val base = projectName.ifBlank { "export" }
-        val fn = "$base-${label.lowercase()}-${dims.replace('x','p')}.mp4"
-        return fn
-    }
-
-    private fun parseDims(sel: String): Pair<Int, Int> {
-        return when (sel) {
-            "4K" -> 3840 to 2160
-            "1080p" -> 1920 to 1080
-            else -> {
-                val parts = sel.lowercase().split("x")
-                if (parts.size == 2) (parts[0].toIntOrNull() ?: 1920) to (parts[1].toIntOrNull() ?: 1080)
-                else 1920 to 1080
-            }
-        }
-    }
-
-    private fun ensureExtension(file: File, defaultExtNoDot: String = "mp4"): File {
-        val safeName = file.name.trim().trimEnd('.')
-        if (safeName.isEmpty()) return File(file.parentFile, "export.$defaultExtNoDot")
-        return if (safeName.contains('.')) {
-            File(file.parentFile, safeName)
-        } else {
-            File(file.parentFile, "$safeName.$defaultExtNoDot")
-        }
     }
 
     private fun sectionLabel(text: String): JComponent {
@@ -561,23 +547,12 @@ class SwingExportPanel : JPanel(BorderLayout()) {
     }
 
     private fun formatSize(bytes: Long): String {
-        val kb = 1000.0
-        val mb = kb * 1000
-        val gb = mb * 1000
-        return when {
-            bytes >= gb -> String.format("%.2f GB", bytes / gb)
-            bytes >= mb -> String.format("%.2f MB", bytes / mb)
-            bytes >= kb -> String.format("%.2f KB", bytes / kb)
-            else -> "$bytes B"
-        }
+        return RenderFormatting.formatSize(bytes)
     }
 
     private fun hasAnyMarkedPoints(): Boolean {
         return try {
-            val mp = manifestPath
-            val projectDir = if (!mp.isNullOrBlank()) EdlIO.projectDirFromManifest(mp) else null
-            val edl = try { if (projectDir != null) EdlIO.readForProjectDir(projectDir) else null } catch (_: Throwable) { null }
-            (edl?.points?.isNotEmpty() == true)
+            loadExportSummary().pointCount > 0
         } catch (_: Throwable) {
             false
         }
@@ -585,10 +560,7 @@ class SwingExportPanel : JPanel(BorderLayout()) {
 
     private fun validFavoriteCount(): Int {
         return try {
-            val mp = manifestPath
-            val projectDir = if (!mp.isNullOrBlank()) EdlIO.projectDirFromManifest(mp) else null
-            val edl = try { if (projectDir != null) EdlIO.readForProjectDir(projectDir) else null } catch (_: Throwable) { null }
-            validateEdl(edl).count { it.favorite }
+            loadExportSummary().favoriteCount
         } catch (_: Throwable) {
             0
         }
@@ -607,56 +579,56 @@ class SwingExportPanel : JPanel(BorderLayout()) {
 
     private fun hasAnyScoredPoints(): Boolean {
         return try {
-            val mp = manifestPath
-            val projectDir = if (!mp.isNullOrBlank()) EdlIO.projectDirFromManifest(mp) else null
-            val edl = try { if (projectDir != null) EdlIO.readForProjectDir(projectDir) else null } catch (_: Throwable) { null }
-            val points = edl?.points ?: emptyList()
-            if (points.isEmpty()) return false
-            val score = try { if (projectDir != null) ScoreIO.readForProjectDir(projectDir) else ScoreV1() } catch (_: Throwable) { ScoreV1() }
-            val outcomes = score.outcomes
-            points.any { pt -> outcomes.containsKey(pt.id) }
+            loadExportSummary().scoredCount > 0
         } catch (_: Throwable) {
             false
         }
     }
 
+    private fun loadExportSummary() = ExportPlanner.summarize(
+        readCurrentProjectEdl(),
+        readCurrentProjectScore(),
+    )
+
+    private fun readCurrentProjectEdl(): EdlV1? {
+        val mp = manifestPath
+        val projectDir = if (!mp.isNullOrBlank()) EdlIO.projectDirFromManifest(mp) else null
+        return try {
+            if (projectDir != null) EdlIO.readForProjectDir(projectDir) else null
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
+    private fun readCurrentProjectScore(): ScoreV1 {
+        val mp = manifestPath
+        val projectDir = if (!mp.isNullOrBlank()) EdlIO.projectDirFromManifest(mp) else null
+        return try {
+            if (projectDir != null) ScoreIO.readForProjectDir(projectDir) else ScoreV1()
+        } catch (_: Throwable) {
+            ScoreV1()
+        }
+    }
+
     private fun updatePointsSummary() {
         try {
-            val mp = manifestPath
-            val projectDir = if (!mp.isNullOrBlank()) EdlIO.projectDirFromManifest(mp) else null
-            val edl = try { if (projectDir != null) EdlIO.readForProjectDir(projectDir) else null } catch (_: Throwable) { null }
-            val points = edl?.points ?: emptyList()
-            val validFavorites = validateEdl(edl).filter { it.favorite }
-            val favoriteCount = validFavorites.size
-            val totalMs = points.fold(0L) { acc, p -> acc + (p.endMs - p.startMs) }
-            val favoriteTotalMs = validFavorites
-                .fold(0L) { acc, p -> acc + (p.endMs - p.startMs) }
-            val pointsCount = points.size
-
-            val score = try { if (projectDir != null) ScoreIO.readForProjectDir(projectDir) else ScoreV1() } catch (_: Throwable) { ScoreV1() }
-            val outcomes = score.outcomes
-            val scoredCount = points.count { pt ->
-                // Consider a point scored if there is any outcome recorded for it (including NONE)
-                outcomes.containsKey(pt.id)
-            }
-
-            val allScored = pointsCount > 0 && scoredCount == pointsCount
+            val summary = loadExportSummary()
 
             // If there are no points, ensure idle-trim is not selected (requirement)
-            if (pointsCount == 0 && idleTrimCheck.isSelected) {
+            if (summary.pointCount == 0 && idleTrimCheck.isSelected) {
                 idleTrimCheck.isSelected = false
                 // Keep init button state consistent if selection changed
                 updateInitButtonState()
             }
 
             // Set texts
-            pointsCountLabel.text = "$pointsCount points / $favoriteCount favorites"
-            pointsTotalLabel.text = "total ${formatSeconds(totalMs)} / favorites ${formatSeconds(favoriteTotalMs)}"
-            pointsScoredLabel.text = "scored ${scoredCount}/${pointsCount}"
+            pointsCountLabel.text = "${summary.pointCount} points / ${summary.favoriteCount} favorites"
+            pointsTotalLabel.text = "total ${RenderFormatting.formatDuration(summary.totalMs)} / favorites ${RenderFormatting.formatDuration(summary.favoriteTotalMs)}"
+            pointsScoredLabel.text = "scored ${summary.scoredCount}/${summary.pointCount}"
 
             // Colors
-            pointsCountLabel.foreground = if (pointsCount == 0) UiStyles.YELLOW else FG_PRIMARY
-            pointsScoredLabel.foreground = if (allScored) UiStyles.GREEN else FG_PRIMARY
+            pointsCountLabel.foreground = if (summary.pointCount == 0) UiStyles.YELLOW else FG_PRIMARY
+            pointsScoredLabel.foreground = if (summary.allScored) UiStyles.GREEN else FG_PRIMARY
             pointsTotalLabel.foreground = FG_PRIMARY
             updateFavoriteOnlyAvailability()
         } catch (_: Throwable) {
@@ -668,11 +640,7 @@ class SwingExportPanel : JPanel(BorderLayout()) {
     }
 
     private fun formatSeconds(ms: Long): String {
-        var remain = ms
-        val h = remain / 3_600_000; remain %= 3_600_000
-        val m = remain / 60_000; remain %= 60_000
-        val s = remain / 1000;
-        return String.format("%d:%02d:%02d", h, m, s)
+        return RenderFormatting.formatDuration(ms)
     }
 
     // Task 3.15 — Gate Initialize button based on project context and prerequisites
@@ -693,8 +661,12 @@ class SwingExportPanel : JPanel(BorderLayout()) {
                     if (idleTrimCheck.isSelected) {
                         val projectDir = EdlIO.projectDirFromManifest(mp)
                         val edl = try { EdlIO.readForProjectDir(projectDir) } catch (_: Throwable) { null }
-                        val allValidPoints = validateEdl(edl)
-                        val keeps = if (favoriteOnlyCheck.isSelected) allValidPoints.filter { it.favorite } else allValidPoints
+                        val allValidPoints = ExportPlanner.validateEdl(edl)
+                        val keeps = ExportPlanner.selectedKeepPoints(
+                            validPoints = allValidPoints,
+                            idleTrim = true,
+                            favoriteOnly = favoriteOnlyCheck.isSelected,
+                        )
                         if (favoriteOnlyCheck.isSelected && keeps.isEmpty()) {
                             reason = "Favorite-only export is ON but no valid favorite points are available."
                         } else if (keeps.isEmpty()) {

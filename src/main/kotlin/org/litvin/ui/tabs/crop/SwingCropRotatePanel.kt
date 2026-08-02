@@ -26,6 +26,7 @@ import javax.swing.event.ChangeListener
 
 class SwingCropRotatePanel(
     private val presenter: CropRotatePresenter = DefaultCropRotatePresenter(),
+    private val onHelp: () -> Unit = {},
 ) : JPanel(BorderLayout()), CropRotateView {
     private val rightPanelWidth = 400
     private var updatingFromState = false
@@ -175,8 +176,18 @@ class SwingCropRotatePanel(
                 toolTipText = "Reset all adjustments"
                 addActionListener { presenter.onIntent(CropRotateIntent.ResetAll) }
             }
+            val actions = JPanel(java.awt.FlowLayout(java.awt.FlowLayout.RIGHT, 8, 0)).apply {
+                isOpaque = false
+                add(JButton("Help [F1]").apply {
+                    name = "crop-help"
+                    toolTipText = "F1 - Help"
+                    UiStyles.styleSecondary(this)
+                    addActionListener { onHelp() }
+                })
+                add(resetBtn)
+            }
             add(title, BorderLayout.WEST)
-            add(resetBtn, BorderLayout.EAST)
+            add(actions, BorderLayout.EAST)
         }
     }
 

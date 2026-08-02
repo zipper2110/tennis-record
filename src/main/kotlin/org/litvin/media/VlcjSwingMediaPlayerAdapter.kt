@@ -4,6 +4,7 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import org.litvin.VlcBootstrap
 import org.litvin.adjustments.AdjustmentsV1
 import org.litvin.ui.tabs.adjustments.AdjustmentsUiConverter
+import uk.co.caprica.vlcj.player.base.LogoPosition
 import uk.co.caprica.vlcj.player.base.MediaPlayer
 import uk.co.caprica.vlcj.player.base.MediaPlayerEventAdapter
 import uk.co.caprica.vlcj.player.base.State
@@ -12,10 +13,14 @@ import uk.co.caprica.vlcj.player.embedded.EmbeddedMediaPlayer
 import java.awt.BorderLayout
 import java.awt.Component
 import java.awt.Dimension
+import java.awt.RenderingHints
+import java.awt.image.BufferedImage
+import java.awt.image.RenderedImage
 import java.io.File
 import java.util.concurrent.atomic.AtomicInteger
 import javax.swing.JPanel
 import javax.swing.SwingUtilities
+import kotlin.math.ceil
 
 /**
  * Swing VLCJ-backed media player using VLCJ's embedded native output.
@@ -50,6 +55,9 @@ class VlcjSwingMediaPlayerAdapter(
     )
 
     private var durationMs: Long = 0L
+    @Volatile private var frameDurationMs: Long = 40L
+    @Volatile private var frameStepCursorMs: Long? = null
+    @Volatile private var previewOverlayImage: RenderedImage? = null
     private var mediaFile: File? = null
     @Volatile private var playbackRate: Float = 1.0f
     @Volatile private var lastKnownTimeMs: Long = 0L
@@ -63,8 +71,22 @@ class VlcjSwingMediaPlayerAdapter(
     var onTimeChanged: ((Long) -> Unit)? = null
 
     fun setRate(rate: Float) {
-        playbackRate = rate
-        mediaPlayer?.controls()?.setRate(rate)
+        val nextRate = rate.takeIf { it.isFinite() && it > 0.0f } ?: return
+        val previousRate = playbackRate
+        playbackRate = nextRate
+        val player = mediaPlayer ?: return
+        val wasPlaying = status() == PlayerStatus.PLAYING
+        val needsSlowRateRestart = wasPlaying && (previousRate < 0.5f || nextRate < 0.5f)
+        val resumeTimeMs = if (needsSlowRateRestart) currentTimeMs() else 0L
+
+        if (needsSlowRateRestart) {
+            player.controls().setPause(true)
+        }
+        player.controls().setRate(nextRate)
+        if (needsSlowRateRestart) {
+            player.controls().setTime(resumeTimeMs)
+            player.controls().play()
+        }
     }
 
     @Volatile private var pendingBrightness = AdjustmentsUiConverter.DEFAULTS.brightness
@@ -199,6 +221,8 @@ class VlcjSwingMediaPlayerAdapter(
         }
         lastKnownTimeMs = releaseTimeMs
         durationMs = 0L
+        frameDurationMs = 40L
+        frameStepCursorMs = null
         sourceVideoDimension = null
         missingGeometrySizeLogged = false
         lastAppliedCropGeometry = null
@@ -438,6 +462,8 @@ class VlcjSwingMediaPlayerAdapter(
         player.events().addMediaPlayerEventListener(object : MediaPlayerEventAdapter() {
             override fun mediaPlayerReady(mediaPlayer: MediaPlayer) {
                 logger.info { "VLC preview component #$playerId mediaPlayerReady." }
+                updateFrameDuration(mediaPlayer)
+                applyPreviewOverlay(mediaPlayer)
             }
 
             override fun videoOutput(mediaPlayer: MediaPlayer, newCount: Int) {
@@ -445,6 +471,8 @@ class VlcjSwingMediaPlayerAdapter(
                     "VLC preview component #$playerId videoOutput: count=$newCount, " +
                         "loadedRotationDeg=$loadedRotationDeg, pendingRotationDeg=$pendingRotationDeg"
                 }
+                updateFrameDuration(mediaPlayer)
+                applyPreviewOverlay(mediaPlayer)
             }
 
             override fun playing(mediaPlayer: MediaPlayer) {
@@ -508,6 +536,8 @@ class VlcjSwingMediaPlayerAdapter(
         mediaFile = file
         pendingPlaybackRestore = null
         durationMs = 0L
+        frameDurationMs = 40L
+        frameStepCursorMs = null
         logger.info {
             "Loading media into VLC preview: component=#$mediaPlayerInstanceId, " +
                 "file=${file.absolutePath}, pendingRotationDeg=$pendingRotationDeg, " +
@@ -618,8 +648,12 @@ class VlcjSwingMediaPlayerAdapter(
     }
 
     fun play() {
+        frameStepCursorMs = null
         mediaFile?.let { activatePreview("play") }
-        mediaPlayer?.controls()?.play()
+        mediaPlayer?.controls()?.let { controls ->
+            controls.setRate(playbackRate)
+            controls.play()
+        }
     }
 
     fun pause() {
@@ -628,24 +662,32 @@ class VlcjSwingMediaPlayerAdapter(
 
     fun seek(ms: Long) {
         val target = ms.coerceAtLeast(0L)
+        frameStepCursorMs = null
+        seekForFrameStep(target)
+    }
+
+    private fun seekForFrameStep(target: Long) {
         lastKnownTimeMs = target
         mediaPlayer?.controls()?.setTime(target)
     }
 
-    fun stepFrameForward() {
+    fun stepFrameForward(maximumTimeMs: Long = Long.MAX_VALUE): Long {
+        val base = frameStepCursorMs ?: currentTimeMs()
+        val target = (base + frameDurationMs).coerceAtMost(maximumTimeMs.coerceAtLeast(0L))
+        frameStepCursorMs = target
         try {
             mediaPlayer?.controls()?.nextFrame()
         } catch (_: Throwable) {
         }
+        return target
     }
 
-    fun stepFrameBackward() {
-        try {
-            val target = (currentTimeMs() - 40L).coerceAtLeast(0L)
-            mediaPlayer?.controls()?.setTime(target)
-            mediaPlayer?.controls()?.nextFrame()
-        } catch (_: Throwable) {
-        }
+    fun stepFrameBackward(minimumTimeMs: Long = 0L): Long {
+        val base = frameStepCursorMs ?: currentTimeMs()
+        val target = (base - frameDurationMs).coerceAtLeast(minimumTimeMs.coerceAtLeast(0L))
+        frameStepCursorMs = target
+        seekForFrameStep(target)
+        return target
     }
 
     fun nextFrame() = try {
@@ -655,6 +697,72 @@ class VlcjSwingMediaPlayerAdapter(
 
     fun currentTimeMs(): Long = mediaPlayer?.status()?.time()?.also { lastKnownTimeMs = it } ?: lastKnownTimeMs
     fun totalDurationMs(): Long = if (durationMs > 0) durationMs else mediaPlayer?.status()?.length() ?: 0L
+
+    private fun updateFrameDuration(player: MediaPlayer) {
+        try {
+            val videoTrack = player.media().info().videoTracks().firstOrNull() ?: return
+            val frameRate = videoTrack.frameRate()
+            val frameRateBase = videoTrack.frameRateBase()
+            if (frameRate > 0 && frameRateBase > 0) {
+                frameDurationMs = ceil(1_000.0 * frameRateBase / frameRate)
+                    .toLong()
+                    .coerceAtLeast(1L)
+            }
+        } catch (_: Throwable) {
+            // Keep the 25 fps fallback when VLC has not exposed track metadata yet.
+        }
+    }
+
+    fun setPreviewOverlayImage(image: RenderedImage?) {
+        previewOverlayImage = image
+        mediaPlayer?.let { applyPreviewOverlay(it) }
+    }
+
+    private fun applyPreviewOverlay(player: MediaPlayer) {
+        try {
+            val logo = player.logo()
+            val image = previewOverlayImage
+            if (image == null) {
+                logo.enable(false)
+            } else {
+                val videoSize = sourceVideoDimension ?: player.video().videoDimension()
+                val scale = videoSize
+                    ?.takeIf { it.height > 0 }
+                    ?.let { it.height / 1080.0 }
+                    ?: 1.0
+                val scaledImage = scalePreviewOverlay(image, scale)
+                val margin = (32 * scale).toInt().coerceAtLeast(8)
+                logo.setImage(scaledImage)
+                logo.setPosition(LogoPosition.TOP_LEFT)
+                logo.setLocation(margin, margin)
+                logo.setOpacity(1.0f)
+                logo.enable(true)
+            }
+        } catch (_: Throwable) {
+        }
+    }
+
+    private fun scalePreviewOverlay(image: RenderedImage, scale: Double): RenderedImage {
+        if (scale in 0.99..1.01) return image
+        val width = (image.width * scale).toInt().coerceAtLeast(1)
+        val height = (image.height * scale).toInt().coerceAtLeast(1)
+        val scaled = BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB)
+        val g = scaled.createGraphics()
+        try {
+            g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC)
+            g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY)
+            g.drawRenderedImage(
+                image,
+                java.awt.geom.AffineTransform.getScaleInstance(
+                    width.toDouble() / image.width,
+                    height.toDouble() / image.height,
+                )
+            )
+        } finally {
+            g.dispose()
+        }
+        return scaled
+    }
 
     fun status(): PlayerStatus {
         val player = mediaPlayer ?: return PlayerStatus.STOPPED

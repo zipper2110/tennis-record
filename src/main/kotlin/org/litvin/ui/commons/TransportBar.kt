@@ -7,13 +7,12 @@ import java.awt.event.ActionListener
 import javax.swing.*
 
 /**
- * Shared transport controls strip: seek back/forward, play/pause, and time label.
+ * Shared transport controls strip: seek back/forward and play/pause.
  *
  * API:
  * - onTogglePlayPause: called when the central button is clicked.
  * - onSeek(deltaMs): called when one of the seek buttons is clicked.
  * - setPlaying(playing): updates the play/pause icon and tooltip.
- * - setTimeText(text): updates the time label on the right.
  */
 class TransportBar(
     private val onTogglePlayPause: () -> Unit,
@@ -27,8 +26,6 @@ class TransportBar(
     private val btnPlayPause = UiStyles.squarePrimaryButton(UiStyles.playIcon(28)) {
         onTogglePlayPause()
     }
-
-    private val timeLabel = JLabel("00:00:00.000")
 
     init {
         isOpaque = false
@@ -78,21 +75,6 @@ class TransportBar(
         add(btnPlayPause); add(Box.createHorizontalStrut(12))
         add(btnSeekFwd1); add(Box.createHorizontalStrut(6))
         add(btnSeekFwd10)
-
-        add(Box.createHorizontalStrut(16))
-        add(Box.createHorizontalGlue())
-
-        // Right group: time label
-        val timePanel = JPanel()
-        timePanel.isOpaque = false
-        val lblTime = JLabel("Time:")
-        lblTime.foreground = UiStyles.FG_SECONDARY
-        timeLabel.foreground = UiStyles.FG_PRIMARY
-        timeLabel.preferredSize = Dimension(100, 24)
-        timePanel.add(lblTime)
-        timePanel.add(Box.createHorizontalStrut(6))
-        timePanel.add(timeLabel)
-        add(timePanel)
     }
 
     private fun seekHandler(delta: Long): ActionListener = ActionListener {
@@ -105,8 +87,4 @@ class TransportBar(
         btnPlayPause.repaint()
     }
 
-    fun setTimeText(text: String) {
-        timeLabel.text = text
-        timeLabel.repaint()
-    }
 }

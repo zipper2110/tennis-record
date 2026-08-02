@@ -38,6 +38,7 @@ import javax.swing.filechooser.FileNameExtensionFilter
  */
 class SwingProjectsPanel(
     private val presenter: ProjectsPresenter = DefaultProjectsPresenter(),
+    private val onHelp: () -> Unit = {},
 ) : JPanel(BorderLayout()), ProjectsView {
     private val currentProjectContainer = JPanel(BorderLayout()).apply {
         isOpaque = false
@@ -63,7 +64,13 @@ class SwingProjectsPanel(
         background = UiStyles.DARK_BG
         border = BorderFactory.createEmptyBorder(16, 16, 16, 16)
 
-        add(ProjectsHeader { presenter.onIntent(ProjectsIntent.ImportNewMatch) }, BorderLayout.NORTH)
+        add(
+            ProjectsHeader(
+                onImportNewMatch = { presenter.onIntent(ProjectsIntent.ImportNewMatch) },
+                onHelp = onHelp,
+            ),
+            BorderLayout.NORTH,
+        )
         add(buildCenterPanel(), BorderLayout.CENTER)
     }
 

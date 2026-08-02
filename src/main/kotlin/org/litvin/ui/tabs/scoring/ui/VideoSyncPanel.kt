@@ -1,192 +1,134 @@
 package org.litvin.ui.tabs.scoring.ui
 
 import org.litvin.ui.UiStyles
+import org.litvin.ui.commons.TransportBar
 import org.litvin.ui.tabs.scoring.VideoPlayerActions
 import java.awt.BorderLayout
-import java.awt.Color
-import java.awt.Dimension
 import java.awt.FlowLayout
+import javax.swing.BorderFactory
 import javax.swing.Box
 import javax.swing.BoxLayout
-import javax.swing.JButton
-import javax.swing.JComboBox
 import javax.swing.JCheckBox
+import javax.swing.JComboBox
 import javax.swing.JLabel
 import javax.swing.JPanel
-import javax.swing.SwingConstants
 import javax.swing.JToggleButton
-import javax.swing.BorderFactory
 import javax.swing.border.EmptyBorder
 import kotlin.math.abs
 
 /**
- * VideoSyncPanel (E-SC-001 T7)
+ * Compact scoring-video controls.
  *
- * Purpose
- * - Leaf Swing component hosting a compact transport/timecode sync cluster for the Scoring tab.
- *   Provides: −10s, −1s, Play/Pause, +1s, +10s and a simple speed selector.
- *
- * Contracts
- * - Emits callbacks strictly via [org.litvin.ui.tabs.scoring.ScoringActions]; no direct media/player references.
- * - Optionally consumes immutable snapshots via [render] to reflect play/pause icon and speed.
- * - Does not depend on domain/media services; styles are delegated to [org.litvin.ui.UiStyles].
+ * Shared transport behavior is delegated to [TransportBar]. This panel owns only
+ * scoring-specific controls: no-point scoring, speed, and frame-step mode.
  */
 class VideoSyncPanel(
     private val actions: VideoPlayerActions,
     private val onNoPoint: () -> Unit,
 ) : JPanel(BorderLayout()) {
 
-    private val playPauseBtn: JButton
+    private val transportBar = TransportBar(
+        onTogglePlayPause = { actions.playPause() },
+        onSeek = { delta -> actions.seekBy(delta) },
+    ).apply {
+        name = "scoring-video-controls"
+    }
+
     private val speedCombo: JComboBox<String>
     private lateinit var frameStepCheckbox: JCheckBox
     private lateinit var noPointBtn: JToggleButton
 
-    // Local presets kept in UI (do not couple to SessionSettings here)
-    private val speedPresets: FloatArray = floatArrayOf(2.0f, 1.0f, 0.5f, 0.25f, 0.1f)
+    private val speedPresets: FloatArray = floatArrayOf(2.0f, 1.5f, 1.25f, 1.0f, 0.5f)
 
     init {
         isOpaque = true
-        background = Color(0x12, 0x12, 0x12)
+        background = UiStyles.SIDEBAR_BG
         border = EmptyBorder(6, 8, 6, 8)
 
-        // Transport controls row
-        val transport = JPanel()
-        transport.layout = BoxLayout(transport, BoxLayout.X_AXIS)
-        transport.isOpaque = false
-
-        fun styleSeek(b: JButton) {
-            UiStyles.styleSecondary(b)
-            b.iconTextGap = 6
-            b.preferredSize = Dimension(100, 44)
-            b.minimumSize = Dimension(100, 40)
+        val speedRow = JPanel(FlowLayout(FlowLayout.CENTER, 8, 0)).apply {
+            isOpaque = false
         }
-        fun styleSeekLarge(b: JButton) {
-            UiStyles.styleSecondary(b)
-            b.iconTextGap = 6
-            b.preferredSize = Dimension(150, 44)
-            b.minimumSize = Dimension(120, 40)
-        }
-
-        val btnSeekBack5 = JButton()
-        val btnSeekBack1 = JButton()
-        val btnSeekFwd1 = JButton()
-        val btnSeekFwd5 = JButton()
-        styleSeekLarge(btnSeekBack5); styleSeek(btnSeekBack1); styleSeek(btnSeekFwd1); styleSeekLarge(btnSeekFwd5)
-        btnSeekBack5.icon = UiStyles.backward5Icon();
-        btnSeekBack5.text = "-10s [shift+←]"
-        btnSeekBack1.icon = UiStyles.seekLeftIcon();
-        btnSeekBack1.text = "-1s [←]"
-        btnSeekFwd1.icon = UiStyles.seekRightIcon();
-        btnSeekFwd1.text = "+1s [→]"
-        btnSeekFwd5.icon = UiStyles.forward5Icon();
-        btnSeekFwd5.text = "+10s [shift+→]"
-
-        btnSeekBack5.horizontalTextPosition = SwingConstants.RIGHT
-        btnSeekBack1.horizontalTextPosition = SwingConstants.RIGHT
-        btnSeekFwd1.horizontalTextPosition = SwingConstants.LEFT
-        btnSeekFwd5.horizontalTextPosition = SwingConstants.LEFT
-        // Wire actions
-        btnSeekBack5.addActionListener { actions.seekBy(-5_000) }
-        btnSeekBack1.addActionListener { actions.seekBy(-1_000) }
-        btnSeekFwd1.addActionListener { actions.seekBy(1_000) }
-        btnSeekFwd5.addActionListener { actions.seekBy(5_000) }
-
-        playPauseBtn = UiStyles.squarePrimaryButton(UiStyles.playIcon(28)) { actions.playPause() }
-        try {
-            playPauseBtn.name = "play-pause"
-            playPauseBtn.accessibleContext.accessibleName = "Play or Pause"
-            playPauseBtn.toolTipText = "SPACE — Play/Pause"
-        } catch (_: Throwable) {}
-
-        // Assemble row similar to Markup
-        transport.add(btnSeekBack5); transport.add(Box.createHorizontalStrut(6))
-        transport.add(btnSeekBack1); transport.add(Box.createHorizontalStrut(12))
-        transport.add(playPauseBtn); transport.add(Box.createHorizontalStrut(12))
-        transport.add(btnSeekFwd1); transport.add(Box.createHorizontalStrut(6))
-        transport.add(btnSeekFwd5)
-
-        // Speed row
-        val speedRow = JPanel(FlowLayout(FlowLayout.CENTER, 8, 0))
-        speedRow.isOpaque = false
-        val speedLabels = arrayOf("2×", "1×", "0.5×", "0.25×", "0.1×")
-        speedCombo = JComboBox(speedLabels)
-        UiStyles.styleComboBox(speedCombo)
-        speedCombo.isFocusable = true
-        speedCombo.name = "speed-dropdown"
-        speedCombo.toolTipText = "Use ↑/↓ to change speed"
-        speedCombo.addActionListener {
-            val idx = speedCombo.selectedIndex.coerceIn(0, speedPresets.lastIndex)
-            actions.setSpeedMultiplier(speedPresets[idx])
+        val speedLabels = arrayOf("2x", "1.5x", "1.25x", "1x", "0.5x")
+        speedCombo = JComboBox(speedLabels).apply {
+            UiStyles.styleComboBox(this)
+            isFocusable = true
+            name = "speed-dropdown"
+            toolTipText = "Use Up/Down to change speed"
+            addActionListener {
+                val idx = selectedIndex.coerceIn(0, speedPresets.lastIndex)
+                actions.setSpeedMultiplier(speedPresets[idx])
+            }
         }
         speedRow.add(speedCombo)
-        // Frame-by-frame checkbox
-        frameStepCheckbox = JCheckBox("Frame-by-frame")
-        try { frameStepCheckbox.accessibleContext.accessibleName = "Frame-by-frame stepping when paused" } catch (_: Throwable) {}
-        frameStepCheckbox.toolTipText = "When enabled, Left/Right step a single frame while paused"
-        UiStyles.styleCheckBox(frameStepCheckbox)
-        frameStepCheckbox.addActionListener { actions.setFrameStepEnabled(frameStepCheckbox.isSelected) }
+
+        frameStepCheckbox = JCheckBox("Seek frame-by-frame [F]").apply {
+            toolTipText = "When enabled, Left/Right step a single frame while paused"
+            UiStyles.styleCheckBox(this)
+            addActionListener { actions.setFrameStepEnabled(isSelected) }
+        }
         speedRow.add(Box.createHorizontalStrut(8))
-        speedRow.add(JLabel("↑ / ↓ speed").apply {
-            foreground = Color(0xAD, 0xAA, 0xAA)
+        speedRow.add(JLabel("Up / Down speed").apply {
+            foreground = UiStyles.FG_SECONDARY
             font = font.deriveFont(10f)
-            toolTipText = "Use ↑/↓ to change speed"
+            toolTipText = "Use Up/Down to change speed"
         })
         speedRow.add(frameStepCheckbox)
 
-        val center = JPanel()
-        center.layout = BoxLayout(center, BoxLayout.Y_AXIS)
-        center.isOpaque = false
-
-        // Top action row: centered "No point" toggle button (styled like player point buttons)
-        val actionsRow = JPanel(FlowLayout(FlowLayout.CENTER, 0, 0))
-        actionsRow.isOpaque = false
-        noPointBtn = JToggleButton("No point [W]")
-        noPointBtn.isFocusPainted = false
-        noPointBtn.foreground = Color.WHITE
-        noPointBtn.background = Color(0x26, 0x26, 0x26)
-        noPointBtn.border = BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(Color(0x48, 0x48, 0x47, 0x33), 1),
-            EmptyBorder(6, 10, 6, 10)
-        )
-        try { noPointBtn.name = "no-point" } catch (_: Throwable) {}
-        noPointBtn.toolTipText = "W — No point"
-        noPointBtn.addActionListener { onNoPoint.invoke() }
+        val actionsRow = JPanel(FlowLayout(FlowLayout.CENTER, 0, 0)).apply {
+            isOpaque = false
+        }
+        noPointBtn = JToggleButton("No point [W]").apply {
+            isFocusPainted = false
+            foreground = UiStyles.FG_PRIMARY
+            background = UiStyles.CARD_BORDER
+            border = BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(UiStyles.CARD_BORDER, 1),
+                EmptyBorder(6, 10, 6, 10),
+            )
+            name = "no-point"
+            toolTipText = "W - No point"
+            addActionListener { onNoPoint.invoke() }
+        }
         actionsRow.add(noPointBtn)
 
-        center.add(actionsRow)
-        center.add(Box.createVerticalStrut(12))
-        center.add(transport)
-        center.add(Box.createVerticalStrut(8))
-        center.add(speedRow)
+        val center = JPanel().apply {
+            layout = BoxLayout(this, BoxLayout.Y_AXIS)
+            isOpaque = false
+            add(actionsRow)
+            add(Box.createVerticalStrut(12))
+            add(transportBar)
+            add(Box.createVerticalStrut(8))
+            add(speedRow)
+        }
 
         add(center, BorderLayout.CENTER)
     }
 
-    /**
-     * External control for the No point button state, to mirror player buttons.
-     */
     fun setNoPointEnabled(enabled: Boolean) {
-        try { noPointBtn.isEnabled = enabled } catch (_: Throwable) { }
+        try {
+            noPointBtn.isEnabled = enabled
+        } catch (_: Throwable) {
+        }
     }
+
     fun setNoPointSelected(selected: Boolean) {
-        try { noPointBtn.model.isSelected = selected } catch (_: Throwable) { }
+        try {
+            noPointBtn.model.isSelected = selected
+        } catch (_: Throwable) {
+        }
     }
 
-    /**
-     * Update the transport visuals from a [org.litvin.ui.tabs.scoring.ScoringViewState] snapshot.
-     * - Sets play/pause icon and tooltip.
-     * - Adjusts speed dropdown to the closest preset.
-     */
     fun render(isPlaying: Boolean, speedMultiplier: Float) {
-        playPauseBtn.icon = if (isPlaying) UiStyles.pauseIcon(28) else UiStyles.playIcon(28)
-        playPauseBtn.toolTipText = if (isPlaying) "SPACE — Pause" else "SPACE — Play"
+        transportBar.setPlaying(isPlaying)
 
-        val m = speedMultiplier
         var best = 0
         var bestDiff = Float.MAX_VALUE
         for (i in speedPresets.indices) {
-            val d = abs(speedPresets[i] - m)
-            if (d < bestDiff) { bestDiff = d; best = i }
+            val diff = abs(speedPresets[i] - speedMultiplier)
+            if (diff < bestDiff) {
+                bestDiff = diff
+                best = i
+            }
         }
         speedCombo.selectedIndex = best
     }
@@ -194,6 +136,7 @@ class VideoSyncPanel(
     fun setFrameStepEnabled(enabled: Boolean) {
         try {
             frameStepCheckbox.isSelected = enabled
-        } catch (_: Throwable) { }
+        } catch (_: Throwable) {
+        }
     }
 }

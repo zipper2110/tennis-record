@@ -3,6 +3,7 @@ package org.litvin.ui.tabs.export
 import org.litvin.CompletedRender
 import org.litvin.CompletedRendersStore
 import org.litvin.RenderJob
+import org.litvin.export.RenderFormatting
 import org.litvin.ui.UiStyles
 import java.awt.BorderLayout
 import java.awt.Component
@@ -163,7 +164,7 @@ class CompletedRendersList {
     }
 
     private fun formatItem(item: CompletedRender): String {
-        val size = formatSize(item.bytesWritten)
+        val size = RenderFormatting.formatSize(item.bytesWritten)
         val sb = if (item.includeScoreboard) "  ·  Scoreboard" else ""
         val res = if (item.outHeight >= 2160 || item.outWidth >= 3840) "4K" else "1080p"
         val proj = item.projectName?.takeIf { it.isNotBlank() }
@@ -171,15 +172,4 @@ class CompletedRendersList {
         return "$left$sb  —  ${item.encoderLabel} / $res  —  $size"
     }
 
-    private fun formatSize(bytes: Long): String {
-        val kb = 1000.0
-        val mb = kb * 1000
-        val gb = mb * 1000
-        return when {
-            bytes >= gb -> String.format("%.2f GB", bytes / gb)
-            bytes >= mb -> String.format("%.2f MB", bytes / mb)
-            bytes >= kb -> String.format("%.2f KB", bytes / kb)
-            else -> "$bytes B"
-        }
-    }
 }

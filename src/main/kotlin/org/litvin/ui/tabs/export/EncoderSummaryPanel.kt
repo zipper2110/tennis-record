@@ -9,13 +9,14 @@ import javax.swing.*
 /**
  * Encapsulates encoder selection, detection hint, and summary label.
  */
-class EncoderSummaryPanel {
+class EncoderSummaryPanel(
+    preferredEncoderId: String? = null,
+) {
     data class EncoderItem(val label: String, val id: String) { override fun toString() = label }
 
     private val encoderCombo = JComboBox<EncoderItem>()
     private val encoderHintLabel = JLabel("")
     private val encoderSummaryLabel = JLabel("")
-    private val recheckButton = JButton("Re-check")
 
     private val panel: JPanel = JPanel()
 
@@ -24,7 +25,7 @@ class EncoderSummaryPanel {
         panel.background = UiStyles.CARD_BG
         panel.foreground = UiStyles.FG_PRIMARY
 
-        populateEncoders()
+        populateEncoders(preferredEncoderId)
         encoderCombo.maximumSize = Dimension(Short.MAX_VALUE.toInt(), 28)
         UiStyles.styleComboBox(encoderCombo)
         panel.add(encoderCombo)
@@ -34,21 +35,11 @@ class EncoderSummaryPanel {
         UiStyles.styleHelper(encoderSummaryLabel)
         panel.add(encoderSummaryLabel)
 
-        recheckButton.alignmentX = 0f
-        UiStyles.styleSecondary(recheckButton)
-        recheckButton.addActionListener {
-            try { FFmpegCapabilities.refresh() } catch (_: Throwable) {}
-            populateEncoders()
-            updateSummary()
-        }
-        panel.add(Box.createRigidArea(Dimension(0, 4)))
-        panel.add(recheckButton)
-
         encoderCombo.addActionListener { updateSummary() }
         updateSummary()
     }
 
-    private fun populateEncoders() {
+    private fun populateEncoders(preferredEncoderId: String?) {
         val items = mutableListOf<EncoderItem>()
         items += EncoderItem("H.264 (libx264) — software", "libx264")
         val caps = try { FFmpegCapabilities.h264Encoders() } catch (_: Throwable) { emptySet() }
@@ -58,7 +49,11 @@ class EncoderSummaryPanel {
         if ("h264_amf" in caps) { items += EncoderItem("H.264 (AMF) — hardware", "h264_amf"); hw += "AMF" }
         val model = DefaultComboBoxModel(items.toTypedArray())
         encoderCombo.model = model
-        encoderCombo.selectedIndex = 0
+        val selectedId = preferredEncoderId
+            ?.takeIf { saved -> items.any { it.id == saved } }
+            ?: FFmpegCapabilities.preferredH264Encoder(caps)
+            ?: "libx264"
+        encoderCombo.selectedItem = items.first { it.id == selectedId }
         val hint = if (hw.isEmpty()) "No hardware H.264 encoders detected. Ensure ffmpeg with NVENC/QSV/AMF is installed and on PATH, or set FFMPEG_PATH." else "Detected: ${hw.joinToString(", ")}"
         Html.setWrapped(encoderHintLabel, hint)
     }

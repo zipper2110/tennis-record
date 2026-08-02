@@ -33,7 +33,9 @@ import kotlin.math.max
  * - Basic autosave of EDL (edl.json) with 300 ms debounce
  *
  */
-class SwingMarkupPanel : JPanel(BorderLayout()) {
+class SwingMarkupPanel(
+    private val onHelp: () -> Unit = {},
+) : JPanel(BorderLayout()) {
 
     // Geometry viewport wrapper for VLC component
     private var geometryViewport: GeometryViewportPanel
@@ -304,7 +306,17 @@ class SwingMarkupPanel : JPanel(BorderLayout()) {
             BorderFactory.createLineBorder(Color(0x44, 0x88, 0x00)), BorderFactory.createEmptyBorder(2, 6, 2, 6)
         )
         countBadge.foreground = UiStyles.LIME
-        header.add(countBadge, BorderLayout.EAST)
+        val headerActions = JPanel(FlowLayout(FlowLayout.RIGHT, 8, 0)).apply {
+            isOpaque = false
+            add(countBadge)
+            add(JButton("Help [F1]").apply {
+                name = "rallies-help"
+                toolTipText = "F1 - Help"
+                UiStyles.styleSecondary(this)
+                addActionListener { onHelp() }
+            })
+        }
+        header.add(headerActions, BorderLayout.EAST)
         rightPanel.add(header, BorderLayout.NORTH)
 
         // Compose right panel content using extracted components

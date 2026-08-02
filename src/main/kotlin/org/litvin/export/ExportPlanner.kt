@@ -1,0 +1,236 @@
+package org.litvin.export
+
+import org.litvin.ExportPreset
+import org.litvin.OverlaySpan
+import org.litvin.RenderJob
+import org.litvin.ScoreboardTimelineBuilder
+import org.litvin.markup.EdlV1
+import org.litvin.markup.PointV1
+import org.litvin.projects.ProjectManifestV1
+import org.litvin.scoring.ScoreV1
+import java.io.File
+
+data class ExportResolution(
+    val label: String,
+    val width: Int,
+    val height: Int,
+)
+
+data class ExportPointSummary(
+    val pointCount: Int,
+    val favoriteCount: Int,
+    val totalMs: Long,
+    val favoriteTotalMs: Long,
+    val scoredCount: Int,
+) {
+    val allScored: Boolean
+        get() = pointCount > 0 && scoredCount == pointCount
+}
+
+data class ExportReadiness(
+    val enabled: Boolean,
+    val disabledReason: String? = null,
+)
+
+data class ExportRenderPlan(
+    val job: RenderJob,
+    val allValidPoints: List<PointV1>,
+    val keptPoints: List<PointV1>,
+    val effectiveIdleTrim: Boolean,
+    val overlayTimeline: List<OverlaySpan>,
+)
+
+data class ExportRenderPlanRequest(
+    val manifest: ProjectManifestV1?,
+    val sourcePath: String,
+    val edl: EdlV1?,
+    val score: ScoreV1,
+    val preset: ExportPreset,
+    val resolution: ExportResolution,
+    val encoderLabel: String,
+    val idleTrim: Boolean,
+    val favoriteOnly: Boolean,
+    val includeScoreboard: Boolean,
+    val outputPath: String,
+)
+
+object ExportPlanner {
+    fun validateEdl(raw: EdlV1?): List<PointV1> {
+        if (raw == null) return emptyList()
+        val points = raw.points.sortedBy { it.startMs }
+        val keeps = ArrayList<PointV1>()
+        var lastEnd = -1
+        for (point in points) {
+            if (point.startMs >= point.endMs) continue
+            if (lastEnd >= 0 && point.startMs < lastEnd) continue
+            keeps += point
+            lastEnd = point.endMs
+        }
+        return keeps
+    }
+
+    fun summarize(edl: EdlV1?, score: ScoreV1): ExportPointSummary {
+        val points = edl?.points ?: emptyList()
+        val validFavorites = validateEdl(edl).filter { it.favorite }
+        val outcomes = score.outcomes
+        return ExportPointSummary(
+            pointCount = points.size,
+            favoriteCount = validFavorites.size,
+            totalMs = points.sumOf { (it.endMs - it.startMs).coerceAtLeast(0).toLong() },
+            favoriteTotalMs = validFavorites.sumOf { (it.endMs - it.startMs).toLong() },
+            scoredCount = points.count { point -> outcomes.containsKey(point.id) },
+        )
+    }
+
+    fun selectedKeepPoints(
+        validPoints: List<PointV1>,
+        idleTrim: Boolean,
+        favoriteOnly: Boolean,
+    ): List<PointV1> {
+        if (!idleTrim) return emptyList()
+        return if (favoriteOnly) validPoints.filter { it.favorite } else validPoints
+    }
+
+    fun effectiveIdleTrim(idleTrim: Boolean, keptPoints: List<PointV1>): Boolean {
+        return idleTrim && keptPoints.isNotEmpty()
+    }
+
+    fun parseResolution(selection: String): ExportResolution {
+        return when (selection) {
+            "4K" -> ExportResolution(selection, 3840, 2160)
+            "1080p" -> ExportResolution(selection, 1920, 1080)
+            else -> {
+                val parts = selection.lowercase().split("x")
+                if (parts.size == 2) {
+                    ExportResolution(
+                        label = selection,
+                        width = parts[0].toIntOrNull() ?: 1920,
+                        height = parts[1].toIntOrNull() ?: 1080,
+                    )
+                } else {
+                    ExportResolution(selection, 1920, 1080)
+                }
+            }
+        }
+    }
+
+    fun suggestFilename(
+        projectName: String,
+        presetId: String,
+        resolutionLabel: String,
+        defaultExtNoDot: String = "mp4",
+    ): String {
+        val base = projectName.ifBlank { "export" }
+        val dims = resolutionLabel.replace('x', 'p')
+        return "$base-${presetId.lowercase()}-$dims.$defaultExtNoDot"
+    }
+
+    fun ensureExtension(file: File, defaultExtNoDot: String = "mp4"): File {
+        val safeName = file.name.trim().trimEnd('.')
+        if (safeName.isEmpty()) return File(file.parentFile, "export.$defaultExtNoDot")
+        return if (safeName.contains('.')) {
+            File(file.parentFile, safeName)
+        } else {
+            File(file.parentFile, "$safeName.$defaultExtNoDot")
+        }
+    }
+
+    fun initializationReadiness(
+        hasProject: Boolean,
+        sourceVideoExists: Boolean,
+        idleTrim: Boolean,
+        favoriteOnly: Boolean,
+        validPoints: List<PointV1>,
+    ): ExportReadiness {
+        if (!hasProject) {
+            return ExportReadiness(false, "Open a project first (Projects -> Open).")
+        }
+        if (!sourceVideoExists) {
+            return ExportReadiness(false, "Source video not found. Set it in Projects/Markup.")
+        }
+        if (!idleTrim) return ExportReadiness(true)
+
+        val keptPoints = selectedKeepPoints(validPoints, idleTrim = true, favoriteOnly = favoriteOnly)
+        return when {
+            favoriteOnly && keptPoints.isEmpty() -> ExportReadiness(
+                false,
+                "Favorite-only export is ON but no valid favorite points are available.",
+            )
+            keptPoints.isEmpty() -> ExportReadiness(
+                false,
+                "EDL is empty/invalid while Idle-trim is ON. Add keep intervals or turn Idle-trim OFF.",
+            )
+            else -> ExportReadiness(true)
+        }
+    }
+
+    fun buildRenderPlan(request: ExportRenderPlanRequest): ExportRenderPlan {
+        val allValidPoints = validateEdl(request.edl)
+        val keptPoints = selectedKeepPoints(
+            validPoints = allValidPoints,
+            idleTrim = request.idleTrim,
+            favoriteOnly = request.favoriteOnly,
+        )
+        val effectiveIdleTrim = effectiveIdleTrim(request.idleTrim, keptPoints)
+        val overlayTimeline = if (request.includeScoreboard) {
+            buildOverlayTimeline(
+                edl = request.edl,
+                score = request.score,
+                allValidPoints = allValidPoints,
+                keptPoints = keptPoints,
+                effectiveIdleTrim = effectiveIdleTrim,
+            )
+        } else {
+            emptyList()
+        }
+
+        val job = RenderJob(
+            projectId = request.manifest?.id,
+            projectName = request.manifest?.name,
+            sourcePath = request.sourcePath,
+            edlSnapshot = if (request.idleTrim) keptPoints else emptyList(),
+            presetId = request.preset.id,
+            outWidth = request.resolution.width,
+            outHeight = request.resolution.height,
+            encoderLabel = request.encoderLabel,
+            idleTrim = effectiveIdleTrim,
+            favoriteOnly = request.favoriteOnly,
+            includeScoreboard = request.includeScoreboard,
+            overlayTimeline = overlayTimeline,
+            outputPath = request.outputPath,
+        )
+
+        return ExportRenderPlan(
+            job = job,
+            allValidPoints = allValidPoints,
+            keptPoints = keptPoints,
+            effectiveIdleTrim = effectiveIdleTrim,
+            overlayTimeline = overlayTimeline,
+        )
+    }
+
+    private fun buildOverlayTimeline(
+        edl: EdlV1?,
+        score: ScoreV1,
+        allValidPoints: List<PointV1>,
+        keptPoints: List<PointV1>,
+        effectiveIdleTrim: Boolean,
+    ): List<OverlaySpan> {
+        val scoringPoints = allValidPoints.ifEmpty { edl?.points ?: emptyList() }
+        val overlayPoints = if (effectiveIdleTrim) keptPoints else scoringPoints
+        return ScoreboardTimelineBuilder.build(
+            points = scoringPoints,
+            outcomes = score.outcomes,
+            idleTrim = effectiveIdleTrim,
+            player1Name = score.player1Name,
+            player2Name = score.player2Name,
+            player1ColorHex = score.player1ColorHex,
+            player2ColorHex = score.player2ColorHex,
+            exportedPointIds = if (effectiveIdleTrim && overlayPoints.isNotEmpty()) {
+                overlayPoints.map { it.id }.toSet()
+            } else {
+                null
+            },
+        )
+    }
+}

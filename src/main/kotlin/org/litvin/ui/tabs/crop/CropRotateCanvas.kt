@@ -5,6 +5,7 @@ import org.litvin.adjustments.AdjustmentsV1
 import org.litvin.adjustments.CropGeometryMath
 import org.litvin.adjustments.CropRect
 import org.litvin.ui.UiStyles
+import org.litvin.ui.commons.AppShortcuts
 import java.awt.AlphaComposite
 import java.awt.BasicStroke
 import java.awt.Color
@@ -293,14 +294,14 @@ class CropRotateCanvas(
                 }
             })
         }
-        bind("LEFT", "cropNudgeLeft", -1, 0)
-        bind("RIGHT", "cropNudgeRight", 1, 0)
-        bind("UP", "cropNudgeUp", 0, -1)
-        bind("DOWN", "cropNudgeDown", 0, 1)
-        bind("shift LEFT", "cropNudgeLeftFast", -10, 0)
-        bind("shift RIGHT", "cropNudgeRightFast", 10, 0)
-        bind("shift UP", "cropNudgeUpFast", 0, -10)
-        bind("shift DOWN", "cropNudgeDownFast", 0, 10)
+        bind(AppShortcuts.LEFT.keyStroke, "cropNudgeLeft", -1, 0)
+        bind(AppShortcuts.RIGHT.keyStroke, "cropNudgeRight", 1, 0)
+        bind(AppShortcuts.UP.keyStroke, "cropNudgeUp", 0, -1)
+        bind(AppShortcuts.DOWN.keyStroke, "cropNudgeDown", 0, 1)
+        bind(AppShortcuts.SHIFT_LEFT.keyStroke, "cropNudgeLeftFast", -10, 0)
+        bind(AppShortcuts.SHIFT_RIGHT.keyStroke, "cropNudgeRightFast", 10, 0)
+        bind(AppShortcuts.SHIFT_UP.keyStroke, "cropNudgeUpFast", 0, -10)
+        bind(AppShortcuts.SHIFT_DOWN.keyStroke, "cropNudgeDownFast", 0, 10)
     }
 
     private fun nudge(dx: Int, dy: Int) {

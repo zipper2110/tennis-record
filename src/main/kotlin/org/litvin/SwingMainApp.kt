@@ -14,6 +14,10 @@ import org.litvin.ui.tabs.export.SwingExportPanel
 import org.litvin.ui.tabs.adjustments.SwingColorAdjustmentsPanel
 import org.litvin.ui.tabs.crop.SwingCropRotatePanel
 import org.litvin.ui.tabs.test.SwingTestPanel
+import org.litvin.ui.commons.AppShortcuts
+import org.litvin.ui.help.HelpDialog
+import org.litvin.ui.help.HelpPage
+import org.litvin.ui.help.HelpPreferences
 
 
 /**
@@ -118,6 +122,10 @@ object SwingMainApp {
                 val frame = JFrame(AppInfo.displayName)
                 frame.defaultCloseOperation = JFrame.EXIT_ON_CLOSE
                 frame.layout = BorderLayout()
+                val helpDialog by lazy { HelpDialog(frame) }
+                fun showHelp(page: HelpPage) {
+                    helpDialog.open(page)
+                }
 
                 // Sidebar styled to match the mock
                 val sidebar = JPanel().apply {
@@ -149,17 +157,26 @@ object SwingMainApp {
                 val cl = cards.layout as CardLayout
 
                 // Projects screen (Swing Phase 2) and Markup (Phase 3)
-                val ralliesPanel = SwingMarkupPanel()
-                val colorsPanel = SwingColorAdjustmentsPanel()
-                val cropRotatePanel = SwingCropRotatePanel()
-                val scoringPanel = SwingScoringPanel()
-                val exportPanel = SwingExportPanel()
+                val ralliesPanel = SwingMarkupPanel { showHelp(HelpPage.RALLIES) }
+                val colorsPanel = SwingColorAdjustmentsPanel { showHelp(HelpPage.COLORS) }
+                val cropRotatePanel = SwingCropRotatePanel(onHelp = { showHelp(HelpPage.CROP) })
+                val scoringPanel = SwingScoringPanel { showHelp(HelpPage.SCORING) }
+                val exportPanel = SwingExportPanel { showHelp(HelpPage.EXPORT) }
                 val testEnabled = System.getProperty("test") == "true"
                 val testPanel = if (testEnabled) SwingTestPanel() else null
                 lateinit var projectsPanel: SwingProjectsPanel
 
                 // Navigation helper with lifecycle wiring
                 var currentCard: String? = null
+                fun currentHelpPage(): HelpPage = when (currentCard) {
+                    CARD_PROJECTS -> HelpPage.PROJECTS
+                    CARD_RALLIES -> HelpPage.RALLIES
+                    CARD_ADJ_COLORS -> HelpPage.COLORS
+                    CARD_ADJ_CROP_ROTATE -> HelpPage.CROP
+                    CARD_SCORING -> HelpPage.SCORING
+                    CARD_EXPORT -> HelpPage.EXPORT
+                    else -> HelpPage.OVERVIEW
+                }
                 fun goTo(card: String) {
                     // Pause media on panels being left
                     when (currentCard) {
@@ -193,7 +210,7 @@ object SwingMainApp {
                     currentCard = card
                 }
 
-                projectsPanel = SwingProjectsPanel().apply {
+                projectsPanel = SwingProjectsPanel(onHelp = { showHelp(HelpPage.PROJECTS) }).apply {
                     onProjectOpened = { path ->
                         ralliesPanel.setProjectManifest(path)
                         colorsPanel.setProjectManifest(path)
@@ -279,6 +296,14 @@ object SwingMainApp {
                 frame.add(sidebar, BorderLayout.WEST)
                 frame.add(cards, BorderLayout.CENTER)
 
+                frame.rootPane.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW)
+                    .put(KeyStroke.getKeyStroke(AppShortcuts.HELP.keyStroke), "openContextHelp")
+                frame.rootPane.actionMap.put("openContextHelp", object : AbstractAction() {
+                    override fun actionPerformed(e: java.awt.event.ActionEvent?) {
+                        showHelp(currentHelpPage())
+                    }
+                })
+
                 // Restore window state from preferences
                 val prefs = Preferences.userNodeForPackage(SwingMainApp::class.java)
                 val savedX = prefs.getInt("win.x", Int.MIN_VALUE)
@@ -308,6 +333,9 @@ object SwingMainApp {
                         "GPU preference set",
                         JOptionPane.INFORMATION_MESSAGE
                     )
+                }
+                if (HelpPreferences.claimFirstLaunchOverview(prefs)) {
+                    showHelp(HelpPage.OVERVIEW)
                 }
             } catch (t: Throwable) {
                 logger.error(t) { "Application startup failed." }
