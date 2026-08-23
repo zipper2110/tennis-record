@@ -1,7 +1,7 @@
 package org.litvin.ui.tabs.export
 
 import org.litvin.CompletedRender
-import org.litvin.CompletedRendersStore
+import org.litvin.export.ProductionCompletedRendersRepository
 import org.litvin.RenderJob
 import org.litvin.export.RenderFormatting
 import org.litvin.ui.UiStyles
@@ -113,7 +113,7 @@ class CompletedRendersList {
 
     fun refreshFromStore() {
         try {
-            val items = CompletedRendersStore.loadAll()
+            val items = ProductionCompletedRendersRepository.loadAll()
             model.removeAllElements()
             items.forEach { model.addElement(it) }
         } catch (_: Throwable) { }
@@ -143,7 +143,7 @@ class CompletedRendersList {
     private fun clearAll() {
         val r = JOptionPane.showConfirmDialog(panel, "Clear all completed entries?", "Confirm", JOptionPane.YES_NO_OPTION)
         if (r == JOptionPane.YES_OPTION) {
-            try { CompletedRendersStore.clear() } catch (_: Throwable) { }
+            try { ProductionCompletedRendersRepository.clear() } catch (_: Throwable) { }
             model.removeAllElements()
         }
     }

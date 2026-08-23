@@ -1,6 +1,7 @@
 package org.litvin
 
 import io.github.oshai.kotlinlogging.KotlinLogging
+import org.litvin.export.ProductionCompletedRendersRepository
 import org.litvin.markup.PointV1
 import java.util.UUID
 import java.util.concurrent.CopyOnWriteArrayList
@@ -474,7 +475,7 @@ object RenderQueueManager {
                     // Remove temp ASS if any
                     try { java.io.File(partOut.absolutePath + ".ass").delete() } catch (_: Throwable) {}
                     // Persist to Completed store (Task 3.11)
-                    try { CompletedRendersStore.append(job) } catch (_: Throwable) { }
+                    try { ProductionCompletedRendersRepository.append(job) } catch (_: Throwable) { }
                     // Notify UI about completion before clearing current
                     notifyObservers()
                 } else {

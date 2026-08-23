@@ -40,16 +40,8 @@ object CompletedRendersStore {
 
     private val lock = ReentrantLock()
 
-    private fun appDataDir(): File {
-        val dir = ApplicationLayout.current().appDataDirectory
-        if (!dir.exists()) dir.mkdirs()
-        return dir
-    }
-
-    private fun jsonFile(): File = File(appDataDir(), "completed-renders.json")
-
-    fun loadAll(): List<CompletedRender> = lock.withLock {
-        val f = jsonFile()
+    fun loadAll(file: File): List<CompletedRender> = lock.withLock {
+        val f = file
         if (!f.exists()) return emptyList()
         return try {
             mapper.readValue(f)
@@ -59,16 +51,17 @@ object CompletedRendersStore {
         }
     }
 
-    private fun saveAll(items: List<CompletedRender>) = lock.withLock {
-        val f = jsonFile()
+    private fun saveAll(file: File, items: List<CompletedRender>) = lock.withLock {
+        val f = file
         try {
+            f.parentFile?.let { if (!it.exists()) it.mkdirs() }
             mapper.writeValue(f, items)
         } catch (t: Throwable) {
             logger.warn(t) { "Failed to write completed renders." }
         }
     }
 
-    fun append(job: RenderJob) {
+    fun append(job: RenderJob, file: File) {
         val item = CompletedRender(
             id = job.id,
             projectId = job.projectId,
@@ -82,12 +75,12 @@ object CompletedRendersStore {
             includeScoreboard = job.includeScoreboard,
             createdAtEpochMs = System.currentTimeMillis(),
         )
-        val items = loadAll().toMutableList()
+        val items = loadAll(file).toMutableList()
         items.add(0, item) // newest first
-        saveAll(items)
+        saveAll(file, items)
     }
 
-    fun clear() {
-        saveAll(emptyList())
+    fun clear(file: File) {
+        saveAll(file, emptyList())
     }
 }
