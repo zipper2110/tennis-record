@@ -7,6 +7,7 @@ data class ExportVideoSettings(
     val presetId: String?,
     val resolution: String?,
     val encoderId: String?,
+    val outputFrameRate: String?,
 )
 
 class ExportSettingsPreferences(
@@ -16,6 +17,7 @@ class ExportSettingsPreferences(
         presetId = preferences.get(KEY_PRESET, null),
         resolution = preferences.get(KEY_RESOLUTION, null),
         encoderId = preferences.get(KEY_ENCODER, null),
+        outputFrameRate = preferences.get(KEY_OUTPUT_FRAME_RATE, null),
     )
 
     fun savePreset(id: String) {
@@ -28,6 +30,10 @@ class ExportSettingsPreferences(
 
     fun saveEncoder(id: String) {
         preferences.put(KEY_ENCODER, id)
+    }
+
+    fun saveOutputFrameRate(frameRate: String) {
+        preferences.put(KEY_OUTPUT_FRAME_RATE, frameRate)
     }
 
     fun loadOutputDirectory(): File? {
@@ -44,6 +50,7 @@ class ExportSettingsPreferences(
         const val KEY_PRESET = "export.video.preset"
         const val KEY_RESOLUTION = "export.video.resolution"
         const val KEY_ENCODER = "export.video.encoder"
+        const val KEY_OUTPUT_FRAME_RATE = "export.video.frameRate"
         const val KEY_OUTPUT_DIRECTORY = "export.output.directory"
     }
 }

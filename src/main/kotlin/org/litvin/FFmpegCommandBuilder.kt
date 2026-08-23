@@ -21,6 +21,7 @@ object FFmpegCommandBuilder {
         val preset: ExportPreset,
         val outWidth: Int,
         val outHeight: Int,
+        val outputFrameRate: String? = null,
         val encoderLabel: String = "H.264 (libx264)",
         val idleTrim: Boolean = true,
         val keeps: List<PointV1> = emptyList(),
@@ -168,6 +169,7 @@ object FFmpegCommandBuilder {
             v.vbvBufsizeK?.let { bufk -> args += listOf("-bufsize", "${bufk}k") }
         }
         v.pixelFormat?.let { args += listOf("-pix_fmt", it) }
+        p.outputFrameRate?.let { args += listOf("-r", it) }
         // GOP length optional — without knowing FPS, skip to avoid incorrect value in MVP
 
         // Audio options

@@ -23,6 +23,7 @@ class FFmpegCommandBuilderTest {
                 idleTrim = false,
                 keeps = emptyList(),
                 subtitlesAssPath = null,
+                outputFrameRate = "30000/1001",
             )
         )
         // Should use -vf scale and not -filter_complex
@@ -34,6 +35,8 @@ class FFmpegCommandBuilderTest {
         // Should use libx264 options
         assertTrue(res.args.contains("-c:v"))
         assertTrue(res.args.contains("libx264"))
+        val frameRateArgIndex = res.args.indexOf("-r")
+        assertEquals("30000/1001", res.args[frameRateArgIndex + 1])
         // Preview must include ffmpeg prefix
         assertTrue(res.preview.startsWith("ffmpeg "), "Preview should start with 'ffmpeg '")
     }
