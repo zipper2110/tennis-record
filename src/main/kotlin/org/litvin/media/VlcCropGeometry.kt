@@ -41,12 +41,7 @@ object VlcCropGeometryCalculator {
         val panPixelsY = (panY * (sourceHeight / 2.0f - height / 2.0f)).roundToInt()
 
         val pannedMinX = minX + panPixelsX
-        val pannedMaxX = maxX + panPixelsX
-
-//        val pannedMinY = sourceWidth - (minY + panPixelsY)
         val pannedMinY = minY + panPixelsY
-//        val pannedMaxY = sourceWidth - (maxY + panPixelsY)
-        val pannedMaxY = maxY + panPixelsY
 
         return VlcCropGeometry(
             cropWidth = width,
