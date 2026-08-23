@@ -14,8 +14,10 @@ import java.awt.image.BufferedImage
 import java.io.File
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
 class VlcjStillFrameCaptureService : StillFrameCaptureService {
+    private val closed = AtomicBoolean(false)
     private val frameLock = Any()
     @Volatile private var loadedFile: File? = null
     @Volatile private var cachedDurationMs: Long = 0L
@@ -98,6 +100,7 @@ class VlcjStillFrameCaptureService : StillFrameCaptureService {
     }
 
     override fun close() {
+        if (!closed.compareAndSet(false, true)) return
         try {
             mediaPlayer.controls().stop()
         } catch (_: Throwable) {

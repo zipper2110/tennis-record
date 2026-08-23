@@ -15,17 +15,20 @@ interface MediaPlayerFactory : AutoCloseable {
     fun createFrameCapture(): StillFrameCaptureService
 }
 
-class VlcjMediaPlayerFactory : MediaPlayerFactory {
-    private val resources = CopyOnWriteArrayList<AutoCloseable>()
+class VlcjMediaPlayerFactory internal constructor(
+    private val playerCreator: () -> SwingMediaPlayer = { VlcjSwingMediaPlayerAdapter() },
+    private val frameCaptureCreator: () -> StillFrameCaptureService = { VlcjStillFrameCaptureService() },
+) : MediaPlayerFactory {
+    private val resources = CopyOnWriteArrayList<ManagedResource>()
     private val closed = AtomicBoolean(false)
 
     override fun create(screen: MediaScreen): SwingMediaPlayer =
-        track(VlcjSwingMediaPlayerAdapter())
+        register(ManagedSwingMediaPlayer(playerCreator(), ::unregister))
 
     override fun createFrameCapture(): StillFrameCaptureService =
-        track(VlcjStillFrameCaptureService())
+        register(ManagedStillFrameCaptureService(frameCaptureCreator(), ::unregister))
 
-    private fun <T : AutoCloseable> track(resource: T): T {
+    private fun <T : ManagedResource> register(resource: T): T {
         if (closed.get()) {
             resource.close()
             error("Media-player factory is closed")
@@ -38,6 +41,10 @@ class VlcjMediaPlayerFactory : MediaPlayerFactory {
         return resource
     }
 
+    private fun unregister(resource: ManagedResource) {
+        resources.remove(resource)
+    }
+
     override fun close() {
         if (!closed.compareAndSet(false, true)) return
         resources.asReversed().forEach { resource ->
@@ -47,5 +54,33 @@ class VlcjMediaPlayerFactory : MediaPlayerFactory {
             }
         }
         resources.clear()
+    }
+
+    private interface ManagedResource : AutoCloseable
+
+    private class ManagedSwingMediaPlayer(
+        private val delegate: SwingMediaPlayer,
+        private val onClosed: (ManagedResource) -> Unit,
+    ) : SwingMediaPlayer by delegate, ManagedResource {
+        private val closed = AtomicBoolean(false)
+
+        override fun close() {
+            if (!closed.compareAndSet(false, true)) return
+            onClosed(this)
+            delegate.close()
+        }
+    }
+
+    private class ManagedStillFrameCaptureService(
+        private val delegate: StillFrameCaptureService,
+        private val onClosed: (ManagedResource) -> Unit,
+    ) : StillFrameCaptureService by delegate, ManagedResource {
+        private val closed = AtomicBoolean(false)
+
+        override fun close() {
+            if (!closed.compareAndSet(false, true)) return
+            onClosed(this)
+            delegate.close()
+        }
     }
 }

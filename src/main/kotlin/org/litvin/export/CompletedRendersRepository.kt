@@ -14,10 +14,26 @@ interface CompletedRendersRepository {
 
 class FileCompletedRendersRepository(
     private val file: File,
+    private val nowEpochMs: () -> Long = System::currentTimeMillis,
 ) : CompletedRendersRepository {
     override fun loadAll(): List<CompletedRender> = CompletedRendersStore.loadAll(file)
 
-    override fun append(job: RenderJob) = CompletedRendersStore.append(job, file)
+    override fun append(job: RenderJob) = CompletedRendersStore.append(
+        file,
+        CompletedRender(
+            id = job.id,
+            projectId = job.projectId,
+            projectName = job.projectName,
+            outputPath = job.outputPath,
+            fileName = File(job.outputPath).name,
+            encoderLabel = job.encoderLabel,
+            outWidth = job.outWidth,
+            outHeight = job.outHeight,
+            bytesWritten = job.bytesWritten,
+            includeScoreboard = job.includeScoreboard,
+            createdAtEpochMs = nowEpochMs(),
+        ),
+    )
 
     override fun clear() = CompletedRendersStore.clear(file)
 }

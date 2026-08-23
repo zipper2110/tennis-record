@@ -3,8 +3,11 @@ package org.litvin.export
 import org.litvin.ActiveQueueSnapshot
 import org.litvin.RenderJob
 import org.litvin.RenderQueueManager
+import org.litvin.adjustments.AdjustmentsSession
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 
 interface RenderService : AutoCloseable {
     fun enqueue(job: RenderJob)
@@ -13,33 +16,65 @@ interface RenderService : AutoCloseable {
     fun observe(observer: (ActiveQueueSnapshot) -> Unit): AutoCloseable
 }
 
+internal const val LEGACY_RENDER_OWNER_ID = "legacy-render-queue"
+
+internal data class RenderQueueRequest(
+    val ownerId: String,
+    val job: RenderJob,
+    val adjustments: AdjustmentsSession,
+    val completedRenders: CompletedRendersRepository,
+)
+
 internal interface RenderQueueGateway {
-    fun enqueue(job: RenderJob)
-    fun cancelCurrent()
-    fun cancelQueued(jobId: String): Boolean
-    fun addObserver(observer: (ActiveQueueSnapshot) -> Unit)
-    fun removeObserver(observer: (ActiveQueueSnapshot) -> Unit)
+    fun enqueue(request: RenderQueueRequest)
+    fun cancelCurrent(ownerId: String)
+    fun cancelQueued(ownerId: String, jobId: String): Boolean
+    fun addObserver(ownerId: String, observer: (ActiveQueueSnapshot) -> Unit)
+    fun removeObserver(ownerId: String, observer: (ActiveQueueSnapshot) -> Unit)
 }
 
 private object GlobalRenderQueueGateway : RenderQueueGateway {
-    override fun enqueue(job: RenderJob) = RenderQueueManager.enqueue(job)
-    override fun cancelCurrent() = RenderQueueManager.cancelCurrent()
-    override fun cancelQueued(jobId: String): Boolean = RenderQueueManager.cancelQueued(jobId)
-    override fun addObserver(observer: (ActiveQueueSnapshot) -> Unit) = RenderQueueManager.addObserver(observer)
-    override fun removeObserver(observer: (ActiveQueueSnapshot) -> Unit) = RenderQueueManager.removeObserver(observer)
+    override fun enqueue(request: RenderQueueRequest) = RenderQueueManager.enqueue(request)
+    override fun cancelCurrent(ownerId: String) = RenderQueueManager.cancelCurrent(ownerId)
+    override fun cancelQueued(ownerId: String, jobId: String): Boolean = RenderQueueManager.cancelQueued(ownerId, jobId)
+    override fun addObserver(ownerId: String, observer: (ActiveQueueSnapshot) -> Unit) =
+        RenderQueueManager.addObserver(ownerId, observer)
+    override fun removeObserver(ownerId: String, observer: (ActiveQueueSnapshot) -> Unit) =
+        RenderQueueManager.removeObserver(ownerId, observer)
 }
 
 class ProductionRenderService internal constructor(
+    private val adjustments: AdjustmentsSession,
+    private val completedRenders: CompletedRendersRepository,
     private val gateway: RenderQueueGateway = GlobalRenderQueueGateway,
 ) : RenderService {
+    private companion object {
+        private val ownerSequence = AtomicLong(0L)
+    }
+
+    private val ownerId = "render-service-${ownerSequence.incrementAndGet()}"
     private val subscriptions = CopyOnWriteArrayList<AutoCloseable>()
+    private val ownedJobIds = ConcurrentHashMap.newKeySet<String>()
     private val closed = AtomicBoolean(false)
 
-    override fun enqueue(job: RenderJob) = gateway.enqueue(job)
+    override fun enqueue(job: RenderJob) {
+        synchronized(subscriptions) {
+            check(!closed.get()) { "Render service is closed" }
+            ownedJobIds += job.id
+            try {
+                gateway.enqueue(RenderQueueRequest(ownerId, job, adjustments, completedRenders))
+            } catch (failure: Throwable) {
+                ownedJobIds.remove(job.id)
+                throw failure
+            }
+        }
+    }
 
-    override fun cancelCurrent() = gateway.cancelCurrent()
+    override fun cancelCurrent() = gateway.cancelCurrent(ownerId)
 
-    override fun cancelQueued(jobId: String): Boolean = gateway.cancelQueued(jobId)
+    override fun cancelQueued(jobId: String): Boolean = gateway.cancelQueued(ownerId, jobId).also { removed ->
+        if (removed) ownedJobIds.remove(jobId)
+    }
 
     override fun observe(observer: (ActiveQueueSnapshot) -> Unit): AutoCloseable {
         synchronized(subscriptions) {
@@ -47,12 +82,12 @@ class ProductionRenderService internal constructor(
             val subscriptionClosed = AtomicBoolean(false)
             val handle = AutoCloseable {
                 if (subscriptionClosed.compareAndSet(false, true)) {
-                    gateway.removeObserver(observer)
+                    gateway.removeObserver(ownerId, observer)
                 }
             }
             subscriptions += handle
             try {
-                gateway.addObserver(observer)
+                gateway.addObserver(ownerId, observer)
             } catch (failure: Throwable) {
                 subscriptions.remove(handle)
                 handle.close()
@@ -63,11 +98,26 @@ class ProductionRenderService internal constructor(
     }
 
     override fun close() {
-        val owned = synchronized(subscriptions) {
+        val (ownedSubscriptions, queuedJobIds) = synchronized(subscriptions) {
             if (!closed.compareAndSet(false, true)) return
-            subscriptions.toList().asReversed().also { subscriptions.clear() }
+            val observers = subscriptions.toList().asReversed().also { subscriptions.clear() }
+            observers to ownedJobIds.toList()
         }
-        owned.forEach { it.close() }
-        cancelCurrent()
+        var failure: Throwable? = null
+        ownedSubscriptions.forEach { subscription ->
+            failure = attemptCleanup(failure) { subscription.close() }
+        }
+        queuedJobIds.forEach { jobId ->
+            failure = attemptCleanup(failure) { cancelQueued(jobId) }
+        }
+        failure = attemptCleanup(failure) { cancelCurrent() }
+        failure?.let { throw it }
+    }
+
+    private fun attemptCleanup(previous: Throwable?, action: () -> Unit): Throwable? = try {
+        action()
+        previous
+    } catch (failure: Throwable) {
+        if (previous == null) failure else previous.apply { addSuppressed(failure) }
     }
 }

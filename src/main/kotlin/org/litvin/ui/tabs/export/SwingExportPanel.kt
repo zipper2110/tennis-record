@@ -5,6 +5,10 @@ import org.litvin.CompletedRender
 import org.litvin.ExportPresetsIO
 import org.litvin.RenderJob
 import org.litvin.RenderQueueManager
+import org.litvin.adjustments.AdjustmentsStore
+import org.litvin.export.ProductionCompletedRendersRepository
+import org.litvin.export.RenderQueueRequest
+import org.litvin.export.LEGACY_RENDER_OWNER_ID
 import org.litvin.RenderStatus
 import org.litvin.export.ExportPlanner
 import org.litvin.export.ExportFrameRateOption
@@ -403,7 +407,7 @@ class SwingExportPanel(
                         }
                         RenderStatus.COMPLETED -> {
                             progressLabel.text = "Completed — Size: $sz"
-                            addCompleted(cur)
+                            refreshCompletedFromStore()
                         }
                         RenderStatus.CANCELED -> {
                             progressLabel.text = "Canceled"
@@ -540,7 +544,14 @@ class SwingExportPanel(
             )
         )
 
-        RenderQueueManager.enqueue(plan.job)
+        RenderQueueManager.enqueue(
+            RenderQueueRequest(
+                LEGACY_RENDER_OWNER_ID,
+                plan.job,
+                AdjustmentsStore.legacySession(),
+                ProductionCompletedRendersRepository,
+            )
+        )
         JOptionPane.showMessageDialog(this, "Render initialized: ${out.name}")
     }
 
@@ -573,10 +584,6 @@ class SwingExportPanel(
         l.foreground = FG_PRIMARY
         l.alignmentX = 0f
         return l
-    }
-
-    private fun addCompleted(job: RenderJob) {
-        completed.addCompletedFrom(job)
     }
 
     private fun refreshCompletedFromStore() {

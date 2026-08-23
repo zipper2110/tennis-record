@@ -24,17 +24,17 @@ import kotlin.test.assertTrue
 
 class AppServicesTest {
     @Test
-    fun closeFlushesAdjustmentsThenClosesOwnedResourcesInReverseConstructionOrderOnce() {
+    fun closeStopsRenderBeforeFlushingItsDependenciesThenClosesRemainingResourcesOnce() {
         val root = kotlin.io.path.createTempDirectory("app-services-").toFile()
         val events = mutableListOf<String>()
         val executors = RecordingExecutorProvider(events)
         val adjustments = AdjustmentsSession(executors.createScheduledExecutor("adjustments"), 60_000)
         adjustments.load(root.absolutePath)
         adjustments.set { it.copy(saturation = 1.5f) }
-        val render = RecordingRenderService(events) {
-            assertTrue(File(root, "adjustments.json").exists(), "Adjustments were not flushed before render shutdown")
+        val render = RecordingRenderService(events)
+        val media = RecordingMediaPlayerFactory(events) {
+            assertTrue(File(root, "adjustments.json").exists(), "Adjustments were not flushed after render shutdown")
         }
-        val media = RecordingMediaPlayerFactory(events)
         val services = AppServices(
             paths = AppDataPaths(root),
             preferences = PreferencesProvider { throw UnsupportedOperationException() },
@@ -66,24 +66,24 @@ class AppServicesTest {
         }
     }
 
-    private class RecordingMediaPlayerFactory(private val events: MutableList<String>) : MediaPlayerFactory {
+    private class RecordingMediaPlayerFactory(
+        private val events: MutableList<String>,
+        private val beforeClose: () -> Unit,
+    ) : MediaPlayerFactory {
         override fun create(screen: MediaScreen): SwingMediaPlayer = error("unused")
         override fun createFrameCapture(): StillFrameCaptureService = error("unused")
         override fun close() {
+            beforeClose()
             events += "media"
         }
     }
 
-    private class RecordingRenderService(
-        private val events: MutableList<String>,
-        private val beforeClose: () -> Unit,
-    ) : RenderService {
+    private class RecordingRenderService(private val events: MutableList<String>) : RenderService {
         override fun enqueue(job: RenderJob) = Unit
         override fun cancelCurrent() = Unit
         override fun cancelQueued(jobId: String): Boolean = false
         override fun observe(observer: (ActiveQueueSnapshot) -> Unit): AutoCloseable = AutoCloseable { }
         override fun close() {
-            beforeClose()
             events += "render"
         }
     }

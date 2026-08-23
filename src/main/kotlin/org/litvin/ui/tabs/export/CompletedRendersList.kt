@@ -2,7 +2,6 @@ package org.litvin.ui.tabs.export
 
 import org.litvin.CompletedRender
 import org.litvin.export.ProductionCompletedRendersRepository
-import org.litvin.RenderJob
 import org.litvin.export.RenderFormatting
 import org.litvin.ui.UiStyles
 import java.awt.BorderLayout
@@ -117,27 +116,6 @@ class CompletedRendersList {
             model.removeAllElements()
             items.forEach { model.addElement(it) }
         } catch (_: Throwable) { }
-    }
-
-    fun addCompleted(job: CompletedRender) {
-        model.addElement(job)
-    }
-
-    fun addCompletedFrom(job: RenderJob) {
-        val item = CompletedRender(
-            id = job.id,
-            projectId = job.projectId,
-            projectName = job.projectName,
-            outputPath = job.outputPath,
-            fileName = File(job.outputPath).name,
-            encoderLabel = job.encoderLabel,
-            outWidth = job.outWidth,
-            outHeight = job.outHeight,
-            bytesWritten = job.bytesWritten,
-            includeScoreboard = job.includeScoreboard,
-            createdAtEpochMs = System.currentTimeMillis(),
-        )
-        addCompleted(item)
     }
 
     private fun clearAll() {

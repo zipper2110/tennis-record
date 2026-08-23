@@ -5,8 +5,33 @@ import java.time.Duration
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlin.test.assertTrue
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 
 class TrackedExecutorProviderTest {
+    @Test
+    fun executorNamesIncludeProviderPrefixRequestedNameAndDeterministicSequence() {
+        val provider = TrackedExecutorProvider("deterministic-provider", Duration.ofSeconds(5))
+        try {
+            val first = provider.createExecutor("worker")
+            val second = provider.createScheduledExecutor("autosave")
+
+            assertEquals("deterministic-provider-worker-1", first.submit<String> { Thread.currentThread().name }.get())
+            assertEquals("deterministic-provider-autosave-2", second.submit<String> { Thread.currentThread().name }.get())
+        } finally {
+            provider.close()
+        }
+    }
+
+    @Test
+    fun creationIsRejectedAfterClose() {
+        val provider = TrackedExecutorProvider("closed-provider", Duration.ofSeconds(5))
+        provider.close()
+
+        assertFailsWith<IllegalStateException> { provider.createExecutor("worker") }
+        assertFailsWith<IllegalStateException> { provider.createScheduledExecutor("autosave") }
+    }
+
     @Test
     fun close_interruptsAndTerminatesEveryOwnedExecutorWithoutLeakingThreads() {
         val prefix = "executor-provider-test-${System.nanoTime()}"

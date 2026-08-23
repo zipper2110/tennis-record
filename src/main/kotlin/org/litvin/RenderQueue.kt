@@ -1,7 +1,7 @@
 package org.litvin
 
 import io.github.oshai.kotlinlogging.KotlinLogging
-import org.litvin.export.ProductionCompletedRendersRepository
+import org.litvin.export.RenderQueueRequest
 import org.litvin.markup.PointV1
 import java.util.UUID
 import java.util.concurrent.CopyOnWriteArrayList
@@ -64,9 +64,14 @@ object RenderQueueManager {
 
     // public read-only view
     @Volatile private var currentJob: RenderJob? = null
-    private val queue = LinkedBlockingQueue<RenderJob>()
+    @Volatile private var currentOwnerId: String? = null
+    private val queue = LinkedBlockingQueue<RenderQueueRequest>()
 
-    private val observers = CopyOnWriteArrayList<(ActiveQueueSnapshot) -> Unit>()
+    private data class ObserverRegistration(
+        val ownerId: String,
+        val callback: (ActiveQueueSnapshot) -> Unit,
+    )
+    private val observers = CopyOnWriteArrayList<ObserverRegistration>()
 
     private val started = AtomicBoolean(false)
     private val stopSignal = AtomicBoolean(false)
@@ -77,10 +82,12 @@ object RenderQueueManager {
     @Volatile private var currentCanceled: Boolean = false
 
     /** Cancel the currently running job, if any. */
-    fun cancelCurrent() {
+    fun cancelCurrent() = cancelCurrent(org.litvin.export.LEGACY_RENDER_OWNER_ID)
+
+    internal fun cancelCurrent(ownerId: String) {
         val proc = currentProc
         val job = currentJob
-        if (proc != null && job != null && job.status == RenderStatus.RUNNING) {
+        if (currentOwnerId == ownerId && proc != null && job != null && job.status == RenderStatus.RUNNING) {
             logger.info { "Cancel requested for render job id=${job.id}" }
             currentCanceled = true
             try { proc.destroy() } catch (_: Throwable) { }
@@ -89,11 +96,16 @@ object RenderQueueManager {
     }
 
     /** Cancel a job that is still waiting in the queue. */
-    fun cancelQueued(jobId: String): Boolean {
-        val job = queue.toList().firstOrNull { it.id == jobId && it.status == RenderStatus.QUEUED }
+    fun cancelQueued(jobId: String): Boolean = cancelQueued(org.litvin.export.LEGACY_RENDER_OWNER_ID, jobId)
+
+    internal fun cancelQueued(ownerId: String, jobId: String): Boolean {
+        val request = queue.toList().firstOrNull {
+            it.ownerId == ownerId && it.job.id == jobId && it.job.status == RenderStatus.QUEUED
+        }
             ?: return false
-        val removed = queue.remove(job)
+        val removed = queue.remove(request)
         if (removed) {
+            val job = request.job
             logger.info { "Canceled queued render job id=${job.id}" }
             job.status = RenderStatus.CANCELED
             job.updatedAtEpochMs = System.currentTimeMillis()
@@ -102,33 +114,40 @@ object RenderQueueManager {
         return removed
     }
 
-    fun addObserver(cb: (ActiveQueueSnapshot) -> Unit) {
-        observers.add(cb)
+    fun addObserver(cb: (ActiveQueueSnapshot) -> Unit) =
+        addObserver(org.litvin.export.LEGACY_RENDER_OWNER_ID, cb)
+
+    internal fun addObserver(ownerId: String, cb: (ActiveQueueSnapshot) -> Unit) {
+        observers.add(ObserverRegistration(ownerId, cb))
         // Push initial snapshot to new observer
-        cb(snapshot())
+        cb(snapshot(ownerId))
     }
 
-    fun removeObserver(cb: (ActiveQueueSnapshot) -> Unit) {
-        observers.remove(cb)
+    fun removeObserver(cb: (ActiveQueueSnapshot) -> Unit) =
+        removeObserver(org.litvin.export.LEGACY_RENDER_OWNER_ID, cb)
+
+    internal fun removeObserver(ownerId: String, cb: (ActiveQueueSnapshot) -> Unit) {
+        observers.removeIf { it.ownerId == ownerId && it.callback === cb }
     }
 
     private fun notifyObservers() {
-        val snap = snapshot()
-        observers.forEach { o ->
-            try { o(snap) } catch (_: Throwable) {}
+        observers.forEach { registration ->
+            try { registration.callback(snapshot(registration.ownerId)) } catch (_: Throwable) {}
         }
     }
 
-    private fun snapshot(): ActiveQueueSnapshot {
-        val list = queue.toList()
-        return ActiveQueueSnapshot(current = currentJob, queued = list)
+    private fun snapshot(ownerId: String): ActiveQueueSnapshot {
+        val list = queue.toList().filter { it.ownerId == ownerId }.map { it.job }
+        val current = currentJob.takeIf { currentOwnerId == ownerId }
+        return ActiveQueueSnapshot(current = current, queued = list)
     }
 
-    fun enqueue(job: RenderJob) {
+    internal fun enqueue(request: RenderQueueRequest) {
+        val job = request.job
         logger.info { "Enqueue render job id=${job.id} -> ${job.outputPath}" }
         job.status = RenderStatus.QUEUED
         job.updatedAtEpochMs = System.currentTimeMillis()
-        queue.put(job)
+        queue.put(request)
         notifyObservers()
         ensureWorker()
     }
@@ -143,8 +162,10 @@ object RenderQueueManager {
     private fun workerLoop() {
         while (!stopSignal.get()) {
             try {
-                val job = queue.take() // blocks
+                val request = queue.take() // blocks
+                val job = request.job
                 currentJob = job
+                currentOwnerId = request.ownerId
                 job.status = RenderStatus.RUNNING
                 job.updatedAtEpochMs = System.currentTimeMillis()
                 logger.info { "Render job running id=${job.id} -> ${job.outputPath} (${job.encoderLabel} / ${job.outWidth}x${job.outHeight})" }
@@ -166,7 +187,7 @@ object RenderQueueManager {
                     job.updatedAtEpochMs = System.currentTimeMillis()
                     logger.error { job.failureReason.orEmpty() }
                     notifyObservers()
-                    currentJob = null
+                    clearCurrent()
                     notifyObservers()
                     continue
                 }
@@ -184,7 +205,7 @@ object RenderQueueManager {
                     job.updatedAtEpochMs = System.currentTimeMillis()
                     logger.error(ex) { job.failureReason.orEmpty() }
                     notifyObservers()
-                    currentJob = null
+                    clearCurrent()
                     notifyObservers()
                     continue
                 }
@@ -239,7 +260,7 @@ object RenderQueueManager {
                         idleTrim = job.idleTrim,
                         keeps = if (job.idleTrim) job.edlSnapshot else emptyList(),
                         subtitlesAssPath = assFile?.absolutePath,
-                        adjustments = try { org.litvin.adjustments.AdjustmentsStore.get() } catch (_: Throwable) { null }
+                        adjustments = try { request.adjustments.get() } catch (_: Throwable) { null }
                     )
                 )
                 logger.debug { "ffmpeg command: ${build.preview}" }
@@ -259,7 +280,7 @@ object RenderQueueManager {
                     job.updatedAtEpochMs = System.currentTimeMillis()
                     notifyObservers()
                     // Clear current and continue
-                    currentJob = null
+                    clearCurrent()
                     notifyObservers()
                     continue
                 }
@@ -464,7 +485,7 @@ object RenderQueueManager {
                         try { java.io.File(partOut.absolutePath + ".ass").delete() } catch (_: Throwable) {}
                         // Notify UI about failure before clearing current
                         notifyObservers()
-                        currentJob = null
+                        clearCurrent()
                         notifyObservers()
                         continue
                     }
@@ -475,7 +496,7 @@ object RenderQueueManager {
                     // Remove temp ASS if any
                     try { java.io.File(partOut.absolutePath + ".ass").delete() } catch (_: Throwable) {}
                     // Persist to Completed store (Task 3.11)
-                    try { ProductionCompletedRendersRepository.append(job) } catch (_: Throwable) { }
+                    try { request.completedRenders.append(job) } catch (_: Throwable) { }
                     // Notify UI about completion before clearing current
                     notifyObservers()
                 } else {
@@ -497,7 +518,7 @@ object RenderQueueManager {
                 }
 
                 // Clear current and notify
-                currentJob = null
+                clearCurrent()
                 notifyObservers()
             } catch (ie: InterruptedException) {
                 // exiting
@@ -508,5 +529,10 @@ object RenderQueueManager {
             }
         }
         logger.info { "Render queue worker stopped" }
+    }
+
+    private fun clearCurrent() {
+        currentJob = null
+        currentOwnerId = null
     }
 }

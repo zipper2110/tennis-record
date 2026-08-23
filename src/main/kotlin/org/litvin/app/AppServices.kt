@@ -36,12 +36,12 @@ data class AppServices(
             preferences,
             executors,
             mediaPlayers,
-            renderService,
             filePicker,
             dialogs,
             projectsRepository,
             completedRenders,
             adjustments,
+            renderService,
         )
         var firstFailure: Throwable? = null
         resourcesInConstructionOrder.asReversed().forEach { resource ->
@@ -63,12 +63,12 @@ data class AppServices(
             val executors = TrackedExecutorProvider()
             try {
                 val mediaPlayers = VlcjMediaPlayerFactory()
-                val renderService = ProductionRenderService()
                 val filePicker = SwingFilePicker()
                 val dialogs = SwingUserDialogService()
                 val projectsRepository = FileProjectsRepository(paths.projects)
                 val completedRenders = FileCompletedRendersRepository(paths.completedRenders)
                 val adjustments = AdjustmentsSession(executors.createScheduledExecutor("adjustments-autosave"))
+                val renderService = ProductionRenderService(adjustments, completedRenders)
                 return AppServices(
                     paths = paths,
                     preferences = preferences,

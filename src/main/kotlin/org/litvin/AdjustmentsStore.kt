@@ -167,4 +167,5 @@ object AdjustmentsStore {
     fun unsubscribe(listener: (AdjustmentsV1) -> Unit) = session.unsubscribe(listener)
     fun load(projectDirPath: String) = session.load(projectDirPath)
     fun save(projectDirPath: String? = null) = session.save(projectDirPath)
+    internal fun legacySession(): AdjustmentsSession = session
 }

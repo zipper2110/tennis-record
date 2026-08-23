@@ -8,10 +8,10 @@ import kotlin.test.assertTrue
 
 class CompletedRendersStoreTest {
     @Test
-    fun repositoriesRemainIsolatedByTheirInjectedFiles() {
+    fun repositoryMapsJobsWithItsClockAndRemainsIsolatedByInjectedFile() {
         val tempDir = kotlin.io.path.createTempDirectory("trs-store-").toFile()
         try {
-            val first = FileCompletedRendersRepository(File(tempDir, "first.json"))
+            val first = FileCompletedRendersRepository(File(tempDir, "first.json")) { 1_234L }
             val second = FileCompletedRendersRepository(File(tempDir, "second.json"))
             val job = RenderJob(
                 id = "job-1",
@@ -42,10 +42,35 @@ class CompletedRendersStoreTest {
             assertEquals(job.outHeight, item.outHeight)
             assertEquals(job.bytesWritten, item.bytesWritten)
             assertTrue(item.includeScoreboard)
+            assertEquals(1_234L, item.createdAtEpochMs)
 
             assertTrue(second.loadAll().isEmpty())
             first.clear()
             assertTrue(first.loadAll().isEmpty())
+        } finally {
+            tempDir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun storeRoundTripsACompletedRenderWithoutOwningJobMappingOrTime() {
+        val tempDir = kotlin.io.path.createTempDirectory("trs-format-").toFile()
+        try {
+            val file = File(tempDir, "records.json")
+            val record = CompletedRender(
+                id = "record-1",
+                outputPath = "C:/videos/result.mp4",
+                fileName = "result.mp4",
+                encoderLabel = "H.264",
+                outWidth = 1280,
+                outHeight = 720,
+                bytesWritten = 42L,
+                createdAtEpochMs = 987_654L,
+            )
+
+            CompletedRendersStore.append(file, record)
+
+            assertEquals(listOf(record), CompletedRendersStore.loadAll(file))
         } finally {
             tempDir.deleteRecursively()
         }

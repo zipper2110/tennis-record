@@ -26,7 +26,7 @@ data class CompletedRender(
     val outHeight: Int,
     val bytesWritten: Long,
     val includeScoreboard: Boolean = false,
-    val createdAtEpochMs: Long = System.currentTimeMillis(),
+    val createdAtEpochMs: Long = 0L,
 )
 
 object CompletedRendersStore {
@@ -61,20 +61,7 @@ object CompletedRendersStore {
         }
     }
 
-    fun append(job: RenderJob, file: File) {
-        val item = CompletedRender(
-            id = job.id,
-            projectId = job.projectId,
-            projectName = job.projectName,
-            outputPath = job.outputPath,
-            fileName = File(job.outputPath).name,
-            encoderLabel = job.encoderLabel,
-            outWidth = job.outWidth,
-            outHeight = job.outHeight,
-            bytesWritten = job.bytesWritten,
-            includeScoreboard = job.includeScoreboard,
-            createdAtEpochMs = System.currentTimeMillis(),
-        )
+    fun append(file: File, item: CompletedRender) {
         val items = loadAll(file).toMutableList()
         items.add(0, item) // newest first
         saveAll(file, items)
