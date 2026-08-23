@@ -29,6 +29,7 @@ internal interface RenderQueueGateway {
     fun enqueue(request: RenderQueueRequest)
     fun cancelCurrent(ownerId: String)
     fun cancelQueued(ownerId: String, jobId: String): Boolean
+    fun closeOwner(ownerId: String)
     fun addObserver(ownerId: String, observer: (ActiveQueueSnapshot) -> Unit)
     fun removeObserver(ownerId: String, observer: (ActiveQueueSnapshot) -> Unit)
 }
@@ -37,6 +38,7 @@ private object GlobalRenderQueueGateway : RenderQueueGateway {
     override fun enqueue(request: RenderQueueRequest) = RenderQueueManager.enqueue(request)
     override fun cancelCurrent(ownerId: String) = RenderQueueManager.cancelCurrent(ownerId)
     override fun cancelQueued(ownerId: String, jobId: String): Boolean = RenderQueueManager.cancelQueued(ownerId, jobId)
+    override fun closeOwner(ownerId: String) = RenderQueueManager.closeOwner(ownerId)
     override fun addObserver(ownerId: String, observer: (ActiveQueueSnapshot) -> Unit) =
         RenderQueueManager.addObserver(ownerId, observer)
     override fun removeObserver(ownerId: String, observer: (ActiveQueueSnapshot) -> Unit) =
@@ -110,7 +112,7 @@ class ProductionRenderService internal constructor(
         queuedJobIds.forEach { jobId ->
             failure = attemptCleanup(failure) { cancelQueued(jobId) }
         }
-        failure = attemptCleanup(failure) { cancelCurrent() }
+        failure = attemptCleanup(failure) { gateway.closeOwner(ownerId) }
         failure?.let { throw it }
     }
 

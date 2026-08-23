@@ -68,6 +68,37 @@ class MediaPlayerFactoryTest {
         assertEquals(1, player.closeCount.get())
     }
 
+    @Test
+    fun factoryCloseAfterRegistrationButBeforeClosedCheckRejectsTheAlreadyUnregisteredHandle() {
+        val registered = CountDownLatch(1)
+        val allowClosedCheck = CountDownLatch(1)
+        val finished = CountDownLatch(1)
+        val player = CountingSwingMediaPlayer()
+        val factory = VlcjMediaPlayerFactory(
+            playerCreator = { player },
+            frameCaptureCreator = { CountingStillFrameCaptureService() },
+            afterRegistration = {
+                registered.countDown()
+                allowClosedCheck.await()
+            },
+        )
+        var result: Result<SwingMediaPlayer>? = null
+        val creator = Thread({
+            result = runCatching { factory.create(MediaScreen.MARKUP) }
+            finished.countDown()
+        }, "media-post-registration-race-test")
+
+        creator.start()
+        assertTrue(registered.await(5, TimeUnit.SECONDS), "Resource was not registered")
+        factory.close()
+        allowClosedCheck.countDown()
+        assertTrue(finished.await(5, TimeUnit.SECONDS), "Registration did not finish")
+        creator.join(5_000)
+
+        assertIs<IllegalStateException>(result?.exceptionOrNull())
+        assertEquals(1, player.closeCount.get())
+    }
+
     private class CountingSwingMediaPlayer : SwingMediaPlayer {
         val closeCount = AtomicInteger(0)
         override val component: Component = JPanel()

@@ -2,6 +2,9 @@ package org.litvin
 
 import org.litvin.export.FileCompletedRendersRepository
 import java.io.File
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -72,6 +75,53 @@ class CompletedRendersStoreTest {
 
             assertEquals(listOf(record), CompletedRendersStore.loadAll(file))
         } finally {
+            tempDir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun concurrentAppendsRetainEveryRecord() {
+        val tempDir = kotlin.io.path.createTempDirectory("trs-concurrent-format-").toFile()
+        val file = File(tempDir, "records.json")
+        val writers = 16
+        val recordsPerWriter = 4
+        val ready = CountDownLatch(writers)
+        val start = CountDownLatch(1)
+        val done = CountDownLatch(writers)
+        val executor = Executors.newFixedThreadPool(writers)
+        try {
+            repeat(writers) { writer ->
+                executor.execute {
+                    ready.countDown()
+                    start.await()
+                    repeat(recordsPerWriter) { record ->
+                        val id = "$writer-$record"
+                        CompletedRendersStore.append(
+                            file,
+                            CompletedRender(
+                                id = id,
+                                outputPath = "C:/videos/$id.mp4",
+                                fileName = "$id.mp4",
+                                encoderLabel = "H.264",
+                                outWidth = 640,
+                                outHeight = 360,
+                                bytesWritten = 1L,
+                            ),
+                        )
+                    }
+                    done.countDown()
+                }
+            }
+
+            assertTrue(ready.await(5, TimeUnit.SECONDS), "Writers did not become ready")
+            start.countDown()
+            assertTrue(done.await(20, TimeUnit.SECONDS), "Concurrent appends did not finish")
+
+            val records = CompletedRendersStore.loadAll(file)
+            assertEquals(writers * recordsPerWriter, records.size)
+            assertEquals(writers * recordsPerWriter, records.map { it.id }.toSet().size)
+        } finally {
+            executor.shutdownNow()
             tempDir.deleteRecursively()
         }
     }

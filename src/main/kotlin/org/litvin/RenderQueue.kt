@@ -1,6 +1,7 @@
 package org.litvin
 
 import io.github.oshai.kotlinlogging.KotlinLogging
+import org.litvin.export.RenderRequestCoordinator
 import org.litvin.export.RenderQueueRequest
 import org.litvin.markup.PointV1
 import java.util.UUID
@@ -72,27 +73,23 @@ object RenderQueueManager {
         val callback: (ActiveQueueSnapshot) -> Unit,
     )
     private val observers = CopyOnWriteArrayList<ObserverRegistration>()
+    private val requestCoordinator = RenderRequestCoordinator()
 
     private val started = AtomicBoolean(false)
     private val stopSignal = AtomicBoolean(false)
-
-    // Track current ffmpeg process and .part file for cancel/cleanup
-    @Volatile private var currentProc: Process? = null
-    @Volatile private var currentPartFile: java.io.File? = null
-    @Volatile private var currentCanceled: Boolean = false
 
     /** Cancel the currently running job, if any. */
     fun cancelCurrent() = cancelCurrent(org.litvin.export.LEGACY_RENDER_OWNER_ID)
 
     internal fun cancelCurrent(ownerId: String) {
-        val proc = currentProc
-        val job = currentJob
-        if (currentOwnerId == ownerId && proc != null && job != null && job.status == RenderStatus.RUNNING) {
+        currentJob?.takeIf { currentOwnerId == ownerId }?.let { job ->
             logger.info { "Cancel requested for render job id=${job.id}" }
-            currentCanceled = true
-            try { proc.destroy() } catch (_: Throwable) { }
-            try { proc.destroyForcibly() } catch (_: Throwable) { }
         }
+        requestCoordinator.cancelCurrent(ownerId)
+    }
+
+    internal fun closeOwner(ownerId: String) {
+        requestCoordinator.closeOwner(ownerId)
     }
 
     /** Cancel a job that is still waiting in the queue. */
@@ -106,6 +103,7 @@ object RenderQueueManager {
         val removed = queue.remove(request)
         if (removed) {
             val job = request.job
+            requestCoordinator.finish(request.ownerId, job.id)
             logger.info { "Canceled queued render job id=${job.id}" }
             job.status = RenderStatus.CANCELED
             job.updatedAtEpochMs = System.currentTimeMillis()
@@ -147,7 +145,13 @@ object RenderQueueManager {
         logger.info { "Enqueue render job id=${job.id} -> ${job.outputPath}" }
         job.status = RenderStatus.QUEUED
         job.updatedAtEpochMs = System.currentTimeMillis()
-        queue.put(request)
+        requestCoordinator.register(request.ownerId, job.id)
+        try {
+            queue.put(request)
+        } catch (failure: Throwable) {
+            requestCoordinator.finish(request.ownerId, job.id)
+            throw failure
+        }
         notifyObservers()
         ensureWorker()
     }
@@ -161,15 +165,23 @@ object RenderQueueManager {
 
     private fun workerLoop() {
         while (!stopSignal.get()) {
+            var activeRequest: RenderQueueRequest? = null
             try {
                 val request = queue.take() // blocks
+                activeRequest = request
                 val job = request.job
+                val mayContinue = requestCoordinator.markCurrent(request.ownerId, job.id)
                 currentJob = job
                 currentOwnerId = request.ownerId
+                if (!mayContinue) {
+                    cancelBeforeProcessStart(request)
+                    continue
+                }
                 job.status = RenderStatus.RUNNING
                 job.updatedAtEpochMs = System.currentTimeMillis()
                 logger.info { "Render job running id=${job.id} -> ${job.outputPath} (${job.encoderLabel} / ${job.outWidth}x${job.outHeight})" }
                 notifyObservers()
+                if (abortIfCanceled(request)) continue
 
                 // Task 3.8.1 — Actual rendering engine (ffmpeg execution)
                 val finalOut = java.io.File(job.outputPath)
@@ -187,7 +199,7 @@ object RenderQueueManager {
                     job.updatedAtEpochMs = System.currentTimeMillis()
                     logger.error { job.failureReason.orEmpty() }
                     notifyObservers()
-                    clearCurrent()
+                    clearCurrent(request)
                     notifyObservers()
                     continue
                 }
@@ -205,10 +217,11 @@ object RenderQueueManager {
                     job.updatedAtEpochMs = System.currentTimeMillis()
                     logger.error(ex) { job.failureReason.orEmpty() }
                     notifyObservers()
-                    clearCurrent()
+                    clearCurrent(request)
                     notifyObservers()
                     continue
                 }
+                if (abortIfCanceled(request, partOut)) continue
 
                 // Prepare scoreboard overlay ASS file if requested
                 var assFile: java.io.File? = null
@@ -221,6 +234,7 @@ object RenderQueueManager {
                         assFile = null
                     }
                 }
+                if (abortIfCanceled(request, partOut, assFile)) continue
 
                 // Pre-probe total duration when not using EDL trimming (needed for percentage)
                 var probedDurationMs: Long? = null
@@ -234,15 +248,23 @@ object RenderQueueManager {
                             job.sourcePath
                         )
                         pbProbe.redirectErrorStream(true)
-                        val pr = pbProbe.start()
-                        val out = pr.inputStream.bufferedReader().readText().trim()
-                        pr.waitFor()
+                        val pr = requestCoordinator.startProcess(request.ownerId, job.id) { pbProbe.start() }
+                        if (pr == null) {
+                            cancelBeforeProcessStart(request, partOut, assFile)
+                            continue
+                        }
+                        val out = try {
+                            pr.inputStream.bufferedReader().readText().trim().also { pr.waitFor() }
+                        } finally {
+                            requestCoordinator.clearProcess(request.ownerId, job.id, pr)
+                        }
                         val seconds = out.toDoubleOrNull()
                         if (seconds != null && seconds.isFinite() && seconds > 0) {
                             probedDurationMs = (seconds * 1000).toLong()
                         }
                     } catch (_: Throwable) { /* ignore probe errors */ }
                 }
+                if (abortIfCanceled(request, partOut, assFile)) continue
 
                 // Build command
                 val presets = ExportPresetsIO.load()
@@ -263,6 +285,7 @@ object RenderQueueManager {
                         adjustments = try { request.adjustments.get() } catch (_: Throwable) { null }
                     )
                 )
+                if (abortIfCanceled(request, partOut, assFile)) continue
                 logger.debug { "ffmpeg command: ${build.preview}" }
 
                 // Start process
@@ -272,7 +295,9 @@ object RenderQueueManager {
                 val pb = ProcessBuilder(cmd)
                 pb.redirectErrorStream(false)
                 pb.directory(finalOut.parentFile)
-                val proc = try { pb.start() } catch (ex: Throwable) {
+                val proc = try {
+                    requestCoordinator.startProcess(request.ownerId, job.id) { pb.start() }
+                } catch (ex: Throwable) {
                     logger.error(ex) { "Failed to start ffmpeg" }
                     job.status = RenderStatus.FAILED
                     job.failureReason = "Failed to start FFmpeg: ${ex.javaClass.simpleName}: ${ex.message}. Run Tennis Record distribution diagnostics for details."
@@ -280,14 +305,14 @@ object RenderQueueManager {
                     job.updatedAtEpochMs = System.currentTimeMillis()
                     notifyObservers()
                     // Clear current and continue
-                    clearCurrent()
+                    clearCurrent(request)
                     notifyObservers()
                     continue
                 }
-                // Expose current process for cancel; reset cancel flag and remember .part
-                currentProc = proc
-                currentPartFile = partOut
-                currentCanceled = false
+                if (proc == null) {
+                    cancelBeforeProcessStart(request, partOut, assFile)
+                    continue
+                }
 
                 // Capture stdout/stderr asynchronously; keep last N stderr lines
                 val tailSize = 200
@@ -451,11 +476,10 @@ object RenderQueueManager {
                 outReader.join(200)
                 job.updatedAtEpochMs = System.currentTimeMillis()
 
-                // Clear process refs early
-                currentProc = null
-                currentPartFile = null
+                // Clear the process reference while retaining cancellation until request completion.
+                requestCoordinator.clearProcess(request.ownerId, job.id, proc)
 
-                if (currentCanceled) {
+                if (requestCoordinator.isCanceled(request.ownerId, job.id)) {
                     // Treat as canceled
                     job.status = RenderStatus.CANCELED
                     // Cleanup partial
@@ -485,7 +509,7 @@ object RenderQueueManager {
                         try { java.io.File(partOut.absolutePath + ".ass").delete() } catch (_: Throwable) {}
                         // Notify UI about failure before clearing current
                         notifyObservers()
-                        clearCurrent()
+                        clearCurrent(request)
                         notifyObservers()
                         continue
                     }
@@ -518,21 +542,54 @@ object RenderQueueManager {
                 }
 
                 // Clear current and notify
-                clearCurrent()
+                clearCurrent(request)
                 notifyObservers()
             } catch (ie: InterruptedException) {
                 // exiting
                 break
             } catch (t: Throwable) {
                 logger.error(t) { "Render queue worker failure" }
-                // Attempt to continue loop
+                activeRequest?.let { request ->
+                    request.job.status = if (requestCoordinator.isCanceled(request.ownerId, request.job.id)) {
+                        RenderStatus.CANCELED
+                    } else {
+                        RenderStatus.FAILED
+                    }
+                    clearCurrent(request)
+                    notifyObservers()
+                }
             }
         }
         logger.info { "Render queue worker stopped" }
     }
 
-    private fun clearCurrent() {
+    private fun abortIfCanceled(
+        request: RenderQueueRequest,
+        partFile: java.io.File? = null,
+        assFile: java.io.File? = null,
+    ): Boolean {
+        if (!requestCoordinator.isCanceled(request.ownerId, request.job.id)) return false
+        cancelBeforeProcessStart(request, partFile, assFile)
+        return true
+    }
+
+    private fun cancelBeforeProcessStart(
+        request: RenderQueueRequest,
+        partFile: java.io.File? = null,
+        assFile: java.io.File? = null,
+    ) {
+        request.job.status = RenderStatus.CANCELED
+        request.job.updatedAtEpochMs = System.currentTimeMillis()
+        try { partFile?.delete() } catch (_: Throwable) { }
+        try { assFile?.delete() } catch (_: Throwable) { }
+        notifyObservers()
+        clearCurrent(request)
+        notifyObservers()
+    }
+
+    private fun clearCurrent(request: RenderQueueRequest) {
         currentJob = null
         currentOwnerId = null
+        requestCoordinator.finish(request.ownerId, request.job.id)
     }
 }

@@ -18,6 +18,7 @@ interface MediaPlayerFactory : AutoCloseable {
 class VlcjMediaPlayerFactory internal constructor(
     private val playerCreator: () -> SwingMediaPlayer = { VlcjSwingMediaPlayerAdapter() },
     private val frameCaptureCreator: () -> StillFrameCaptureService = { VlcjStillFrameCaptureService() },
+    private val afterRegistration: () -> Unit = { },
 ) : MediaPlayerFactory {
     private val resources = CopyOnWriteArrayList<ManagedResource>()
     private val closed = AtomicBoolean(false)
@@ -34,7 +35,9 @@ class VlcjMediaPlayerFactory internal constructor(
             error("Media-player factory is closed")
         }
         resources += resource
-        if (closed.get() && resources.remove(resource)) {
+        afterRegistration()
+        if (closed.get()) {
+            resources.remove(resource)
             resource.close()
             error("Media-player factory is closed")
         }

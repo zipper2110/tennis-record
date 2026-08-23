@@ -160,6 +160,10 @@ class RenderServiceTest {
             cancelQueuedRequests += ownerId to jobId
             return cancelQueuedResult
         }
+        override fun closeOwner(ownerId: String) {
+            cancelCurrentCalls++
+            cancelCurrentOwners += ownerId
+        }
         override fun addObserver(ownerId: String, observer: (ActiveQueueSnapshot) -> Unit) {
             observers += observer
         }
@@ -186,6 +190,10 @@ class RenderServiceTest {
             if (failCancellation) throw IllegalArgumentException("cancel failed")
         }
         override fun cancelQueued(ownerId: String, jobId: String): Boolean = false
+        override fun closeOwner(ownerId: String) {
+            cancelCalls++
+            if (failCancellation) throw IllegalArgumentException("cancel failed")
+        }
         override fun addObserver(ownerId: String, observer: (ActiveQueueSnapshot) -> Unit) = Unit
         override fun removeObserver(ownerId: String, observer: (ActiveQueueSnapshot) -> Unit) {
             removalAttempts += observer
