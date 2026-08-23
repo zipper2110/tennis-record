@@ -15,6 +15,24 @@ import org.litvin.ui.commons.SwingUserDialogService
 import org.litvin.ui.commons.UserDialogService
 import java.util.concurrent.atomic.AtomicBoolean
 
+internal data class AppServicesProductionFactory(
+    val paths: () -> AppDataPaths = AppDataPaths::production,
+    val preferences: () -> PreferencesProvider = PreferencesProvider::production,
+    val executors: () -> ExecutorProvider = { TrackedExecutorProvider() },
+    val mediaPlayers: () -> MediaPlayerFactory = { VlcjMediaPlayerFactory() },
+    val filePicker: () -> FilePicker = { SwingFilePicker() },
+    val dialogs: () -> UserDialogService = { SwingUserDialogService() },
+    val projectsRepository: (AppDataPaths) -> ProjectsRepository = { FileProjectsRepository(it.projects) },
+    val completedRenders: (AppDataPaths) -> CompletedRendersRepository = { FileCompletedRendersRepository(it.completedRenders) },
+    val adjustments: (ExecutorProvider) -> AdjustmentsSession = {
+        AdjustmentsSession(it.createScheduledExecutor("adjustments-autosave"))
+    },
+    val renderService: (AdjustmentsSession, CompletedRendersRepository) -> RenderService = { adjustments, completed ->
+        ProductionRenderService(adjustments, completed)
+    },
+    val afterConstruction: (AppServices) -> Unit = { },
+)
+
 data class AppServices(
     val paths: AppDataPaths,
     val preferences: PreferencesProvider,
@@ -57,19 +75,27 @@ data class AppServices(
     }
 
     companion object {
-        fun production(): AppServices {
-            val paths = AppDataPaths.production()
-            val preferences = PreferencesProvider.production()
-            val executors = TrackedExecutorProvider()
+        fun production(): AppServices = production(AppServicesProductionFactory())
+
+        internal fun production(factory: AppServicesProductionFactory): AppServices {
+            val constructedResources = mutableListOf<AutoCloseable>()
+
+            fun <T> construct(create: () -> T): T = create().also { resource ->
+                if (resource is AutoCloseable) constructedResources += resource
+            }
+
             try {
-                val mediaPlayers = VlcjMediaPlayerFactory()
-                val filePicker = SwingFilePicker()
-                val dialogs = SwingUserDialogService()
-                val projectsRepository = FileProjectsRepository(paths.projects)
-                val completedRenders = FileCompletedRendersRepository(paths.completedRenders)
-                val adjustments = AdjustmentsSession(executors.createScheduledExecutor("adjustments-autosave"))
-                val renderService = ProductionRenderService(adjustments, completedRenders)
-                return AppServices(
+                val paths = construct(factory.paths)
+                val preferences = construct(factory.preferences)
+                val executors = construct(factory.executors)
+                val mediaPlayers = construct(factory.mediaPlayers)
+                val filePicker = construct(factory.filePicker)
+                val dialogs = construct(factory.dialogs)
+                val projectsRepository = construct { factory.projectsRepository(paths) }
+                val completedRenders = construct { factory.completedRenders(paths) }
+                val adjustments = construct { factory.adjustments(executors) }
+                val renderService = construct { factory.renderService(adjustments, completedRenders) }
+                val services = AppServices(
                     paths = paths,
                     preferences = preferences,
                     executors = executors,
@@ -81,8 +107,16 @@ data class AppServices(
                     completedRenders = completedRenders,
                     adjustments = adjustments,
                 )
+                factory.afterConstruction(services)
+                return services
             } catch (failure: Throwable) {
-                executors.close()
+                constructedResources.asReversed().forEach { resource ->
+                    try {
+                        resource.close()
+                    } catch (cleanupFailure: Throwable) {
+                        failure.addSuppressed(cleanupFailure)
+                    }
+                }
                 throw failure
             }
         }

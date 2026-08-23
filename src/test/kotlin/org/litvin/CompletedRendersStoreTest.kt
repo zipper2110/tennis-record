@@ -83,6 +83,8 @@ class CompletedRendersStoreTest {
     fun concurrentAppendsRetainEveryRecord() {
         val tempDir = kotlin.io.path.createTempDirectory("trs-concurrent-format-").toFile()
         val file = File(tempDir, "records.json")
+        val alias = File(tempDir, ".${File.separator}records.json")
+        val baselineLockEntries = CompletedRendersStore.activeLockEntryCount
         val writers = 16
         val recordsPerWriter = 4
         val ready = CountDownLatch(writers)
@@ -97,7 +99,7 @@ class CompletedRendersStoreTest {
                     repeat(recordsPerWriter) { record ->
                         val id = "$writer-$record"
                         CompletedRendersStore.append(
-                            file,
+                            if (writer % 2 == 0) file else alias,
                             CompletedRender(
                                 id = id,
                                 outputPath = "C:/videos/$id.mp4",
@@ -120,6 +122,7 @@ class CompletedRendersStoreTest {
             val records = CompletedRendersStore.loadAll(file)
             assertEquals(writers * recordsPerWriter, records.size)
             assertEquals(writers * recordsPerWriter, records.map { it.id }.toSet().size)
+            assertEquals(baselineLockEntries, CompletedRendersStore.activeLockEntryCount)
         } finally {
             executor.shutdownNow()
             tempDir.deleteRecursively()

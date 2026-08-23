@@ -8,7 +8,6 @@ import com.fasterxml.jackson.module.kotlin.KotlinModule
 import com.fasterxml.jackson.module.kotlin.readValue
 import io.github.oshai.kotlinlogging.KotlinLogging
 import java.io.File
-import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 
@@ -39,7 +38,10 @@ object CompletedRendersStore {
         .setSerializationInclusion(JsonInclude.Include.NON_NULL)
         .enable(SerializationFeature.INDENT_OUTPUT)
 
-    private val locksByFile = ConcurrentHashMap<String, ReentrantLock>()
+    private val fileLocks = CanonicalFileLockRegistry()
+
+    internal val activeLockEntryCount: Int
+        get() = fileLocks.activeEntryCount
 
     fun loadAll(file: File): List<CompletedRender> = withFileLock(file) {
         loadAllUnlocked(file)
@@ -74,12 +76,39 @@ object CompletedRendersStore {
         saveAllUnlocked(file, emptyList())
     }
 
-    private inline fun <T> withFileLock(file: File, action: () -> T): T {
+    private fun <T> withFileLock(file: File, action: () -> T): T {
+        return fileLocks.withLock(file, action)
+    }
+}
+
+internal class CanonicalFileLockRegistry {
+    private data class Entry(
+        val lock: ReentrantLock = ReentrantLock(),
+        var references: Int = 0,
+    )
+
+    private val monitor = Any()
+    private val entries = mutableMapOf<String, Entry>()
+
+    val activeEntryCount: Int
+        get() = synchronized(monitor) { entries.size }
+
+    fun <T> withLock(file: File, action: () -> T): T {
         val key = try {
             file.canonicalPath
         } catch (_: Throwable) {
             file.absoluteFile.toPath().normalize().toString()
         }
-        return locksByFile.computeIfAbsent(key) { ReentrantLock() }.withLock(action)
+        val entry = synchronized(monitor) {
+            entries.getOrPut(key) { Entry() }.also { it.references++ }
+        }
+        try {
+            return entry.lock.withLock(action)
+        } finally {
+            synchronized(monitor) {
+                entry.references--
+                if (entry.references == 0) entries.remove(key, entry)
+            }
+        }
     }
 }

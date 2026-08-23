@@ -3,6 +3,7 @@ package org.litvin
 import io.github.oshai.kotlinlogging.KotlinLogging
 import org.litvin.export.RenderRequestCoordinator
 import org.litvin.export.RenderQueueRequest
+import org.litvin.export.RenderTerminalOutcome
 import org.litvin.markup.PointV1
 import java.util.UUID
 import java.util.concurrent.CopyOnWriteArrayList
@@ -103,10 +104,10 @@ object RenderQueueManager {
         val removed = queue.remove(request)
         if (removed) {
             val job = request.job
-            requestCoordinator.finish(request.ownerId, job.id)
             logger.info { "Canceled queued render job id=${job.id}" }
             job.status = RenderStatus.CANCELED
             job.updatedAtEpochMs = System.currentTimeMillis()
+            finishRequest(request)
             notifyObservers()
         }
         return removed
@@ -479,66 +480,57 @@ object RenderQueueManager {
                 // Clear the process reference while retaining cancellation until request completion.
                 requestCoordinator.clearProcess(request.ownerId, job.id, proc)
 
-                if (requestCoordinator.isCanceled(request.ownerId, job.id)) {
-                    // Treat as canceled
-                    job.status = RenderStatus.CANCELED
-                    // Cleanup partial
-                    if (partOut.exists()) partOut.delete()
-                    // Remove temp ASS if any
-                    try { java.io.File(partOut.absolutePath + ".ass").delete() } catch (_: Throwable) {}
-                    logger.info { "Render job canceled id=${job.id}" }
-                    // Notify UI about final state before clearing current
-                    notifyObservers()
-                } else if (exit == 0) {
-                    // Move .part → final (replace if exists)
-                    try {
-                        java.nio.file.Files.move(
-                            partOut.toPath(),
-                            finalOut.toPath(),
-                            java.nio.file.StandardCopyOption.REPLACE_EXISTING
-                        )
-                    } catch (mv: Throwable) {
-                        logger.error(mv) { "Failed to finalize output move for render job ${job.id}" }
+                val terminalized = when {
+                    requestCoordinator.isCanceled(request.ownerId, job.id) -> false
+                    exit == 0 -> requestCoordinator.terminalize(request.ownerId, job.id) {
+                        try {
+                            java.nio.file.Files.move(
+                                partOut.toPath(),
+                                finalOut.toPath(),
+                                java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                            )
+                            job.bytesWritten = if (finalOut.exists()) finalOut.length() else 0
+                            job.progress = 1.0
+                            job.status = RenderStatus.COMPLETED
+                            logger.info { "Render job completed id=${job.id}" }
+                            try { java.io.File(partOut.absolutePath + ".ass").delete() } catch (_: Throwable) { }
+                            try { request.completedRenders.append(job) } catch (_: Throwable) { }
+                        } catch (moveFailure: Throwable) {
+                            logger.error(moveFailure) { "Failed to finalize output move for render job ${job.id}" }
+                            job.status = RenderStatus.FAILED
+                            job.stderrTail = try {
+                                synchronized(errTail) { errTail.joinToString("\n") }
+                            } catch (_: Throwable) {
+                                null
+                            }
+                            job.failureReason = "Failed to finalize output file move: ${moveFailure.javaClass.simpleName}: ${moveFailure.message}"
+                            if (partOut.exists()) partOut.delete()
+                            try { java.io.File(partOut.absolutePath + ".ass").delete() } catch (_: Throwable) { }
+                        }
+                        notifyObservers()
+                    }
+                    else -> requestCoordinator.terminalize(request.ownerId, job.id) {
                         job.status = RenderStatus.FAILED
-                        val tailCopy = try { synchronized(errTail) { errTail.joinToString("\n") } } catch (_: Throwable) { null }
-                        job.stderrTail = tailCopy
-                        job.failureReason = "Failed to finalize output file move: ${mv.javaClass.simpleName}: ${mv.message}"
-                        // Cleanup partial if any remains
                         if (partOut.exists()) partOut.delete()
-                        // Remove temp ASS if any
-                        try { java.io.File(partOut.absolutePath + ".ass").delete() } catch (_: Throwable) {}
-                        // Notify UI about failure before clearing current
+                        try { java.io.File(partOut.absolutePath + ".ass").delete() } catch (_: Throwable) { }
+                        val tailCopy = synchronized(errTail) { errTail.joinToString("\n") }
+                        job.stderrTail = tailCopy
+                        val brief = tailCopy.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.lastOrNull()
+                        job.failureReason = if (brief != null) {
+                            "ffmpeg exited with code $exit — $brief"
+                        } else {
+                            "ffmpeg exited with code $exit (see logs)"
+                        }
+                        logger.error { "ffmpeg exited with code $exit for job ${job.id}. Stderr tail:\n$tailCopy" }
                         notifyObservers()
-                        clearCurrent(request)
-                        notifyObservers()
-                        continue
                     }
-                    job.bytesWritten = if (finalOut.exists()) finalOut.length() else 0
-                    job.progress = 1.0
-                    job.status = RenderStatus.COMPLETED
-                    logger.info { "Render job completed id=${job.id}" }
-                    // Remove temp ASS if any
-                    try { java.io.File(partOut.absolutePath + ".ass").delete() } catch (_: Throwable) {}
-                    // Persist to Completed store (Task 3.11)
-                    try { request.completedRenders.append(job) } catch (_: Throwable) { }
-                    // Notify UI about completion before clearing current
-                    notifyObservers()
-                } else {
-                    job.status = RenderStatus.FAILED
-                    // Cleanup partial
+                }
+                if (!terminalized) {
+                    job.status = RenderStatus.CANCELED
                     if (partOut.exists()) partOut.delete()
-                    // Remove temp ASS if any
-                    try { java.io.File(partOut.absolutePath + ".ass").delete() } catch (_: Throwable) {}
-                    val tailCopy = synchronized(errTail) { errTail.joinToString("\n") }
-                    job.stderrTail = tailCopy
-                    // Derive a brief failure reason
-                    val brief = tailCopy.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.lastOrNull()
-                    job.failureReason = if (brief != null) {
-                        "ffmpeg exited with code $exit — $brief"
-                    } else {
-                        "ffmpeg exited with code $exit (see logs)"
-                    }
-                    logger.error { "ffmpeg exited with code $exit for job ${job.id}. Stderr tail:\n$tailCopy" }
+                    try { java.io.File(partOut.absolutePath + ".ass").delete() } catch (_: Throwable) { }
+                    logger.info { "Render job canceled id=${job.id}" }
+                    notifyObservers()
                 }
 
                 // Clear current and notify
@@ -590,6 +582,20 @@ object RenderQueueManager {
     private fun clearCurrent(request: RenderQueueRequest) {
         currentJob = null
         currentOwnerId = null
+        finishRequest(request)
+    }
+
+    private fun finishRequest(request: RenderQueueRequest) {
         requestCoordinator.finish(request.ownerId, request.job.id)
+        val outcome = when (request.job.status) {
+            RenderStatus.COMPLETED -> RenderTerminalOutcome.COMPLETED
+            RenderStatus.CANCELED -> RenderTerminalOutcome.CANCELED
+            else -> RenderTerminalOutcome.FAILED
+        }
+        try {
+            request.signalTerminal(outcome)
+        } catch (failure: Throwable) {
+            logger.warn(failure) { "Render terminal callback failed for job ${request.job.id}" }
+        }
     }
 }

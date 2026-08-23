@@ -18,12 +18,21 @@ interface RenderService : AutoCloseable {
 
 internal const val LEGACY_RENDER_OWNER_ID = "legacy-render-queue"
 
-internal data class RenderQueueRequest(
+internal enum class RenderTerminalOutcome { COMPLETED, FAILED, CANCELED }
+
+internal class RenderQueueRequest(
     val ownerId: String,
     val job: RenderJob,
     val adjustments: AdjustmentsSession,
     val completedRenders: CompletedRendersRepository,
-)
+    private val onTerminal: (RenderTerminalOutcome) -> Unit = { },
+) {
+    private val terminalSignaled = AtomicBoolean(false)
+
+    fun signalTerminal(outcome: RenderTerminalOutcome) {
+        if (terminalSignaled.compareAndSet(false, true)) onTerminal(outcome)
+    }
+}
 
 internal interface RenderQueueGateway {
     fun enqueue(request: RenderQueueRequest)
@@ -64,7 +73,11 @@ class ProductionRenderService internal constructor(
             check(!closed.get()) { "Render service is closed" }
             ownedJobIds += job.id
             try {
-                gateway.enqueue(RenderQueueRequest(ownerId, job, adjustments, completedRenders))
+                gateway.enqueue(
+                    RenderQueueRequest(ownerId, job, adjustments, completedRenders) {
+                        ownedJobIds.remove(job.id)
+                    },
+                )
             } catch (failure: Throwable) {
                 ownedJobIds.remove(job.id)
                 throw failure

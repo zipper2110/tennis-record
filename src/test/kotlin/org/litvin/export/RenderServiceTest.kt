@@ -139,6 +139,49 @@ class RenderServiceTest {
         }
     }
 
+    @Test
+    fun everyNaturalTerminalOutcomeRemovesHistoricalJobIdsExactlyOnce() {
+        val executors = TrackedExecutorProvider("render-terminal-signal-test", Duration.ofSeconds(5))
+        val adjustments = AdjustmentsSession(executors.createScheduledExecutor("adjustments"))
+        val gateway = RecordingRenderQueueGateway()
+        val service = ProductionRenderService(adjustments, RecordingCompletedRendersRepository(), gateway)
+        try {
+            val outcomes = RenderTerminalOutcome.entries
+            repeat(90) { index ->
+                service.enqueue(renderJob("terminal-$index"))
+            }
+            gateway.requests.forEachIndexed { index, request ->
+                request.signalTerminal(outcomes[index % outcomes.size])
+                request.signalTerminal(outcomes[index % outcomes.size])
+            }
+
+            service.close()
+
+            assertEquals(emptyList(), gateway.cancelQueuedRequests)
+        } finally {
+            adjustments.close()
+            executors.close()
+        }
+    }
+
+    @Test
+    fun terminalSignalFollowedByExceptionalEnqueueDoesNotRetainTheJob() {
+        val executors = TrackedExecutorProvider("render-terminal-exception-test", Duration.ofSeconds(5))
+        val adjustments = AdjustmentsSession(executors.createScheduledExecutor("adjustments"))
+        val gateway = TerminalThenThrowingGateway()
+        val service = ProductionRenderService(adjustments, RecordingCompletedRendersRepository(), gateway)
+        try {
+            assertFailsWith<IllegalStateException> { service.enqueue(renderJob("exceptional-terminal")) }
+
+            service.close()
+
+            assertEquals(emptyList(), gateway.cancelQueuedIds)
+        } finally {
+            adjustments.close()
+            executors.close()
+        }
+    }
+
     private class RecordingRenderQueueGateway : RenderQueueGateway {
         val observers = mutableListOf<(ActiveQueueSnapshot) -> Unit>()
         val requests = mutableListOf<RenderQueueRequest>()
@@ -199,6 +242,23 @@ class RenderServiceTest {
             removalAttempts += observer
             if (observer === failRemovalFor) throw IllegalStateException("remove failed")
         }
+    }
+
+    private class TerminalThenThrowingGateway : RenderQueueGateway {
+        val cancelQueuedIds = mutableListOf<String>()
+
+        override fun enqueue(request: RenderQueueRequest) {
+            request.signalTerminal(RenderTerminalOutcome.FAILED)
+            throw IllegalStateException("enqueue failed after terminal signal")
+        }
+        override fun cancelCurrent(ownerId: String) = Unit
+        override fun cancelQueued(ownerId: String, jobId: String): Boolean {
+            cancelQueuedIds += jobId
+            return false
+        }
+        override fun closeOwner(ownerId: String) = Unit
+        override fun addObserver(ownerId: String, observer: (ActiveQueueSnapshot) -> Unit) = Unit
+        override fun removeObserver(ownerId: String, observer: (ActiveQueueSnapshot) -> Unit) = Unit
     }
 
     private fun renderJob(id: String) = RenderJob(

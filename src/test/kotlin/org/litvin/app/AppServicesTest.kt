@@ -20,6 +20,7 @@ import java.io.File
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.ScheduledExecutorService
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class AppServicesTest {
@@ -55,6 +56,42 @@ class AppServicesTest {
         root.deleteRecursively()
     }
 
+    @Test
+    fun productionFailureClosesEveryConstructedResourceInReverseOrderDespiteCleanupFailures() {
+        val root = kotlin.io.path.createTempDirectory("app-services-construction-").toFile()
+        val events = mutableListOf<String>()
+        val executors = RecordingExecutorProvider(events)
+        val media = FailingMediaPlayerFactory(events)
+        val render = FailingRenderService(events)
+        try {
+            val failure = assertFailsWith<IllegalStateException> {
+                AppServices.production(
+                    AppServicesProductionFactory(
+                        paths = { AppDataPaths(root) },
+                        preferences = { PreferencesProvider { throw UnsupportedOperationException() } },
+                        executors = { executors },
+                        mediaPlayers = { media },
+                        filePicker = { NoOpFilePicker },
+                        dialogs = { NoOpDialogs },
+                        projectsRepository = { _ -> NoOpProjectsRepository },
+                        completedRenders = { _ -> NoOpCompletedRendersRepository },
+                        adjustments = { provider ->
+                            AdjustmentsSession(provider.createScheduledExecutor("construction-adjustments"))
+                        },
+                        renderService = { _, _ -> render },
+                        afterConstruction = { throw IllegalStateException("construction failed") },
+                    ),
+                )
+            }
+
+            assertEquals("construction failed", failure.message)
+            assertEquals(listOf("render", "media", "executors"), events)
+            assertEquals(2, failure.suppressed.size)
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
     private class RecordingExecutorProvider(private val events: MutableList<String>) : ExecutorProvider {
         private val delegate = TrackedExecutorProvider("app-services-test")
         override fun createExecutor(name: String): ExecutorService = delegate.createExecutor(name)
@@ -85,6 +122,26 @@ class AppServicesTest {
         override fun observe(observer: (ActiveQueueSnapshot) -> Unit): AutoCloseable = AutoCloseable { }
         override fun close() {
             events += "render"
+        }
+    }
+
+    private class FailingMediaPlayerFactory(private val events: MutableList<String>) : MediaPlayerFactory {
+        override fun create(screen: MediaScreen): SwingMediaPlayer = error("unused")
+        override fun createFrameCapture(): StillFrameCaptureService = error("unused")
+        override fun close() {
+            events += "media"
+            throw IllegalArgumentException("media close failed")
+        }
+    }
+
+    private class FailingRenderService(private val events: MutableList<String>) : RenderService {
+        override fun enqueue(job: RenderJob) = Unit
+        override fun cancelCurrent() = Unit
+        override fun cancelQueued(jobId: String): Boolean = false
+        override fun observe(observer: (ActiveQueueSnapshot) -> Unit): AutoCloseable = AutoCloseable { }
+        override fun close() {
+            events += "render"
+            throw IllegalStateException("render close failed")
         }
     }
 

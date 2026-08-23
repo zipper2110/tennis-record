@@ -3,6 +3,7 @@ package org.litvin.export
 internal class RenderRequestCoordinator {
     private data class OwnerState(
         val requestIds: MutableSet<String> = linkedSetOf(),
+        val terminalizingRequestIds: MutableSet<String> = linkedSetOf(),
         var closed: Boolean = false,
     )
 
@@ -13,7 +14,8 @@ internal class RenderRequestCoordinator {
         var process: Process? = null,
     )
 
-    private val monitor = Any()
+    @Suppress("PLATFORM_CLASS_MAPPED_TO_KOTLIN")
+    private val monitor = java.lang.Object()
     private val owners = mutableMapOf<String, OwnerState>()
     private var current: CurrentRequest? = null
 
@@ -63,13 +65,52 @@ internal class RenderRequestCoordinator {
             current?.takeIf { it.ownerId == ownerId }?.also { it.canceled = true }?.process
         }
         destroy(process)
+        var interrupted = false
+        synchronized(monitor) {
+            while (owners[ownerId]?.terminalizingRequestIds?.isNotEmpty() == true) {
+                try {
+                    monitor.wait()
+                } catch (_: InterruptedException) {
+                    interrupted = true
+                }
+            }
+        }
+        if (interrupted) Thread.currentThread().interrupt()
+    }
+
+    fun terminalize(ownerId: String, requestId: String, action: () -> Unit): Boolean {
+        synchronized(monitor) {
+            val owner = owners[ownerId]
+            check(owner?.requestIds?.contains(requestId) == true) { "Render request is not registered: $requestId" }
+            if (owner.closed || current?.takeIf { it.ownerId == ownerId && it.requestId == requestId }?.canceled == true) {
+                return false
+            }
+            check(owner.terminalizingRequestIds.add(requestId)) { "Render request is already terminalizing: $requestId" }
+        }
+        try {
+            action()
+            return true
+        } finally {
+            synchronized(monitor) {
+                owners[ownerId]?.terminalizingRequestIds?.remove(requestId)
+                removeOwnerIfFinished(ownerId)
+                monitor.notifyAll()
+            }
+        }
     }
 
     fun finish(ownerId: String, requestId: String) = synchronized(monitor) {
         current?.takeIf { it.ownerId == ownerId && it.requestId == requestId }?.let { current = null }
         val owner = owners[ownerId] ?: return
         owner.requestIds.remove(requestId)
-        if (owner.requestIds.isEmpty()) owners.remove(ownerId)
+        removeOwnerIfFinished(ownerId)
+        monitor.notifyAll()
+    }
+
+    private fun removeOwnerIfFinished(ownerId: String) {
+        owners[ownerId]?.takeIf {
+            it.requestIds.isEmpty() && it.terminalizingRequestIds.isEmpty()
+        }?.let { owners.remove(ownerId) }
     }
 
     private fun destroy(process: Process?) {
