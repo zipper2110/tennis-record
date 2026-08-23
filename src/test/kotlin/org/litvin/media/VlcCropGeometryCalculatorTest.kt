@@ -20,6 +20,8 @@ class VlcCropGeometryCalculatorTest {
         )
 
         assertEquals(VlcCropGeometry(1280, 720, 320, 180), crop)
+        assertEquals(1280, crop?.cropWidth)
+        assertEquals(720, crop?.cropHeight)
         assertEquals("1280x720+320+180", crop?.cropGeometry)
     }
 
@@ -36,6 +38,10 @@ class VlcCropGeometryCalculatorTest {
 
         assertEquals(VlcCropGeometry(1280, 720, 0, 0), topLeft)
         assertEquals(VlcCropGeometry(1280, 720, 640, 180), right)
+        assertEquals(1280, topLeft?.cropWidth)
+        assertEquals(720, topLeft?.cropHeight)
+        assertEquals(1280, right?.cropWidth)
+        assertEquals(720, right?.cropHeight)
     }
 
     @Test

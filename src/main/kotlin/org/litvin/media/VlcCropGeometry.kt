@@ -48,7 +48,12 @@ object VlcCropGeometryCalculator {
 //        val pannedMaxY = sourceWidth - (maxY + panPixelsY)
         val pannedMaxY = maxY + panPixelsY
 
-        return VlcCropGeometry(pannedMaxX, pannedMaxY, pannedMinX, pannedMinY)
+        return VlcCropGeometry(
+            cropWidth = width,
+            cropHeight = height,
+            x = pannedMinX,
+            y = pannedMinY,
+        )
     }
 
     fun sourceAspectRatio(size: Dimension): String? {

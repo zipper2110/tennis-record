@@ -112,6 +112,7 @@ class SwingScoringPanel(
 
     // Active state controlled by navigation
     private var isActive: Boolean = false
+    private var disposed: Boolean = false
 
     fun onActivated() = uiSafe {
         isActive = true
@@ -130,6 +131,19 @@ class SwingScoringPanel(
         player.deactivatePreview("scoring deactivated")
         // Flush pending autosave when leaving the tab
         saveNow()
+    }
+
+    /** Release Swing and native-player resources; safe to call more than once. */
+    fun dispose() {
+        if (disposed) return
+        disposed = true
+        namesSaveTimer.stop()
+        onDeactivated()
+        player.onTimeChanged = null
+        player.onStatusChanged = null
+        player.onReady = null
+        player.setPreviewOverlayImage(null)
+        player.dispose()
     }
 
     // Media player (reuse Markup adapter)
