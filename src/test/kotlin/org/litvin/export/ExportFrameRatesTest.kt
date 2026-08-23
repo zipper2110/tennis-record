@@ -35,4 +35,16 @@ class ExportFrameRatesTest {
             choices.map { it.label },
         )
     }
+
+    @Test
+    fun retainsTheSavedRateWhenItIsSupportedByTheNewSource() {
+        val sourceRate = requireNotNull(ExportFrameRates.parse("60/1"))
+
+        val selected = ExportFrameRates.preferredOption(
+            options = ExportFrameRates.availableFor(sourceRate),
+            savedFrameRate = "30",
+        )
+
+        assertEquals("30 FPS", selected?.label)
+    }
 }

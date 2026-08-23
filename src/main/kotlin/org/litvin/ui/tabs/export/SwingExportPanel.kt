@@ -58,6 +58,7 @@ class SwingExportPanel(
     private val presetCombo = JComboBox(presets.map { it.label }.toTypedArray())
     private val resCombo = JComboBox(arrayOf("1920x1080", "3840x2160"))
     private val frameRateCombo = JComboBox<ExportFrameRateOption>()
+    private var refreshingFrameRateOptions = false
     private val idleTrimCheck = JCheckBox("Cut idle time between points", true)
     private val favoriteOnlyCheck = JCheckBox("Only favorite points", false).apply {
         toolTipText = "Render only points marked with a star. Requires idle-trim because the export is assembled from point intervals."
@@ -317,6 +318,7 @@ class SwingExportPanel(
             (resCombo.selectedItem as? String)?.let(settingsPreferences::saveResolution)
         }
         frameRateCombo.addActionListener {
+            if (refreshingFrameRateOptions) return@addActionListener
             (frameRateCombo.selectedItem as? ExportFrameRateOption)
                 ?.frameRate
                 ?.ffmpegArgument
@@ -552,12 +554,17 @@ class SwingExportPanel(
             ?.takeIf { File(it).isFile }
             ?.let { ExportFrameRateProbe.probe(it, ApplicationLayout.current().ffprobeExecutable) }
         val options = sourceRate?.let(ExportFrameRates::availableFor).orEmpty()
-        frameRateCombo.model = DefaultComboBoxModel(options.toTypedArray())
-        frameRateCombo.isEnabled = options.isNotEmpty()
-        val restoredOption = options.firstOrNull {
-            it.frameRate.ffmpegArgument == savedVideoSettings.outputFrameRate
+        refreshingFrameRateOptions = true
+        try {
+            frameRateCombo.model = DefaultComboBoxModel(options.toTypedArray())
+            frameRateCombo.isEnabled = options.isNotEmpty()
+            frameRateCombo.selectedItem = ExportFrameRates.preferredOption(
+                options = options,
+                savedFrameRate = settingsPreferences.load().outputFrameRate,
+            )
+        } finally {
+            refreshingFrameRateOptions = false
         }
-        frameRateCombo.selectedItem = restoredOption ?: options.firstOrNull { it.isSourceRate }
     }
 
     private fun sectionLabel(text: String): JComponent {
