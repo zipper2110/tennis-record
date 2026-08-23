@@ -21,8 +21,8 @@ import javax.swing.SwingUtilities
 import javax.swing.WindowConstants
 
 class SpikeWindow private constructor() : JFrame(TITLE) {
-    private val input = JTextField("replace me", 24).apply { name = INPUT_NAME }
-    private val submit = JButton("Open modal").apply { name = SUBMIT_NAME }
+    private val input = EdtReadGuardTextField("replace me", 24).apply { name = INPUT_NAME }
+    private val submit = EdtReadGuardButton("Open modal").apply { name = SUBMIT_NAME }
     private val slider = JSlider(0, 10, 2).apply { name = SLIDER_NAME }
     private val choice = JComboBox(arrayOf("alpha", "beta")).apply { name = CHOICE_NAME }
     private val result = JLabel("ready").apply { name = RESULT_NAME }
@@ -100,4 +100,32 @@ class SpikeWindow private constructor() : JFrame(TITLE) {
             return frame.get()
         }
     }
+}
+
+private class EdtReadGuardTextField(text: String, columns: Int) : JTextField(text, columns) {
+    override fun isShowing(): Boolean {
+        requireEdtRead("text field visibility")
+        return super.isShowing()
+    }
+
+    override fun isEnabled(): Boolean {
+        requireEdtRead("text field enabled state")
+        return super.isEnabled()
+    }
+}
+
+private class EdtReadGuardButton(text: String) : JButton(text) {
+    override fun isShowing(): Boolean {
+        requireEdtRead("button visibility")
+        return super.isShowing()
+    }
+
+    override fun isEnabled(): Boolean {
+        requireEdtRead("button enabled state")
+        return super.isEnabled()
+    }
+}
+
+private fun requireEdtRead(description: String) {
+    check(SwingUtilities.isEventDispatchThread()) { "$description read off the EDT" }
 }

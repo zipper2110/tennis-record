@@ -1,7 +1,6 @@
 package org.litvin.ui.flow.spike
 
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
@@ -12,20 +11,32 @@ import java.awt.event.InputEvent
 import java.awt.event.KeyEvent
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.concurrent.FutureTask
 import javax.swing.KeyStroke
+import javax.swing.SwingUtilities
 import javax.swing.UIManager
 
 class AssertJSwingCompatibilityUiFlowIT {
 
     @Test
-    fun `AssertJ Swing drives FlatLaf components and captures actionable diagnostics`() {
+    fun `driver ignores a disposed duplicate hierarchy and drives the current FlatLaf window`() {
         assertEquals("true", System.getProperty("tennis.record.uiFlow"))
         assertEquals(17, Runtime.version().feature(), "compatibility spike must run on JDK 17")
 
         lateinit var frame: SpikeWindow
         RobotSwingDriver().use { driver ->
+            val priorFrame = SpikeWindow.show()
+            val priorFrameDisposed = onEdt {
+                priorFrame.dispose()
+                !priorFrame.isDisplayable
+            }
+            assertTrue(priorFrameDisposed, "first lifecycle must be disposed before the second opens")
+
             frame = SpikeWindow.show()
-            assertEquals("com.formdev.flatlaf.FlatDarkLaf", UIManager.getLookAndFeel().javaClass.name)
+            assertEquals(
+                "com.formdev.flatlaf.FlatDarkLaf",
+                onEdt { UIManager.getLookAndFeel().javaClass.name },
+            )
             val artifactDir = Files.createTempDirectory(
                 Files.createDirectories(
                     Path.of("target", "ui-test-artifacts", javaClass.simpleName),
@@ -77,11 +88,14 @@ class AssertJSwingCompatibilityUiFlowIT {
             }
         }
 
-        assertFalse(frame.isDisplayable, "driver cleanup must dispose the spike frame")
-        assertTrue(
-            Window.getWindows().none(Window::isShowing),
-            "driver cleanup must leave no showing AWT windows",
-        )
+        val cleanup = onEdt {
+            CleanupSnapshot(
+                frameDisposed = !frame.isDisplayable,
+                noShowingWindows = Window.getWindows().none(Window::isShowing),
+            )
+        }
+        assertTrue(cleanup.frameDisposed, "driver cleanup must dispose the spike frame")
+        assertTrue(cleanup.noShowingWindows, "driver cleanup must leave no showing AWT windows")
     }
 
     private fun assertArtifactContains(path: Path, expected: String) {
@@ -92,4 +106,16 @@ class AssertJSwingCompatibilityUiFlowIT {
             "expected $path to contain '$expected'",
         )
     }
+
+    private fun <T> onEdt(action: () -> T): T {
+        if (SwingUtilities.isEventDispatchThread()) return action()
+        val task = FutureTask(action)
+        SwingUtilities.invokeAndWait(task)
+        return task.get()
+    }
+
+    private data class CleanupSnapshot(
+        val frameDisposed: Boolean,
+        val noShowingWindows: Boolean,
+    )
 }

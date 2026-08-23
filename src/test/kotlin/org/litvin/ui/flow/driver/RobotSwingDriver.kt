@@ -29,10 +29,10 @@ class RobotSwingDriver : SwingUiDriver {
     }
 
     override fun click(name: String) {
-        val component = requireComponent(name)
-        requireState(component.isShowing, "component '$name' to be showing")
-        requireState(component.isEnabled, "component '$name' to be enabled")
-        click(component)
+        val snapshot = requireComponentSnapshot(name)
+        requireState(snapshot.showing, "component '$name' to be showing")
+        requireState(snapshot.enabled, "component '$name' to be enabled")
+        click(snapshot.component)
     }
 
     override fun setText(name: String, value: String) {
@@ -80,36 +80,31 @@ class RobotSwingDriver : SwingUiDriver {
 
     override fun requireShowing(name: String) {
         waitUntil("component '$name' to be showing") {
-            findByName(name)?.isShowing == true
+            componentSnapshot(name)?.showing == true
         }
     }
 
     override fun requireEnabled(name: String, enabled: Boolean) {
         waitUntil("component '$name' enabled state to be $enabled") {
-            findByName(name)?.isEnabled == enabled
+            componentSnapshot(name)?.enabled == enabled
         }
     }
 
     override fun requireText(name: String, expected: String) {
         waitUntil("component '$name' to have text '$expected'") {
-            findByName(name)?.let(::textOf) == expected
+            textSnapshot(name) == expected
         }
     }
 
     override fun dismissDialog(title: String, buttonText: String) {
-        var dialog: Dialog? = null
-        var button: AbstractButton? = null
+        var snapshot: DialogButtonSnapshot? = null
         waitUntil("dialog '$title' with button '$buttonText' to be showing") {
-            dialog = findDialog(title)
-            button = dialog?.let { showingDialog ->
-                descendants(showingDialog)
-                    .filterIsInstance<AbstractButton>()
-                    .firstOrNull { candidate -> candidate.isShowing && candidate.text == buttonText }
-            }
-            button != null
+            snapshot = dialogButtonSnapshot(title, buttonText)
+            snapshot != null
         }
-        click(button ?: throw AssertionError("dialog '$title' has no button '$buttonText'"))
-        waitUntil("dialog '$title' to close") { dialog?.isShowing == false }
+        val target = snapshot ?: throw AssertionError("dialog '$title' has no button '$buttonText'")
+        click(target.button)
+        waitUntil("dialog '$title' to close") { onEdt { !target.dialog.isShowing } }
     }
 
     override fun waitUntil(description: String, timeout: Duration, condition: () -> Boolean) {
@@ -129,7 +124,9 @@ class RobotSwingDriver : SwingUiDriver {
                 .filter(Window::isDisplayable)
                 .forEach(Window::dispose)
         }
-        waitUntil("all AWT windows to close") { Window.getWindows().none(Window::isShowing) }
+        waitUntil("all AWT windows to close") {
+            onEdt { Window.getWindows().none(Window::isShowing) }
+        }
     }
 
     private fun click(component: Component) {
@@ -208,6 +205,9 @@ class RobotSwingDriver : SwingUiDriver {
     private fun requireComponent(name: String): Component =
         findByName(name) ?: throw AssertionError("No component named '$name'")
 
+    private fun requireComponentSnapshot(name: String): ComponentSnapshot =
+        componentSnapshot(name) ?: throw AssertionError("No component named '$name'")
+
     private fun <T : Component> requireComponent(name: String, type: Class<T>): T {
         val component = requireComponent(name)
         if (!type.isInstance(component)) {
@@ -216,28 +216,54 @@ class RobotSwingDriver : SwingUiDriver {
         return type.cast(component)
     }
 
-    private fun findByName(name: String): Component? = onEdt {
-        Window.getWindows()
+    private fun componentSnapshot(name: String): ComponentSnapshot? = onEdt {
+        findByNameOnEdt(name)?.let { component ->
+            ComponentSnapshot(component, component.isShowing, component.isEnabled)
+        }
+    }
+
+    private fun textSnapshot(name: String): String? = onEdt {
+        findByNameOnEdt(name)?.let(::textOfOnEdt)
+    }
+
+    private fun findByName(name: String): Component? = onEdt { findByNameOnEdt(name) }
+
+    private fun findByNameOnEdt(name: String): Component? {
+        check(EventQueue.isDispatchThread()) { "component hierarchy must be traversed on the EDT" }
+        return Window.getWindows()
+            .filter(Window::isShowing)
+            .asReversed()
             .asSequence()
             .flatMap(::descendants)
             .firstOrNull { component -> component.name == name }
     }
 
-    private fun findDialog(title: String): Dialog? = onEdt {
-        Window.getWindows()
+    private fun dialogButtonSnapshot(title: String, buttonText: String): DialogButtonSnapshot? = onEdt {
+        val dialog = Window.getWindows()
             .filterIsInstance<Dialog>()
-            .firstOrNull { dialog -> dialog.isShowing && dialog.title == title }
+            .asReversed()
+            .firstOrNull { candidate -> candidate.isShowing && candidate.title == title }
+            ?: return@onEdt null
+        val button = descendants(dialog)
+            .filterIsInstance<AbstractButton>()
+            .firstOrNull { candidate -> candidate.isShowing && candidate.text == buttonText }
+            ?: return@onEdt null
+        DialogButtonSnapshot(dialog, button)
     }
 
     private fun descendants(component: Component): Sequence<Component> = sequence {
+        check(EventQueue.isDispatchThread()) { "component hierarchy must be traversed on the EDT" }
         yield(component)
         if (component is Container) {
             component.components.forEach { child -> yieldAll(descendants(child)) }
         }
     }
 
-    private fun textOf(component: Component): String? = onEdt {
-        when (component) {
+    private fun textOf(component: Component): String? = onEdt { textOfOnEdt(component) }
+
+    private fun textOfOnEdt(component: Component): String? {
+        check(EventQueue.isDispatchThread()) { "component text must be read on the EDT" }
+        return when (component) {
             is JTextComponent -> component.text
             is JLabel -> component.text
             is AbstractButton -> component.text
@@ -258,6 +284,17 @@ class RobotSwingDriver : SwingUiDriver {
     }
 
     private data class CharacterStroke(val keyCode: Int, val shift: Boolean)
+
+    private data class ComponentSnapshot(
+        val component: Component,
+        val showing: Boolean,
+        val enabled: Boolean,
+    )
+
+    private data class DialogButtonSnapshot(
+        val dialog: Dialog,
+        val button: AbstractButton,
+    )
 
     private companion object {
         const val EVENT_DELAY_MILLIS = 20
