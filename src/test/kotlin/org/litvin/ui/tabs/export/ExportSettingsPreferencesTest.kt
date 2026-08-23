@@ -18,9 +18,10 @@ class ExportSettingsPreferencesTest {
             settings.savePreset("quality")
             settings.saveResolution("4K")
             settings.saveEncoder("h264_nvenc")
+            settings.saveOutputFrameRate("30000/1001")
 
             assertEquals(
-                ExportVideoSettings("quality", "4K", "h264_nvenc"),
+                ExportVideoSettings("quality", "4K", "h264_nvenc", "30000/1001"),
                 settings.load(),
             )
         } finally {

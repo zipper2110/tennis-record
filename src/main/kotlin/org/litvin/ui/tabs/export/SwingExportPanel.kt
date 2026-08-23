@@ -1,11 +1,15 @@
 package org.litvin.ui.tabs.export
 import org.litvin.ActiveQueueSnapshot
+import org.litvin.ApplicationLayout
 import org.litvin.CompletedRender
 import org.litvin.ExportPresetsIO
 import org.litvin.RenderJob
 import org.litvin.RenderQueueManager
 import org.litvin.RenderStatus
 import org.litvin.export.ExportPlanner
+import org.litvin.export.ExportFrameRateOption
+import org.litvin.export.ExportFrameRateProbe
+import org.litvin.export.ExportFrameRates
 import org.litvin.export.ExportRenderPlanRequest
 import org.litvin.export.RenderFormatting
 import org.litvin.markup.EdlIO
@@ -53,6 +57,8 @@ class SwingExportPanel(
     private val savedVideoSettings = settingsPreferences.load()
     private val presetCombo = JComboBox(presets.map { it.label }.toTypedArray())
     private val resCombo = JComboBox(arrayOf("1920x1080", "3840x2160"))
+    private val frameRateCombo = JComboBox<ExportFrameRateOption>()
+    private var refreshingFrameRateOptions = false
     private val idleTrimCheck = JCheckBox("Cut idle time between points", true)
     private val favoriteOnlyCheck = JCheckBox("Only favorite points", false).apply {
         toolTipText = "Render only points marked with a star. Requires idle-trim because the export is assembled from point intervals."
@@ -169,6 +175,14 @@ class SwingExportPanel(
         left.add(Box.createRigidArea(Dimension(0, 6)))
         left.add(resSummaryLabel)
         left.add(scalePlanLabel)
+        left.add(Box.createRigidArea(Dimension(0, 12)))
+
+        left.add(sectionLabel("FPS"))
+        frameRateCombo.maximumSize = Dimension(Short.MAX_VALUE.toInt(), 28)
+        frameRateCombo.toolTipText = "Output frame rate. The source video frame rate is marked."
+        UiStyles.styleComboBox(frameRateCombo)
+        frameRateCombo.isEnabled = false
+        left.add(frameRateCombo)
         left.add(Box.createRigidArea(Dimension(0, 12)))
 
         left.add(sectionLabel("Encoder"))
@@ -303,6 +317,13 @@ class SwingExportPanel(
             updateResolutionPreview()
             (resCombo.selectedItem as? String)?.let(settingsPreferences::saveResolution)
         }
+        frameRateCombo.addActionListener {
+            if (refreshingFrameRateOptions) return@addActionListener
+            (frameRateCombo.selectedItem as? ExportFrameRateOption)
+                ?.frameRate
+                ?.ffmpegArgument
+                ?.let(settingsPreferences::saveOutputFrameRate)
+        }
         encoderPanel.addChangeListener {
             settingsPreferences.saveEncoder(encoderPanel.selectedEncoderId())
         }
@@ -406,6 +427,7 @@ class SwingExportPanel(
 
     fun setProjectManifest(path: String?) {
         manifestPath = path
+        refreshFrameRateOptions()
         updatePointsSummary()
         updateFavoriteOnlyAvailability()
         updateInitButtonState()
@@ -487,6 +509,13 @@ class SwingExportPanel(
         }
 
         val resolution = ExportPlanner.parseResolution(resCombo.selectedItem as String)
+        val outputFrameRate = (frameRateCombo.selectedItem as? ExportFrameRateOption)
+            ?.frameRate
+            ?.ffmpegArgument
+        if (outputFrameRate == null) {
+            Dialogs.showError(this, IllegalStateException("Source video frame rate unavailable"), "Cannot determine source FPS")
+            return
+        }
         val encoderLabel = encoderPanel.selectedEncoderLabel().substringBefore(" — ")
 
         val score = try {
@@ -502,6 +531,7 @@ class SwingExportPanel(
                 score = score,
                 preset = selPreset,
                 resolution = resolution,
+                outputFrameRate = outputFrameRate,
                 encoderLabel = encoderLabel,
                 idleTrim = idleTrimCheck.isSelected,
                 favoriteOnly = favoriteOnly,
@@ -512,6 +542,29 @@ class SwingExportPanel(
 
         RenderQueueManager.enqueue(plan.job)
         JOptionPane.showMessageDialog(this, "Render initialized: ${out.name}")
+    }
+
+    private fun refreshFrameRateOptions() {
+        val sourcePath = try {
+            manifestPath?.let(ManifestIO::read)?.sourceVideo
+        } catch (_: Throwable) {
+            null
+        }
+        val sourceRate = sourcePath
+            ?.takeIf { File(it).isFile }
+            ?.let { ExportFrameRateProbe.probe(it, ApplicationLayout.current().ffprobeExecutable) }
+        val options = sourceRate?.let(ExportFrameRates::availableFor).orEmpty()
+        refreshingFrameRateOptions = true
+        try {
+            frameRateCombo.model = DefaultComboBoxModel(options.toTypedArray())
+            frameRateCombo.isEnabled = options.isNotEmpty()
+            frameRateCombo.selectedItem = ExportFrameRates.preferredOption(
+                options = options,
+                savedFrameRate = settingsPreferences.load().outputFrameRate,
+            )
+        } finally {
+            refreshingFrameRateOptions = false
+        }
     }
 
     private fun sectionLabel(text: String): JComponent {

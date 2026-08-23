@@ -81,6 +81,7 @@ class ExportPlannerTest {
                 favoriteOnly = true,
                 includeScoreboard = true,
                 outputPath = "out.mp4",
+                outputFrameRate = "30000/1001",
             )
         )
 
@@ -89,6 +90,7 @@ class ExportPlannerTest {
         assertEquals(listOf("p1"), plan.job.edlSnapshot.map { it.id })
         assertEquals(true, plan.job.favoriteOnly)
         assertEquals(true, plan.job.includeScoreboard)
+        assertEquals("30000/1001", plan.job.outputFrameRate)
         assertEquals(1, plan.overlayTimeline.size)
         assertEquals(0, plan.overlayTimeline.single().startMs)
         assertEquals(1_000, plan.overlayTimeline.single().endMs)
