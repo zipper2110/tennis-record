@@ -1,5 +1,6 @@
 package org.litvin.projects
 
+import org.litvin.app.AppDataPaths
 import java.io.File
 import java.util.UUID
 
@@ -18,10 +19,14 @@ interface ProjectsRepository {
     fun openProject(path: String, sourceVideoPath: String? = null): ProjectSummary
 }
 
-class FileProjectsRepository : ProjectsRepository {
-    override fun projectsRootPath(): String = RecentsProvider.projectsRoot().absolutePath
+class FileProjectsRepository(private val projectsRoot: File) : ProjectsRepository {
+    constructor() : this(AppDataPaths.production().projects)
 
-    override fun getRecents(): List<ProjectSummary> = RecentsProvider.current().map(::summarize)
+    private val recentsProvider = RecentsProvider(projectsRoot)
+
+    override fun projectsRootPath(): String = projectsRoot.absolutePath
+
+    override fun getRecents(): List<ProjectSummary> = recentsProvider.current().map(::summarize)
 
     override fun readManifest(path: String): ProjectManifestV1 = ManifestIO.read(path)
 
@@ -36,17 +41,17 @@ class FileProjectsRepository : ProjectsRepository {
 
     override fun createProject(sourceVideoPath: String): ProjectSummary {
         val selected = File(sourceVideoPath)
-        val projectsRoot = RecentsProvider.projectsRoot().apply {
+        val targetRoot = projectsRoot.apply {
             if (!exists()) mkdirs()
         }
 
         val baseName = selected.name.substringBeforeLast('.').ifBlank { "Untitled Match" }
         var projectName = baseName
-        var projectDir = File(projectsRoot, projectName)
+        var projectDir = File(targetRoot, projectName)
         var suffix = 2
         while (projectDir.exists()) {
             projectName = "$baseName (${suffix++})"
-            projectDir = File(projectsRoot, projectName)
+            projectDir = File(targetRoot, projectName)
         }
         if (!projectDir.mkdirs() && !projectDir.exists()) {
             error("Could not create project directory: ${projectDir.absolutePath}")
@@ -63,7 +68,7 @@ class FileProjectsRepository : ProjectsRepository {
         )
         val manifestPath = File(projectDir, "$projectName.trproj").absolutePath
         ManifestIO.write(manifestPath, manifest)
-        RecentsProvider.refresh()
+        recentsProvider.refresh()
         return summaryFor(manifestPath, manifest)
     }
 
@@ -74,7 +79,7 @@ class FileProjectsRepository : ProjectsRepository {
             sourceVideo = sourceVideoPath?.takeIf { it.isNotBlank() } ?: manifest.sourceVideo,
         )
         ManifestIO.write(path, updated)
-        RecentsProvider.refresh()
+        recentsProvider.refresh()
         return summaryFor(path, updated)
     }
 

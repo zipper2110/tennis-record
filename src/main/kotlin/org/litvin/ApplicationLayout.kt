@@ -103,6 +103,9 @@ class ApplicationLayoutResolver(
 
     private fun resolveAppDataDirectory(): File {
         value("tennis.record.appDataDir")?.let { return File(it).absoluteFile.normalize() }
+        environment["TENNIS_RECORD_APP_DATA_DIR"]?.trim()?.takeIf { it.isNotEmpty() }?.let {
+            return File(it).absoluteFile.normalize()
+        }
         environment["APPDATA"]?.trim()?.takeIf { it.isNotEmpty() }?.let {
             return File(it, "tennis-record")
         }

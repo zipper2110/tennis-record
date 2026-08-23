@@ -1,8 +1,12 @@
 package org.litvin.ui.tabs.projects.presenter
 
+import org.litvin.app.PreferencesProvider
 import org.litvin.projects.ProjectManifestV1
 import org.litvin.projects.ProjectSummary
 import org.litvin.projects.ProjectsRepository
+import org.litvin.projects.FileProjectsRepository
+import org.junit.jupiter.api.io.TempDir
+import java.nio.file.Path
 import java.util.UUID
 import java.util.concurrent.Executor
 import java.util.prefs.Preferences
@@ -12,6 +16,9 @@ import kotlin.test.assertEquals
 import kotlin.test.assertIs
 
 class DefaultProjectsPresenterTest {
+    @TempDir
+    lateinit var tempDir: Path
+
     @Test
     fun activationRendersPagedRecentsFromRepository() {
         val repository = FakeProjectsRepository(
@@ -54,6 +61,37 @@ class DefaultProjectsPresenterTest {
         assertIs<ProjectsViewEffect.ProjectOpened>(view.effects.last())
         assertEquals("match.mp4", repository.manifests.getValue("match.trproj").sourceVideo)
         assertEquals("match.trproj", view.states.last().currentProject?.path)
+    }
+
+    @Test
+    fun fileRepositoriesKeepProjectsAndRecentsInsideTheirOwnRoots() {
+        val firstRoot = tempDir.resolve("first/projects").toFile()
+        val secondRoot = tempDir.resolve("second/projects").toFile()
+        val firstSource = tempDir.resolve("first-match.mp4").toFile().apply { writeText("first") }
+        val secondSource = tempDir.resolve("second-match.mp4").toFile().apply { writeText("second") }
+        val firstRepository = FileProjectsRepository(firstRoot)
+        val secondRepository = FileProjectsRepository(secondRoot)
+
+        val firstProject = firstRepository.createProject(firstSource.absolutePath)
+
+        assertEquals(firstRoot.absolutePath, firstRepository.projectsRootPath())
+        assertEquals(listOf(firstProject.path), firstRepository.getRecents().map { it.path })
+        assertEquals(emptyList(), secondRepository.getRecents())
+
+        val secondProject = secondRepository.createProject(secondSource.absolutePath)
+
+        assertEquals(secondRoot.absolutePath, secondRepository.projectsRootPath())
+        assertEquals(listOf(firstProject.path), firstRepository.getRecents().map { it.path })
+        assertEquals(listOf(secondProject.path), secondRepository.getRecents().map { it.path })
+    }
+
+    @Test
+    fun productionPreferencesKeepTheExistingProjectsPackageNode() {
+        val expected = Preferences.userNodeForPackage(DefaultProjectsPresenter::class.java).absolutePath()
+
+        val actual = PreferencesProvider.production().node(PreferencesProvider.PROJECTS).absolutePath()
+
+        assertEquals(expected, actual)
     }
 
     private fun presenter(repository: ProjectsRepository): DefaultProjectsPresenter {
