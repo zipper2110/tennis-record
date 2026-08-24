@@ -22,7 +22,8 @@ class ScrubPanel(
     private val scrubBar = ScrubBar(
         onUserScrub = { target -> onUserScrub(target) },
         tooltip = "Scrub within the selected point segment",
-        rightAccessory = rightAccessory
+        rightAccessory = rightAccessory,
+        sliderComponentName = "scoring-seek",
     )
 
     init {

@@ -37,7 +37,7 @@ class SwingCropRotatePanel(
     }
 
     private val seekSlider = JSlider(0, 10000, 0).apply {
-        name = "adj-cr-seek"
+        name = "crop-seek"
         toolTipText = "Seek"
         paintLabels = false
         paintTicks = false

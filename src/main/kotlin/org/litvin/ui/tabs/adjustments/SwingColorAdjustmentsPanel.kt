@@ -119,13 +119,14 @@ class SwingColorAdjustmentsPanel(
 
         // Populate transport: play/pause, time labels, seek slider
         playPauseBtn = UiStyles.squarePrimaryButton(UiStyles.playIcon(28)) { togglePlayPause() }.apply {
-            name = "adj-color-play-pause"
+            name = "colors-play-pause"
             accessibleContext.accessibleName = "Play or Pause"
             toolTipText = "SPACE - Play"
         }
         scrubBar = ScrubBar(
             onUserScrub = { target -> player.seek(target) },
-            tooltip = "Seek"
+            tooltip = "Seek",
+            sliderComponentName = "colors-seek",
         )
         val playRow = JPanel(java.awt.FlowLayout(java.awt.FlowLayout.CENTER, 0, 6)).apply {
             isOpaque = true
@@ -168,7 +169,7 @@ class SwingColorAdjustmentsPanel(
             font = font.deriveFont(font.style, font.size2D + 3.0f)
         }
         colorResetBtn =
-            JButton("Reset").apply { name = "adj-color-reset"; toolTipText = "Reset Color Grade to defaults" }
+            JButton("Reset").apply { name = "colors-reset"; toolTipText = "Reset Color Grade to defaults" }
         colorResetBtn.addActionListener {
             adjustments.set { prev -> mergeColorInto(prev, AdjustmentsUiConverter.DEFAULTS) }
         }
@@ -200,21 +201,21 @@ class SwingColorAdjustmentsPanel(
             labeledSliderRow(
                 "Brightness",
                 brightnessSlider,
-                "adj-brightness",
+                "colors-brightness",
                 "Brightness [-100..+100], default 0"
             )
         )
-        content.add(labeledSliderRow("Contrast", contrastSlider, "adj-contrast", "Contrast [-50..+50], default 0"))
+        content.add(labeledSliderRow("Contrast", contrastSlider, "colors-contrast", "Contrast [-50..+50], default 0"))
         content.add(
             labeledSliderRow(
                 "Saturation",
                 saturationSlider,
-                "adj-saturation",
+                "colors-saturation",
                 "Saturation [-100..+100], default 0"
             )
         )
-        content.add(labeledSliderRow("WB Temp", tempSlider, "adj-wb-temp", "Temperature [-100..+100], default 0"))
-        content.add(labeledSliderRow("WB Tint", tintSlider, "adj-wb-tint", "Tint [-100..+100], default 0"))
+        content.add(labeledSliderRow("WB Temp", tempSlider, "colors-temperature", "Temperature [-100..+100], default 0"))
+        content.add(labeledSliderRow("WB Tint", tintSlider, "colors-tint", "Tint [-100..+100], default 0"))
         val scroll = JScrollPane(content).apply {
             background = UiStyles.DARK_BG
             viewport.background = UiStyles.DARK_BG

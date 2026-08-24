@@ -157,7 +157,7 @@ class DefaultProjectsPresenter(
     }
 
     private fun ProjectSummary.toCardState(): ProjectCardState {
-        return ProjectCardState(path = path, name = name, secondary = secondary)
+        return ProjectCardState(path = path, name = name, secondary = secondary, id = id)
     }
 
     private fun onEventDispatchThread(action: () -> Unit) {

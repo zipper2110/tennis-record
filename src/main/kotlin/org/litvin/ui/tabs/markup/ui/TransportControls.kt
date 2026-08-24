@@ -28,13 +28,14 @@ class TransportControls(
     private val onNudge: (deltaMs: Long) -> Unit,
 ) : JPanel(BorderLayout()) {
 
-    private val btnStart = JButton("Point Start [C]")
-    private val btnEnd = JButton("Point End [V]")
-    private val timeLabel = JLabel("00:00:00.000")
+    private val btnStart = JButton("Point Start [C]").apply { name = "rallies-point-start" }
+    private val btnEnd = JButton("Point End [V]").apply { name = "rallies-point-end" }
+    private val timeLabel = JLabel("00:00:00.000").apply { name = "rallies-current-time" }
 
     private val transportBar = TransportBar(
         onTogglePlayPause = { actions.togglePlayPause() },
-        onSeek = { delta -> onNudge(delta) }
+        onSeek = { delta -> onNudge(delta) },
+        playPauseComponentName = "rallies-play-pause",
     )
 
     init {

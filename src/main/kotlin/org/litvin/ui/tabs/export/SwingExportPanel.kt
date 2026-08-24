@@ -80,24 +80,28 @@ class SwingExportPanel(
     // Left controls
     private val presets = ExportPresetsIO.load()
     private val savedVideoSettings = settingsPreferences.load()
-    private val presetCombo = JComboBox(presets.map { it.label }.toTypedArray())
-    private val resCombo = JComboBox(arrayOf("1920x1080", "3840x2160"))
+    private val presetCombo = JComboBox(presets.map { it.label }.toTypedArray()).apply { name = "export-preset" }
+    private val resCombo = JComboBox(arrayOf("1920x1080", "3840x2160")).apply { name = "export-resolution" }
     private val frameRateCombo = JComboBox<ExportFrameRateOption>()
     private var refreshingFrameRateOptions = false
-    private val idleTrimCheck = JCheckBox("Cut idle time between points", true)
+    private val idleTrimCheck = JCheckBox("Cut idle time between points", true).apply { name = "export-idle-trim" }
     private val favoriteOnlyCheck = JCheckBox("Only favorite points", false).apply {
+        name = "export-favorites-only"
         toolTipText = "Render only points marked with a star. Requires idle-trim because the export is assembled from point intervals."
     }
     private val scoreboardCheck = JCheckBox("Include Scoreboard", false).apply {
+        name = "export-scoreboard"
         toolTipText = "Burn in a simple scoreboard overlay that updates after each point. Uses current Scoring data; fixed English labels in v0.1.0."
     }
-    private val initButton = UiStyles.primaryButton("Initialize Render") { onInitializeRender() }
+    private val initButton = UiStyles.primaryButton("Initialize Render") { onInitializeRender() }.apply {
+        name = "export-initialize"
+    }
     private val encoderPanel = EncoderSummaryPanel(savedVideoSettings.encoderId, availableEncoderIds)
 
     // Right side — Active + Completed
-    private val progressBar = JProgressBar(0, 100)
+    private val progressBar = JProgressBar(0, 100).apply { name = "export-progress" }
     private val progressLabel = JLabel("Idle")
-    private val cancelButton = JButton("Cancel")
+    private val cancelButton = JButton("Cancel").apply { name = "export-cancel" }
     private var lastFailureNotifiedJobId: String? = null
     private var lastFailureJob: RenderJob? = null
 

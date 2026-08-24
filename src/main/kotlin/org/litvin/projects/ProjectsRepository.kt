@@ -8,6 +8,7 @@ data class ProjectSummary(
     val path: String,
     val name: String,
     val secondary: String,
+    val id: String = path,
 )
 
 interface ProjectsRepository {
@@ -90,6 +91,7 @@ class FileProjectsRepository(private val projectsRoot: File) : ProjectsRepositor
             path = path,
             name = manifest.name.ifBlank { File(path).nameWithoutExtension },
             secondary = manifest.sourceVideo?.takeIf { it.isNotBlank() } ?: path,
+            id = manifest.id,
         )
     }
 }

@@ -50,6 +50,7 @@ object SwingApplicationFactory {
         check(EventQueue.isDispatchThread()) { "Swing application must be created on the EDT" }
 
         val frame = JFrame(AppInfo.displayName).apply {
+            name = "app-frame"
             defaultCloseOperation = JFrame.DISPOSE_ON_CLOSE
             layout = BorderLayout()
         }
@@ -221,32 +222,32 @@ object SwingApplicationFactory {
             btnProjects = UiStyles.sidebarButton("Projects", UiStyles.folderIcon()) {
                 frame.title = "Tennis Record — Projects"
                 goTo(CARD_PROJECTS)
-            }
+            }.apply { name = "nav-projects" }
             addItem(btnProjects)
             btnColors = UiStyles.sidebarButton("Colors", UiStyles.colorsIcon()) {
                 frame.title = "Tennis Record — Color"
                 goTo(CARD_ADJ_COLORS)
-            }
+            }.apply { name = "nav-colors" }
             addItem(btnColors)
             btnCropRotate = UiStyles.sidebarButton("Crop", UiStyles.cropRotateIcon()) {
                 frame.title = "Tennis Record — Crop & Rotate"
                 goTo(CARD_ADJ_CROP_ROTATE)
-            }
+            }.apply { name = "nav-crop" }
             addItem(btnCropRotate)
             btnRallies = UiStyles.sidebarButton("Rallies", UiStyles.rallyIcon()) {
                 frame.title = "Tennis Record — Rallies"
                 goTo(CARD_RALLIES)
-            }
+            }.apply { name = "nav-rallies" }
             addItem(btnRallies)
             btnScoring = UiStyles.sidebarButton("Scoring", UiStyles.targetIcon()) {
                 frame.title = "Tennis Record — Scoring"
                 goTo(CARD_SCORING)
-            }
+            }.apply { name = "nav-scoring" }
             addItem(btnScoring)
             btnExport = UiStyles.sidebarButton("Export", UiStyles.exportIcon()) {
                 frame.title = "Tennis Record — Export"
                 goTo(CARD_EXPORT)
-            }
+            }.apply { name = "nav-export" }
             addItem(btnExport)
             if (testEnabled) {
                 btnTest = UiStyles.sidebarButton("Test", UiStyles.targetIcon()) {

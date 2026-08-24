@@ -32,6 +32,7 @@ class PlayerPanel(
         pointsLbl.foreground = Color(0xAD, 0xAA, 0xAA)
         pointsLbl.font = pointsLbl.font.deriveFont(Font.BOLD, 11f)
         pointsVal.background = Color(0x26, 0x26, 0x26)
+        if (isPrimary) pointsVal.name = "scoring-score-summary"
         pointsVal.foreground = if (isPrimary) Color(0xA1, 0xFE, 0x00) else Color.WHITE
         pointsVal.isOpaque = true
         pointsVal.border = EmptyBorder(6, 10, 6, 10)
@@ -46,7 +47,7 @@ class PlayerPanel(
         pointBtn.background = Color(0x26, 0x26, 0x26)
         // Initial border is built from current accentColor
         pointBtn.border = buildPointButtonBorder()
-        pointBtn.name = if (isPrimary) "p1-point" else "p2-point"
+        pointBtn.name = if (isPrimary) "scoring-player-1-point" else "scoring-player-2-point"
         pointBtn.addActionListener { onPointClicked.invoke() }
 
         val topRow = JPanel(FlowLayout(FlowLayout.LEFT, 8, 0))

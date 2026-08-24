@@ -25,6 +25,7 @@ class ScrubBar(
     tooltip: String = "Seek",
     private val rightAccessory: JComponent? = null,
     sliderMaximum: Int = 10000,
+    sliderComponentName: String? = null,
 ) : JPanel(BorderLayout(8, 0)) {
     private val startLabel = JLabel("00:00:00")
     private val endLabel = JLabel("00:00:00  ")
@@ -43,7 +44,7 @@ class ScrubBar(
             label.foreground = Color(0xAD, 0xAA, 0xAA)
         }
 
-        slider.name = "scrub"
+        slider.name = sliderComponentName
         slider.toolTipText = tooltip
         slider.isOpaque = false
         slider.paintTicks = false

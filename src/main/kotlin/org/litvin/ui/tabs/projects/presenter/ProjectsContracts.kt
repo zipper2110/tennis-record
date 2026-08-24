@@ -28,6 +28,7 @@ data class ProjectCardState(
     val path: String,
     val name: String,
     val secondary: String,
+    val id: String = path,
 )
 
 sealed class ProjectsIntent {

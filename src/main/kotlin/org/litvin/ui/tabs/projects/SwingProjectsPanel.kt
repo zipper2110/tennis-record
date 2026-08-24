@@ -157,7 +157,11 @@ class SwingProjectsPanel(
     private fun renderCurrentProject(project: ProjectCardState?) {
         currentProjectContainer.removeAll()
         currentProjectContainer.add(
-            if (project == null) emptyCurrentProjectCard() else ProjectCard(project.name, project.secondary),
+            if (project == null) {
+                emptyCurrentProjectCard()
+            } else {
+                ProjectCard(project.name, project.secondary, titleComponentName = "projects-current-name")
+            },
             BorderLayout.CENTER,
         )
         refresh(currentProjectContainer)
@@ -188,13 +192,21 @@ class SwingProjectsPanel(
     }
 
     private fun buildProjectCard(project: ProjectCardState): JComponent {
-        return ProjectCard(project.name, project.secondary) {
+        return ProjectCard(
+            project.name,
+            project.secondary,
+            openButtonComponentName = "projects-open-${project.id}",
+        ) {
             presenter.onIntent(ProjectsIntent.OpenProject(project.path))
         }
     }
 
     private fun emptyCurrentProjectCard(): JComponent {
-        return ProjectCard("No open project", "Use \"IMPORT NEW MATCH\" or open from Existing Projects")
+        return ProjectCard(
+            "No open project",
+            "Use \"IMPORT NEW MATCH\" or open from Existing Projects",
+            titleComponentName = "projects-current-name",
+        )
     }
 
     private fun chooseSourceVideo(title: String, initialDirectory: String?): String? =

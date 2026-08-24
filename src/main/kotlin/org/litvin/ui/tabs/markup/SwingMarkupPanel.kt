@@ -77,7 +77,7 @@ class SwingMarkupPanel(
     // UI controls
     private var transport: TransportControls
 
-    private val countBadge = JLabel("0 MARKED / 0 FAV")
+    private val countBadge = JLabel("0 MARKED / 0 FAV").apply { name = "rallies-point-count" }
 
     // Cards view (replaces legacy inline cards list)
     private var cardsView: PointsCardsView
@@ -195,7 +195,7 @@ class SwingMarkupPanel(
                 player.component.requestFocusInWindow()
 
             }
-        })
+        }).apply { name = "rallies-seek" }
 
     // Autosave controller (debounced, off-EDT persistence)
     private val autosave = AutosaveController(
@@ -295,6 +295,7 @@ class SwingMarkupPanel(
         leftColumn.isOpaque = false
         // Wrap VLC component with geometry viewport for live zoom/pan (Task 5.4)
         geometryViewport = GeometryViewportPanel(player.component)
+        geometryViewport.name = "rallies-video"
         leftColumn.add(geometryViewport, BorderLayout.CENTER)
         leftColumn.add(bottom, BorderLayout.SOUTH)
         leftColumn.minimumSize = Dimension(320, 0)
