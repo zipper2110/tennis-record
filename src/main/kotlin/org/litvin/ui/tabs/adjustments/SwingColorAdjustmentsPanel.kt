@@ -4,8 +4,11 @@ import org.litvin.GeometryViewportPanel
 import org.litvin.projects.ManifestIO
 import org.litvin.media.PlayerStatus
 import org.litvin.media.VlcjSwingMediaPlayerAdapter
+import org.litvin.media.SwingMediaPlayer
 import org.litvin.adjustments.AdjustmentsV1
 import org.litvin.adjustments.AdjustmentsStore
+import org.litvin.adjustments.AdjustmentsSession
+import org.litvin.app.PreferencesProvider
 import org.litvin.ui.UiStyles
 import org.litvin.ui.commons.ScrubBar
 import org.litvin.ui.commons.AppShortcuts
@@ -16,6 +19,7 @@ import java.awt.EventQueue
 import java.awt.event.ActionEvent
 import java.io.File
 import java.util.prefs.Preferences
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.swing.*
 import org.litvin.ui.commons.applyDarkScrollbar
 
@@ -29,19 +33,28 @@ import org.litvin.ui.commons.applyDarkScrollbar
  * Component IDs: adj-color-root, adj-color-left, adj-color-right, adj-color-viewport, adj-color-transport, adj-color-left-header
  */
 class SwingColorAdjustmentsPanel(
+    private val player: SwingMediaPlayer,
+    private val adjustments: AdjustmentsSession,
+    private val prefs: Preferences,
     private val onHelp: () -> Unit = {},
-) : JPanel(BorderLayout()) {
+) : JPanel(BorderLayout()), AutoCloseable {
+    constructor(onHelp: () -> Unit = {}) : this(
+        VlcjSwingMediaPlayerAdapter(),
+        AdjustmentsStore.legacySession(),
+        PreferencesProvider.production().node(PreferencesProvider.COLOR_ADJUSTMENTS),
+        onHelp,
+    )
+
     private var projectManifestPath: String? = null
+    private val closed = AtomicBoolean(false)
 
     // Adjustments store subscription and feedback guard (T6)
     private var unsubscribeStore: (() -> Unit)? = null
     private var updatingFromModel: Boolean = false
 
-    private val prefs: Preferences = Preferences.userNodeForPackage(SwingColorAdjustmentsPanel::class.java)
     private val dividerPrefKey = "adj.color.split.divider"
 
     // Media player and media loading state
-    private val player = VlcjSwingMediaPlayerAdapter()
     private var pendingMediaFile: File? = null
     private var isMediaLoaded: Boolean = false
 
@@ -157,7 +170,7 @@ class SwingColorAdjustmentsPanel(
         colorResetBtn =
             JButton("Reset").apply { name = "adj-color-reset"; toolTipText = "Reset Color Grade to defaults" }
         colorResetBtn.addActionListener {
-            AdjustmentsStore.set { prev -> mergeColorInto(prev, AdjustmentsUiConverter.DEFAULTS) }
+            adjustments.set { prev -> mergeColorInto(prev, AdjustmentsUiConverter.DEFAULTS) }
         }
         val headerRight2 = JPanel(java.awt.FlowLayout(java.awt.FlowLayout.RIGHT, 8, 4)).apply {
             isOpaque = true
@@ -226,9 +239,9 @@ class SwingColorAdjustmentsPanel(
             slider.addChangeListener {
                 if (!updatingFromModel) {
                     val color = uiToModel()
-                    val adjustments = mergeColorInto(AdjustmentsStore.get(), color)
-                    applyPreview(adjustments)
-                    AdjustmentsStore.set { prev -> mergeColorInto(prev, color) }
+                    val nextAdjustments = mergeColorInto(adjustments.get(), color)
+                    applyPreview(nextAdjustments)
+                    adjustments.set { prev -> mergeColorInto(prev, color) }
                 }
             }
         }
@@ -330,7 +343,7 @@ class SwingColorAdjustmentsPanel(
         super.addNotify()
         SwingUtilities.invokeLater { ensurePlayerLoaded() }
         // Ensure UI reflects current adjustments on first show
-        modelToUi(AdjustmentsStore.get())
+        modelToUi(adjustments.get())
     }
 
     private fun ensurePlayerLoaded() {
@@ -343,7 +356,7 @@ class SwingColorAdjustmentsPanel(
         isMediaLoaded = true
         // Re-apply current adjustments after media is loaded to ensure VLC picks them up
         try {
-            applyPreview(AdjustmentsStore.get())
+            applyPreview(adjustments.get())
         } catch (_: Throwable) { /* ignore */ }
     }
 
@@ -375,7 +388,7 @@ class SwingColorAdjustmentsPanel(
                     scrubBar.setRange(0L, dur)
                     scrubBar.setPosition(player.currentTimeMs())
                 }
-                applyPreview(AdjustmentsStore.get())
+                applyPreview(adjustments.get())
                 updatePlayPauseUi()
             }
         }
@@ -422,7 +435,7 @@ class SwingColorAdjustmentsPanel(
         // Load adjustments for this project directory
         val projectDir = File(path).parentFile?.absolutePath
         if (!projectDir.isNullOrBlank()) {
-            AdjustmentsStore.load(projectDir)
+            adjustments.load(projectDir)
         }
 
         val manifest = ManifestIO.read(path)
@@ -436,7 +449,7 @@ class SwingColorAdjustmentsPanel(
             }
         }
         // Ensure UI reflects the loaded adjustments
-        modelToUi(AdjustmentsStore.get())
+        modelToUi(adjustments.get())
     }
 
     fun onActivated() {
@@ -444,11 +457,11 @@ class SwingColorAdjustmentsPanel(
         player.activatePreview("color adjustments activated")
         // Subscribe to adjustments changes to reflect external updates and live-apply preview (T6)
         unsubscribeStore?.invoke()
-        unsubscribeStore = AdjustmentsStore.subscribe { adj ->
+        unsubscribeStore = adjustments.subscribe { adj ->
             EventQueue.invokeLater { modelToUi(adj) }
         }
         // Push current state immediately
-        modelToUi(AdjustmentsStore.get())
+        modelToUi(adjustments.get())
     }
 
     fun onDeactivated() {
@@ -457,7 +470,17 @@ class SwingColorAdjustmentsPanel(
         unsubscribeStore?.invoke(); unsubscribeStore = null
         // Persist current adjustments immediately when leaving the tab
         val dir = projectManifestPath?.let { File(it).parentFile?.absolutePath }
-        AdjustmentsStore.save(dir)
+        adjustments.save(dir)
+    }
+
+    override fun close() {
+        if (!closed.compareAndSet(false, true)) return
+        onDeactivated()
+        player.onTimeChanged = null
+        player.onStatusChanged = null
+        player.onReady = null
+        adjustments.flush()
+        player.close()
     }
 
     private fun mergeColorInto(base: AdjustmentsV1, color: AdjustmentsV1): AdjustmentsV1 {

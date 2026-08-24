@@ -2,6 +2,7 @@ package org.litvin.ui.tabs.crop.presenter
 
 import io.github.oshai.kotlinlogging.KotlinLogging
 import org.litvin.adjustments.AdjustmentsStore
+import org.litvin.adjustments.AdjustmentsSession
 import org.litvin.adjustments.AdjustmentsV1
 import org.litvin.media.StillFrameCaptureService
 import org.litvin.media.VlcjStillFrameCaptureService
@@ -13,17 +14,25 @@ import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicBoolean
 
 class DefaultCropRotatePresenter(
-    private val frameService: StillFrameCaptureService = VlcjStillFrameCaptureService(),
+    private val frameService: StillFrameCaptureService,
+    private val adjustments: AdjustmentsSession,
+    private val executor: ScheduledExecutorService,
 ) : CropRotatePresenter {
+    constructor(frameService: StillFrameCaptureService = VlcjStillFrameCaptureService()) : this(
+        frameService,
+        AdjustmentsStore.legacySession(),
+        Executors.newSingleThreadScheduledExecutor { runnable ->
+            Thread(runnable, "crop-rotate-frame-capture").apply { isDaemon = true }
+        },
+    )
     private companion object {
         private val logger = KotlinLogging.logger {}
     }
 
-    private val executor: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor { runnable ->
-        Thread(runnable, "crop-rotate-frame-capture").apply { isDaemon = true }
-    }
+    private val disposed = AtomicBoolean(false)
     private val frameSequence = AtomicInteger(0)
     private val seekDurationsMs = ArrayDeque<Long>()
 
@@ -51,12 +60,12 @@ class DefaultCropRotatePresenter(
     override fun onActivated() {
         active = true
         unsubscribeStore?.invoke()
-        unsubscribeStore = AdjustmentsStore.subscribe { adjustments ->
+        unsubscribeStore = adjustments.subscribe { newAdjustments ->
             updateState {
-                it.copy(adjustments = adjustments, banner = failureBanner())
+                it.copy(adjustments = newAdjustments, banner = failureBanner())
             }
         }
-        updateState { it.copy(adjustments = AdjustmentsStore.get()) }
+        updateState { it.copy(adjustments = adjustments.get()) }
         requestFrame(state.seekMs, immediate = true)
     }
 
@@ -64,7 +73,7 @@ class DefaultCropRotatePresenter(
         active = false
         pendingSeek?.cancel(false)
         pendingSeek = null
-        AdjustmentsStore.save(projectDir)
+        adjustments.save(projectDir)
     }
 
     override fun onIntent(intent: CropRotateIntent) {
@@ -89,7 +98,7 @@ class DefaultCropRotatePresenter(
                     rotationDeg = incoming.rotationDeg,
                 )
                 updateState { it.copy(adjustments = next) }
-                AdjustmentsStore.set { previous ->
+                adjustments.set { previous ->
                     previous.copy(
                         zoom = incoming.zoom,
                         panX = incoming.panX,
@@ -99,26 +108,26 @@ class DefaultCropRotatePresenter(
                 }
             }
             CropRotateIntent.ResetTransform -> {
-                AdjustmentsStore.set { previous ->
+                adjustments.set { previous ->
                     previous.copy(zoom = 1.0f, panX = 0.0f, panY = 0.0f, rotationDeg = 0.0f)
                 }
             }
-            CropRotateIntent.ResetAll -> AdjustmentsStore.reset()
+            CropRotateIntent.ResetAll -> adjustments.reset()
         }
     }
 
     fun dispose() {
+        if (!disposed.compareAndSet(false, true)) return
         onDeactivated()
         detach()
-        executor.shutdownNow()
         frameService.close()
     }
 
     private fun loadProject(manifestPath: String) {
         projectManifestPath = manifestPath
         projectDir = File(manifestPath).parentFile?.absolutePath
-        projectDir?.let { AdjustmentsStore.load(it) }
-        updateState { it.copy(adjustments = AdjustmentsStore.get(), frame = null, seekMs = 0L, durationMs = 0L) }
+        projectDir?.let { adjustments.load(it) }
+        updateState { it.copy(adjustments = adjustments.get(), frame = null, seekMs = 0L, durationMs = 0L) }
 
         executor.execute {
             try {

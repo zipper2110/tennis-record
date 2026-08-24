@@ -3,6 +3,7 @@ package org.litvin.ui.tabs.projects.presenter
 import org.litvin.projects.FileProjectsRepository
 import org.litvin.projects.ProjectSummary
 import org.litvin.projects.ProjectsRepository
+import org.litvin.app.PreferencesProvider
 import java.awt.EventQueue
 import java.io.File
 import java.util.concurrent.Executor
@@ -11,7 +12,7 @@ import java.util.prefs.Preferences
 
 class DefaultProjectsPresenter(
     private val repository: ProjectsRepository = FileProjectsRepository(),
-    private val preferences: Preferences = Preferences.userNodeForPackage(DefaultProjectsPresenter::class.java),
+    private val preferences: Preferences = PreferencesProvider.production().node(PreferencesProvider.PROJECTS),
     private val ioExecutor: Executor = Executors.newSingleThreadExecutor(),
 ) : ProjectsPresenter {
     private val pageSize = 10

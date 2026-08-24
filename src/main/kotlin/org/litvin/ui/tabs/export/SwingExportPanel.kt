@@ -2,13 +2,14 @@ package org.litvin.ui.tabs.export
 import org.litvin.ActiveQueueSnapshot
 import org.litvin.ApplicationLayout
 import org.litvin.CompletedRender
+import org.litvin.FFmpegCapabilities
 import org.litvin.ExportPresetsIO
 import org.litvin.RenderJob
-import org.litvin.RenderQueueManager
 import org.litvin.adjustments.AdjustmentsStore
 import org.litvin.export.ProductionCompletedRendersRepository
-import org.litvin.export.RenderQueueRequest
-import org.litvin.export.LEGACY_RENDER_OWNER_ID
+import org.litvin.export.CompletedRendersRepository
+import org.litvin.export.ProductionRenderService
+import org.litvin.export.RenderService
 import org.litvin.RenderStatus
 import org.litvin.export.ExportPlanner
 import org.litvin.export.ExportFrameRateOption
@@ -23,14 +24,18 @@ import org.litvin.projects.ManifestIO
 import org.litvin.scoring.Outcome
 import org.litvin.scoring.ScoreIO
 import org.litvin.scoring.ScoreV1
-import org.litvin.ui.commons.Dialogs
 import org.litvin.ui.UiStyles
 import org.litvin.ui.commons.Html
+import org.litvin.ui.commons.FilePicker
+import org.litvin.ui.commons.SwingFilePicker
+import org.litvin.ui.commons.SwingUserDialogService
+import org.litvin.ui.commons.UserDialogService
 
 import java.awt.*
 import java.io.File
 import javax.swing.*
 import javax.swing.border.EmptyBorder
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Phase 4 — Export pipeline (Swing)
@@ -39,10 +44,26 @@ import javax.swing.border.EmptyBorder
  * FFmpegCommandBuilder and RenderQueueManager. Shows live progress with Cancel.
  */
 class SwingExportPanel(
-    private val settingsPreferences: ExportSettingsPreferences = ExportSettingsPreferences(),
+    private val settingsPreferences: ExportSettingsPreferences,
+    private val renderService: RenderService,
+    private val completedRepository: CompletedRendersRepository,
+    private val filePicker: FilePicker,
+    private val dialogs: UserDialogService,
+    availableEncoderIds: Set<String>,
     private val onHelp: () -> Unit = {},
-) : JPanel(BorderLayout()) {
-    constructor(onHelp: () -> Unit) : this(ExportSettingsPreferences(), onHelp)
+) : JPanel(BorderLayout()), AutoCloseable {
+    constructor(onHelp: () -> Unit = {}) : this(
+        ExportSettingsPreferences(),
+        ProductionRenderService(AdjustmentsStore.legacySession(), ProductionCompletedRendersRepository),
+        ProductionCompletedRendersRepository,
+        SwingFilePicker(),
+        SwingUserDialogService(),
+        try { FFmpegCapabilities.h264Encoders() } catch (_: Throwable) { emptySet() },
+        onHelp,
+    )
+
+    private val closed = AtomicBoolean(false)
+    private var queueSubscription: AutoCloseable? = null
 
     fun onActivated() {
         // Ensure Completed list reflects latest persisted items (global across projects)
@@ -71,7 +92,7 @@ class SwingExportPanel(
         toolTipText = "Burn in a simple scoreboard overlay that updates after each point. Uses current Scoring data; fixed English labels in v0.1.0."
     }
     private val initButton = UiStyles.primaryButton("Initialize Render") { onInitializeRender() }
-    private val encoderPanel = EncoderSummaryPanel(savedVideoSettings.encoderId)
+    private val encoderPanel = EncoderSummaryPanel(savedVideoSettings.encoderId, availableEncoderIds)
 
     // Right side — Active + Completed
     private val progressBar = JProgressBar(0, 100)
@@ -80,8 +101,8 @@ class SwingExportPanel(
     private var lastFailureNotifiedJobId: String? = null
     private var lastFailureJob: RenderJob? = null
 
-    private val renderQueue = RenderQueueList()
-    private val completed = CompletedRendersList()
+    private val renderQueue = RenderQueueList(renderService, dialogs)
+    private val completed = CompletedRendersList(completedRepository, dialogs)
 
     // Theming — reuse UiStyles palette
     private val DARK_BG = UiStyles.DARK_BG
@@ -217,7 +238,7 @@ class SwingExportPanel(
         cancelButton.isEnabled = false
         rightButtons.add(cancelButton)
         stats.add(rightButtons, BorderLayout.EAST)
-        cancelButton.addActionListener { RenderQueueManager.cancelCurrent() }
+        cancelButton.addActionListener { renderService.cancelCurrent() }
 
         progressBar.value = 0
         progressBar.isStringPainted = true
@@ -335,7 +356,7 @@ class SwingExportPanel(
             // If user tries to enable idle-trim with no marked points, prevent and explain
             if (idleTrimCheck.isSelected && !hasAnyMarkedPoints()) {
                 idleTrimCheck.isSelected = false
-                JOptionPane.showMessageDialog(this, "Cannot cut idle time: there are no marked points in the current project.", "Idle-trim unavailable", JOptionPane.INFORMATION_MESSAGE)
+                dialogs.showInfo(this, "Cannot cut idle time: there are no marked points in the current project.", "Idle-trim unavailable")
             }
             if (!idleTrimCheck.isSelected) favoriteOnlyCheck.isSelected = false
             updateFavoriteOnlyAvailability()
@@ -345,7 +366,7 @@ class SwingExportPanel(
         favoriteOnlyCheck.addActionListener {
             if (favoriteOnlyCheck.isSelected && (!idleTrimCheck.isSelected || validFavoriteCount() <= 0)) {
                 favoriteOnlyCheck.isSelected = false
-                JOptionPane.showMessageDialog(this, "Favorite-only export requires idle-trim and at least one valid favorite point.", "Favorite export unavailable", JOptionPane.INFORMATION_MESSAGE)
+                dialogs.showInfo(this, "Favorite-only export requires idle-trim and at least one valid favorite point.", "Favorite export unavailable")
             }
             updatePointsSummary()
             updateInitButtonState()
@@ -354,14 +375,14 @@ class SwingExportPanel(
             // If user tries to enable scoreboard with no scored points, prevent and explain
             if (scoreboardCheck.isSelected && !hasAnyScoredPoints()) {
                 scoreboardCheck.isSelected = false
-                JOptionPane.showMessageDialog(this, "Cannot include scoreboard: there are no scored points in the current project.", "Scoreboard unavailable", JOptionPane.INFORMATION_MESSAGE)
+                dialogs.showInfo(this, "Cannot include scoreboard: there are no scored points in the current project.", "Scoreboard unavailable")
                 return@addActionListener
             }
             updatePointsSummary()
         }
 
         // Observe queue updates to refresh UI
-        RenderQueueManager.addObserver { snap ->
+        queueSubscription = renderService.observe { snap ->
             SwingUtilities.invokeLater {
                 lastSnapshot = snap
                 val cur = snap.current
@@ -402,7 +423,7 @@ class SwingExportPanel(
                             if (lastFailureNotifiedJobId != cur.id) {
                                 lastFailureNotifiedJobId = cur.id
                                 lastFailureJob = cur
-                                JOptionPane.showMessageDialog(this, reason, "Render failed", JOptionPane.ERROR_MESSAGE)
+                                dialogs.showError(this, reason, "Render failed")
                             }
                         }
                         RenderStatus.COMPLETED -> {
@@ -456,12 +477,12 @@ class SwingExportPanel(
         val manifest = try {
             if (manifestPath.isNullOrBlank()) null else ManifestIO.read(manifestPath)
         } catch (t: Throwable) {
-            Dialogs.showError(this, t, "Failed to read manifest")
+            dialogs.showError(this, t.message ?: t.toString(), "Failed to read manifest")
             return
         }
         val source = manifest?.sourceVideo
         if (source.isNullOrBlank() || !File(source).exists()) {
-            Dialogs.showError(this, IllegalStateException("Source video missing"), "Select source video")
+            dialogs.showError(this, "Source video missing", "Select source video")
             return
         }
 
@@ -475,23 +496,20 @@ class SwingExportPanel(
             favoriteOnly = favoriteOnly,
         )
         if (favoriteOnly && keeps.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Cannot render only favorite points: no valid favorite points are available.", "Favorite export unavailable", JOptionPane.INFORMATION_MESSAGE)
+            dialogs.showInfo(this, "Cannot render only favorite points: no valid favorite points are available.", "Favorite export unavailable")
             updateFavoriteOnlyAvailability()
             updateInitButtonState()
             return
         }
         if (idleTrimCheck.isSelected && keeps.isEmpty()) {
-            val r = JOptionPane.showConfirmDialog(this, "EDL is empty or invalid. Continue with full render?", "EDL warning", JOptionPane.YES_NO_OPTION)
-            if (r != JOptionPane.YES_OPTION) return
+            if (!dialogs.confirm(this, "EDL is empty or invalid. Continue with full render?", "EDL warning")) return
         }
         // Choose output path
         val initialDir = settingsPreferences.loadOutputDirectory()
             ?: projectDir?.let { File(it) }
             ?: File(source).parentFile
         val selPreset = presets.getOrNull(presetCombo.selectedIndex) ?: presets[ExportPresetsIO.defaultBalancedIndex(presets)]
-        val chooser = JFileChooser(initialDir)
-        chooser.dialogTitle = "Save Export As…"
-        chooser.selectedFile = File(
+        val suggestedFile = File(
             initialDir,
             ExportPlanner.suggestFilename(
                 projectName = manifest?.name ?: File(source).nameWithoutExtension,
@@ -499,17 +517,19 @@ class SwingExportPanel(
                 resolutionLabel = resCombo.selectedItem as String,
             )
         )
-        val res = chooser.showSaveDialog(this)
-        if (res != JFileChooser.APPROVE_OPTION) return
-        var out = chooser.selectedFile
+        var out = filePicker.chooseExportDestination(
+            parent = this,
+            title = "Save Export As…",
+            initialDirectory = initialDir,
+            suggestedFile = suggestedFile,
+        ) ?: return
         settingsPreferences.saveOutputDirectory(out)
         // Ensure extension if user omitted
         val defaultExt = selPreset.container?.format?.lowercase()?.let { if (it.startsWith(".")) it.drop(1) else it } ?: "mp4"
         out = ExportPlanner.ensureExtension(out, defaultExt)
 
         if (out.exists()) {
-            val ow = JOptionPane.showConfirmDialog(this, "File exists. Overwrite?", "Confirm overwrite", JOptionPane.YES_NO_OPTION)
-            if (ow != JOptionPane.YES_OPTION) return
+            if (!dialogs.confirm(this, "File exists. Overwrite?", "Confirm overwrite")) return
         }
 
         val resolution = ExportPlanner.parseResolution(resCombo.selectedItem as String)
@@ -517,7 +537,7 @@ class SwingExportPanel(
             ?.frameRate
             ?.ffmpegArgument
         if (outputFrameRate == null) {
-            Dialogs.showError(this, IllegalStateException("Source video frame rate unavailable"), "Cannot determine source FPS")
+            dialogs.showError(this, "Source video frame rate unavailable", "Cannot determine source FPS")
             return
         }
         val encoderLabel = encoderPanel.selectedEncoderLabel().substringBefore(" — ")
@@ -544,15 +564,14 @@ class SwingExportPanel(
             )
         )
 
-        RenderQueueManager.enqueue(
-            RenderQueueRequest(
-                LEGACY_RENDER_OWNER_ID,
-                plan.job,
-                AdjustmentsStore.legacySession(),
-                ProductionCompletedRendersRepository,
-            )
-        )
-        JOptionPane.showMessageDialog(this, "Render initialized: ${out.name}")
+        renderService.enqueue(plan.job)
+        dialogs.showInfo(this, "Render initialized: ${out.name}")
+    }
+
+    override fun close() {
+        if (!closed.compareAndSet(false, true)) return
+        queueSubscription?.close()
+        queueSubscription = null
     }
 
     private fun refreshFrameRateOptions() {

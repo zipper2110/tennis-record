@@ -2,7 +2,10 @@ package org.litvin.ui.tabs.projects
 
 import org.litvin.ui.UiStyles
 import org.litvin.ui.UiStyles.GREEN
-import org.litvin.ui.commons.Dialogs
+import org.litvin.ui.commons.FilePicker
+import org.litvin.ui.commons.SwingFilePicker
+import org.litvin.ui.commons.SwingUserDialogService
+import org.litvin.ui.commons.UserDialogService
 import org.litvin.ui.commons.applyDarkScrollbar
 import org.litvin.ui.tabs.projects.components.ProjectCard
 import org.litvin.ui.tabs.projects.components.ProjectsEmptyListCard
@@ -24,11 +27,9 @@ import javax.swing.BorderFactory
 import javax.swing.Box
 import javax.swing.BoxLayout
 import javax.swing.JComponent
-import javax.swing.JFileChooser
 import javax.swing.JLabel
 import javax.swing.JPanel
 import javax.swing.JScrollPane
-import javax.swing.filechooser.FileNameExtensionFilter
 
 /**
  * Passive Swing view for the Projects tab.
@@ -38,6 +39,8 @@ import javax.swing.filechooser.FileNameExtensionFilter
  */
 class SwingProjectsPanel(
     private val presenter: ProjectsPresenter = DefaultProjectsPresenter(),
+    private val filePicker: FilePicker = SwingFilePicker(),
+    private val dialogs: UserDialogService = SwingUserDialogService(),
     private val onHelp: () -> Unit = {},
 ) : JPanel(BorderLayout()), ProjectsView {
     private val currentProjectContainer = JPanel(BorderLayout()).apply {
@@ -117,7 +120,7 @@ class SwingProjectsPanel(
                 }
             }
             is ProjectsViewEffect.ProjectOpened -> onProjectOpened?.invoke(effect.manifestPath)
-            is ProjectsViewEffect.ShowError -> Dialogs.showError(this, RuntimeException(effect.message), effect.title)
+            is ProjectsViewEffect.ShowError -> dialogs.showError(this, effect.message, effect.title)
         }
     }
 
@@ -194,23 +197,12 @@ class SwingProjectsPanel(
         return ProjectCard("No open project", "Use \"IMPORT NEW MATCH\" or open from Existing Projects")
     }
 
-    private fun chooseSourceVideo(title: String, initialDirectory: String?): String? {
-        val chooser = JFileChooser().apply {
-            dialogTitle = title
-            fileSelectionMode = JFileChooser.FILES_ONLY
-            isAcceptAllFileFilterUsed = false
-            fileFilter = FileNameExtensionFilter("Video Files", "mp4", "mov", "mkv", "avi", "m4v", "wmv")
-            initialDirectory?.let { path ->
-                val dir = File(path)
-                if (dir.exists()) currentDirectory = dir
-            }
-        }
-        return if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
-            chooser.selectedFile?.absolutePath
-        } else {
-            null
-        }
-    }
+    private fun chooseSourceVideo(title: String, initialDirectory: String?): String? =
+        filePicker.chooseSourceVideo(
+            parent = this,
+            title = title,
+            initialDirectory = initialDirectory?.let(::File),
+        )?.absolutePath
 
     private fun sectionLabel(text: String): JComponent = JLabel(text).apply {
         font = font.deriveFont(Font.BOLD, font.size2D + 2f)

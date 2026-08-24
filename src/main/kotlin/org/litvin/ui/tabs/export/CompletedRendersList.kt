@@ -1,7 +1,7 @@
 package org.litvin.ui.tabs.export
 
 import org.litvin.CompletedRender
-import org.litvin.export.ProductionCompletedRendersRepository
+import org.litvin.export.CompletedRendersRepository
 import org.litvin.export.RenderFormatting
 import org.litvin.ui.UiStyles
 import java.awt.BorderLayout
@@ -11,12 +11,16 @@ import java.awt.FlowLayout
 import java.io.File
 import javax.swing.*
 import org.litvin.ui.commons.applyDarkScrollbar
+import org.litvin.ui.commons.UserDialogService
 
 /**
  * Extracted from SwingExportPanel: encapsulates the "Completed Renders" card
  * with list, renderer, and actions. No dependency on other tabs.
  */
-class CompletedRendersList {
+class CompletedRendersList(
+    private val repository: CompletedRendersRepository,
+    private val dialogs: UserDialogService,
+) {
     private val model = DefaultListModel<CompletedRender>()
     private val list = JList(model)
 
@@ -112,16 +116,15 @@ class CompletedRendersList {
 
     fun refreshFromStore() {
         try {
-            val items = ProductionCompletedRendersRepository.loadAll()
+            val items = repository.loadAll()
             model.removeAllElements()
             items.forEach { model.addElement(it) }
         } catch (_: Throwable) { }
     }
 
     private fun clearAll() {
-        val r = JOptionPane.showConfirmDialog(panel, "Clear all completed entries?", "Confirm", JOptionPane.YES_NO_OPTION)
-        if (r == JOptionPane.YES_OPTION) {
-            try { ProductionCompletedRendersRepository.clear() } catch (_: Throwable) { }
+        if (dialogs.confirm(panel, "Clear all completed entries?", "Confirm")) {
+            try { repository.clear() } catch (_: Throwable) { }
             model.removeAllElements()
         }
     }
@@ -137,7 +140,7 @@ class CompletedRendersList {
                 Runtime.getRuntime().exec(arrayOf("explorer.exe", dir.absolutePath))
             }
         } catch (t: Throwable) {
-            JOptionPane.showMessageDialog(panel, t.message ?: t.toString(), "Failed to open folder", JOptionPane.ERROR_MESSAGE)
+            dialogs.showError(panel, t.message ?: t.toString(), "Failed to open folder")
         }
     }
 
