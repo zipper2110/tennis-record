@@ -1,0 +1,318 @@
+package org.litvin.app
+
+import org.litvin.AppInfo
+import org.litvin.FFmpegCapabilities
+import org.litvin.SwingMainApp
+import org.litvin.WindowsGpuPreference
+import org.litvin.media.MediaScreen
+import org.litvin.ui.UiStyles
+import org.litvin.ui.commons.AppShortcuts
+import org.litvin.ui.help.HelpDialog
+import org.litvin.ui.help.HelpPage
+import org.litvin.ui.help.HelpPreferences
+import org.litvin.ui.tabs.adjustments.SwingColorAdjustmentsPanel
+import org.litvin.ui.tabs.crop.SwingCropRotatePanel
+import org.litvin.ui.tabs.crop.presenter.DefaultCropRotatePresenter
+import org.litvin.ui.tabs.export.ExportSettingsPreferences
+import org.litvin.ui.tabs.export.SwingExportPanel
+import org.litvin.ui.tabs.markup.SwingMarkupPanel
+import org.litvin.ui.tabs.projects.SwingProjectsPanel
+import org.litvin.ui.tabs.projects.presenter.DefaultProjectsPresenter
+import org.litvin.ui.tabs.scoring.SwingScoringPanel
+import org.litvin.ui.tabs.test.SwingTestPanel
+import java.awt.BorderLayout
+import java.awt.CardLayout
+import java.awt.Dimension
+import java.awt.EventQueue
+import java.awt.event.WindowAdapter
+import java.awt.event.WindowEvent
+import javax.swing.AbstractAction
+import javax.swing.Box
+import javax.swing.JComponent
+import javax.swing.JFrame
+import javax.swing.JOptionPane
+import javax.swing.JPanel
+import javax.swing.KeyStroke
+
+object SwingApplicationFactory {
+    private const val CARD_PROJECTS = "projects"
+    private const val CARD_RALLIES = "markup"
+    private const val CARD_EXPORT = "export"
+    private const val CARD_SCORING = "scoring"
+    private const val CARD_ADJ_COLORS = "adjustments"
+    private const val CARD_ADJ_CROP_ROTATE = "adjustments-crop-rotate"
+    private const val CARD_TEST = "test"
+
+    fun create(
+        services: AppServices,
+        show: Boolean = true,
+    ): SwingApplicationHandle {
+        check(EventQueue.isDispatchThread()) { "Swing application must be created on the EDT" }
+
+        val frame = JFrame(AppInfo.displayName).apply {
+            defaultCloseOperation = JFrame.DISPOSE_ON_CLOSE
+            layout = BorderLayout()
+        }
+        val closeActions = mutableListOf<() -> Unit>({ services.close() })
+        val handle = SwingApplicationHandle(frame, closeActions)
+
+        try {
+            val helpDialog = lazy { HelpDialog(frame) }
+            fun showHelp(page: HelpPage) = helpDialog.value.open(page)
+
+            val sidebar = JPanel().apply {
+                UiStyles.styleSidebarContainer(this)
+                preferredSize = Dimension(100, 0)
+                foreground = UiStyles.SIDEBAR_FG
+            }
+
+            lateinit var btnProjects: UiStyles.SidebarButton
+            lateinit var btnRallies: UiStyles.SidebarButton
+            lateinit var btnColors: UiStyles.SidebarButton
+            lateinit var btnScoring: UiStyles.SidebarButton
+            lateinit var btnExport: UiStyles.SidebarButton
+            lateinit var btnCropRotate: UiStyles.SidebarButton
+            var btnTest: UiStyles.SidebarButton? = null
+
+            fun addItem(button: UiStyles.SidebarButton) {
+                button.alignmentX = 0f
+                button.maximumSize = Dimension(Int.MAX_VALUE, 64)
+                sidebar.add(button)
+                sidebar.add(Box.createRigidArea(Dimension(0, 6)))
+            }
+
+            val cards = JPanel(CardLayout())
+            val cardLayout = cards.layout as CardLayout
+            val applicationPreferences = services.preferences.node(PreferencesProvider.APPLICATION)
+
+            val ralliesPanel = SwingMarkupPanel(
+                services.mediaPlayers.create(MediaScreen.MARKUP),
+                services.adjustments,
+                services.executors.createExecutor("markup-autosave"),
+                services.dialogs,
+            ) { showHelp(HelpPage.RALLIES) }
+            closeActions += ralliesPanel::close
+
+            val colorsPanel = SwingColorAdjustmentsPanel(
+                services.mediaPlayers.create(MediaScreen.COLORS),
+                services.adjustments,
+                services.preferences.node(PreferencesProvider.COLOR_ADJUSTMENTS),
+            ) { showHelp(HelpPage.COLORS) }
+            closeActions += colorsPanel::close
+
+            val cropRotatePanel = SwingCropRotatePanel(
+                DefaultCropRotatePresenter(
+                    services.mediaPlayers.createFrameCapture(),
+                    services.adjustments,
+                    services.executors.createScheduledExecutor("crop-frame-capture"),
+                ),
+            ) { showHelp(HelpPage.CROP) }
+            closeActions += cropRotatePanel::dispose
+
+            val scoringPanel = SwingScoringPanel(
+                services.mediaPlayers.create(MediaScreen.SCORING),
+                services.adjustments,
+                services.dialogs,
+            ) { showHelp(HelpPage.SCORING) }
+            closeActions += scoringPanel::close
+
+            val encoderIds = if (show) {
+                try {
+                    FFmpegCapabilities.h264Encoders()
+                } catch (_: Throwable) {
+                    emptySet()
+                }
+            } else {
+                emptySet()
+            }
+            val exportPanel = SwingExportPanel(
+                ExportSettingsPreferences(services.preferences.node(PreferencesProvider.EXPORT)),
+                services.renderService,
+                services.completedRenders,
+                services.filePicker,
+                services.dialogs,
+                encoderIds,
+            ) { showHelp(HelpPage.EXPORT) }
+            closeActions += exportPanel::close
+
+            val testEnabled = System.getProperty("test") == "true"
+            val testPanel = if (testEnabled) SwingTestPanel() else null
+            if (testPanel != null) closeActions += testPanel::onDeactivated
+            lateinit var projectsPanel: SwingProjectsPanel
+
+            var currentCard: String? = null
+            fun currentHelpPage(): HelpPage = when (currentCard) {
+                CARD_PROJECTS -> HelpPage.PROJECTS
+                CARD_RALLIES -> HelpPage.RALLIES
+                CARD_ADJ_COLORS -> HelpPage.COLORS
+                CARD_ADJ_CROP_ROTATE -> HelpPage.CROP
+                CARD_SCORING -> HelpPage.SCORING
+                CARD_EXPORT -> HelpPage.EXPORT
+                else -> HelpPage.OVERVIEW
+            }
+
+            fun goTo(card: String) {
+                when (currentCard) {
+                    CARD_PROJECTS -> projectsPanel.onDeactivated()
+                    CARD_RALLIES -> ralliesPanel.onDeactivated()
+                    CARD_ADJ_COLORS -> colorsPanel.onDeactivated()
+                    CARD_ADJ_CROP_ROTATE -> cropRotatePanel.onDeactivated()
+                    CARD_SCORING -> scoringPanel.onDeactivated()
+                    CARD_TEST -> testPanel?.onDeactivated()
+                }
+                cardLayout.show(cards, card)
+                when (card) {
+                    CARD_PROJECTS -> projectsPanel.onActivated()
+                    CARD_RALLIES -> ralliesPanel.onActivated()
+                    CARD_ADJ_COLORS -> colorsPanel.onActivated()
+                    CARD_ADJ_CROP_ROTATE -> cropRotatePanel.onActivated()
+                    CARD_SCORING -> scoringPanel.onActivated()
+                    CARD_EXPORT -> exportPanel.onActivated()
+                    CARD_TEST -> testPanel?.onActivated()
+                }
+                btnProjects.active = card == CARD_PROJECTS
+                btnRallies.active = card == CARD_RALLIES
+                btnColors.active = card == CARD_ADJ_COLORS
+                btnCropRotate.active = card == CARD_ADJ_CROP_ROTATE
+                btnScoring.active = card == CARD_SCORING
+                btnExport.active = card == CARD_EXPORT
+                btnTest?.active = card == CARD_TEST
+                currentCard = card
+            }
+
+            val projectsPresenter = DefaultProjectsPresenter(
+                services.projectsRepository,
+                services.preferences.node(PreferencesProvider.PROJECTS),
+                services.executors.createExecutor("projects-io"),
+            )
+            projectsPanel = SwingProjectsPanel(
+                projectsPresenter,
+                services.filePicker,
+                services.dialogs,
+            ) { showHelp(HelpPage.PROJECTS) }.apply {
+                onProjectOpened = { path ->
+                    ralliesPanel.setProjectManifest(path)
+                    colorsPanel.setProjectManifest(path)
+                    cropRotatePanel.setProjectManifest(path)
+                    scoringPanel.setProjectManifest(path)
+                    exportPanel.setProjectManifest(path)
+                    testPanel?.setProjectManifest(path)
+                    btnRallies.isVisible = true
+                    btnColors.isVisible = true
+                    btnCropRotate.isVisible = true
+                    btnScoring.isVisible = true
+                    btnExport.isVisible = true
+                    btnTest?.isVisible = true
+                    sidebar.revalidate()
+                    sidebar.repaint()
+                    frame.title = "Tennis Record — Markup"
+                    goTo(CARD_RALLIES)
+                }
+            }
+
+            cards.add(projectsPanel, CARD_PROJECTS)
+            cards.add(ralliesPanel, CARD_RALLIES)
+            cards.add(colorsPanel, CARD_ADJ_COLORS)
+            cards.add(cropRotatePanel, CARD_ADJ_CROP_ROTATE)
+            cards.add(scoringPanel, CARD_SCORING)
+            cards.add(exportPanel, CARD_EXPORT)
+            if (testPanel != null) cards.add(testPanel, CARD_TEST)
+
+            btnProjects = UiStyles.sidebarButton("Projects", UiStyles.folderIcon()) {
+                frame.title = "Tennis Record — Projects"
+                goTo(CARD_PROJECTS)
+            }
+            addItem(btnProjects)
+            btnColors = UiStyles.sidebarButton("Colors", UiStyles.colorsIcon()) {
+                frame.title = "Tennis Record — Color"
+                goTo(CARD_ADJ_COLORS)
+            }
+            addItem(btnColors)
+            btnCropRotate = UiStyles.sidebarButton("Crop", UiStyles.cropRotateIcon()) {
+                frame.title = "Tennis Record — Crop & Rotate"
+                goTo(CARD_ADJ_CROP_ROTATE)
+            }
+            addItem(btnCropRotate)
+            btnRallies = UiStyles.sidebarButton("Rallies", UiStyles.rallyIcon()) {
+                frame.title = "Tennis Record — Rallies"
+                goTo(CARD_RALLIES)
+            }
+            addItem(btnRallies)
+            btnScoring = UiStyles.sidebarButton("Scoring", UiStyles.targetIcon()) {
+                frame.title = "Tennis Record — Scoring"
+                goTo(CARD_SCORING)
+            }
+            addItem(btnScoring)
+            btnExport = UiStyles.sidebarButton("Export", UiStyles.exportIcon()) {
+                frame.title = "Tennis Record — Export"
+                goTo(CARD_EXPORT)
+            }
+            addItem(btnExport)
+            if (testEnabled) {
+                btnTest = UiStyles.sidebarButton("Test", UiStyles.targetIcon()) {
+                    frame.title = "Tennis Record — Test"
+                    goTo(CARD_TEST)
+                }
+                addItem(btnTest!!)
+            }
+
+            btnRallies.isVisible = false
+            btnColors.isVisible = false
+            btnCropRotate.isVisible = false
+            btnScoring.isVisible = false
+            btnExport.isVisible = false
+
+            frame.add(sidebar, BorderLayout.WEST)
+            frame.add(cards, BorderLayout.CENTER)
+            frame.rootPane.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW)
+                .put(KeyStroke.getKeyStroke(AppShortcuts.HELP.keyStroke), "openContextHelp")
+            frame.rootPane.actionMap.put("openContextHelp", object : AbstractAction() {
+                override fun actionPerformed(event: java.awt.event.ActionEvent?) {
+                    showHelp(currentHelpPage())
+                }
+            })
+
+            val savedX = applicationPreferences.getInt("win.x", Int.MIN_VALUE)
+            val savedY = applicationPreferences.getInt("win.y", Int.MIN_VALUE)
+            val savedW = applicationPreferences.getInt("win.w", Int.MIN_VALUE)
+            val savedH = applicationPreferences.getInt("win.h", Int.MIN_VALUE)
+            val savedState = applicationPreferences.getInt("win.state", JFrame.NORMAL)
+            if (savedX != Int.MIN_VALUE && savedY != Int.MIN_VALUE && savedW > 0 && savedH > 0) {
+                frame.setBounds(savedX, savedY, savedW, savedH)
+                frame.extendedState = savedState
+            } else {
+                frame.setSize(1200, 800)
+                frame.setLocationRelativeTo(null)
+            }
+
+            frame.addWindowListener(object : WindowAdapter() {
+                override fun windowClosing(event: WindowEvent?) = handle.close()
+            })
+
+            btnProjects.doClick()
+            frame.isVisible = show
+
+            if (show && WindowsGpuPreference.wasChangeApplied()) {
+                JOptionPane.showMessageDialog(
+                    frame,
+                    "We set a Windows preference for this app to use the dedicated/external GPU on future launches.\n\n" +
+                        "Please restart the application now. If it still uses the integrated GPU, open Windows Graphics Settings → Graphics performance preference, or NVIDIA/AMD control panel, and force the high‑performance GPU for javaw.exe (or your packaged EXE).",
+                    "GPU preference set",
+                    JOptionPane.INFORMATION_MESSAGE,
+                )
+            }
+            if (show && HelpPreferences.claimFirstLaunchOverview(applicationPreferences)) {
+                showHelp(HelpPage.OVERVIEW)
+            }
+
+            return handle
+        } catch (failure: Throwable) {
+            try {
+                handle.close()
+            } catch (cleanupFailure: Throwable) {
+                failure.addSuppressed(cleanupFailure)
+            }
+            throw failure
+        }
+    }
+}
