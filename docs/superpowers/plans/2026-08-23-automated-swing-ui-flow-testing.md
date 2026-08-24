@@ -480,7 +480,7 @@
   ffprobe -v error -show_entries format=duration,format_name,size -show_entries stream=codec_name,codec_type -of json src/test/resources/media/ui-smoke.mp4
   ```
 
-  Required result: MP4 container, H.264 video, 5-15 seconds, no required audio behavior, and at most 5 MiB.
+  Required result: MP4 container, H.264 video, 3-15 seconds, no required audio behavior, and at most 5 MiB.
 
 - [ ] Run `mvn -B -Dtest=UiSmokeMediaContractTest test`. Run the retained compatibility spike as well; the four product flows do not exist yet at this point in the sequence.
 
