@@ -9,7 +9,7 @@ interface SwingUiDriver : AutoCloseable {
     fun setSlider(name: String, value: Int)
     fun select(name: String, value: String)
     fun press(keyStroke: KeyStroke)
-    fun requireShowing(name: String)
+    fun requireShowing(name: String, showing: Boolean = true)
     fun requireEnabled(name: String, enabled: Boolean)
     fun requireText(name: String, expected: String)
     fun dismissDialog(title: String, buttonText: String)

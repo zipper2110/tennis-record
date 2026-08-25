@@ -28,4 +28,14 @@ class UiFlowContext internal constructor(
     val driver: SwingUiDriver,
     internal val threadPrefix: String,
     internal val asynchronousFailures: CopyOnWriteArrayList<Throwable>,
-)
+) {
+    private var restartAction: (() -> UiFlowContext)? = null
+
+    fun restartApplication(): UiFlowContext =
+        checkNotNull(restartAction) { "UI flow restart is not available" }.invoke()
+
+    internal fun onRestart(action: () -> UiFlowContext) {
+        check(restartAction == null) { "UI flow restart is already configured" }
+        restartAction = action
+    }
+}

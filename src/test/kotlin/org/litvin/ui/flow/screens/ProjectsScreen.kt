@@ -15,6 +15,11 @@ internal class ProjectsScreen(application: ApplicationScreen) : UserFlowScreen(a
         context.driver.click("projects-open-$id")
     }
 
+    fun assertRecent(id: String): ProjectsScreen = apply {
+        require(id.isNotBlank()) { "project id must not be blank" }
+        assertVisible("projects-open-$id")
+    }
+
     fun assertCurrentProject(name: String) {
         application.eventually("current project name to be '$name'") {
             context.driver.requireText("projects-current-name", name)

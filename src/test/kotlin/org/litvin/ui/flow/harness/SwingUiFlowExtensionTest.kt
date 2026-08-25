@@ -121,7 +121,7 @@ class SwingUiFlowExtensionTest {
         override fun setSlider(name: String, value: Int) = Unit
         override fun select(name: String, value: String) = Unit
         override fun press(keyStroke: KeyStroke) = Unit
-        override fun requireShowing(name: String) = Unit
+        override fun requireShowing(name: String, showing: Boolean) = Unit
         override fun requireEnabled(name: String, enabled: Boolean) = Unit
         override fun requireText(name: String, expected: String) = Unit
         override fun dismissDialog(title: String, buttonText: String) = Unit

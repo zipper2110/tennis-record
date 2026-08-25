@@ -29,6 +29,20 @@ class UiFlowFixtureBuilder(
 ) {
     private val sequence = AtomicInteger()
 
+    fun onlyProject(): UiFlowProject {
+        val manifests = Files.walk(projectsRoot).use { paths ->
+            paths.filter { path -> Files.isRegularFile(path) && path.fileName.toString().endsWith(".trproj") }
+                .toList()
+        }
+        require(manifests.size == 1) { "Expected exactly one project manifest below $projectsRoot, found $manifests" }
+        val manifestFile = manifests.single()
+        return UiFlowProject(
+            directory = requireNotNull(manifestFile.parent),
+            manifestFile = manifestFile,
+            manifest = ManifestIO.read(manifestFile.toString()),
+        )
+    }
+
     fun emptyProject(name: String = "Empty Match"): UiFlowProject = create(
         name = name,
         source = sourceVideo,

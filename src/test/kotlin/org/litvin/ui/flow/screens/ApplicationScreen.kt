@@ -17,6 +17,15 @@ internal class ApplicationScreen(
     val scoring = ScoringScreen(this)
     val export = ExportScreen(this)
 
+    fun assertProjectsOnlyNavigation() {
+        assertNavigation(projectNavigationVisible = false)
+        projects.assertReady()
+    }
+
+    fun assertProjectNavigation() {
+        assertNavigation(projectNavigationVisible = true)
+    }
+
     fun eventually(description: String, assertion: () -> Unit) {
         var lastFailure: Throwable? = null
         try {
@@ -66,6 +75,14 @@ internal class ApplicationScreen(
         appendLine("renderService=${context.renderService.calls}")
         appendLine("filePicker=${context.filePicker.calls}")
         append("dialogs=${context.dialogs.calls}")
+    }
+
+    private fun assertNavigation(projectNavigationVisible: Boolean) {
+        eventually("project navigation visibility to be $projectNavigationVisible") {
+            context.driver.requireShowing("nav-projects")
+            listOf("nav-rallies", "nav-colors", "nav-crop", "nav-scoring", "nav-export")
+                .forEach { name -> context.driver.requireShowing(name, projectNavigationVisible) }
+        }
     }
 
     private fun <T> onEdt(action: () -> T): T {

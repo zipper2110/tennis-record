@@ -6,6 +6,8 @@ import java.nio.file.Path
 internal class RalliesScreen(application: ApplicationScreen) : UserFlowScreen(application) {
     fun open(): RalliesScreen = apply { open("nav-rallies", "rallies-point-start") }
 
+    fun assertReady() = assertVisible("rallies-point-start")
+
     fun markPoint(startMs: Long, endMs: Long): RalliesScreen = apply {
         require(startMs >= 0) { "point start must not be negative" }
         require(endMs > startMs) { "point end must be after its start" }

@@ -44,6 +44,7 @@ class SwingUiFlowExtension(
     private var testFailure: Throwable? = null
     private var previousUncaughtHandler: Thread.UncaughtExceptionHandler? = null
     private var previousRepaintManager: RepaintManager? = null
+    private var lifecycleOrdinal = 0
 
     override fun beforeEach(context: ExtensionContext) {
         check(current == null) { "SwingUiFlowExtension cannot run tests concurrently" }
@@ -57,6 +58,10 @@ class SwingUiFlowExtension(
         Files.createDirectories(workspaceBase)
         val workspace = Files.createTempDirectory(workspaceBase, "$className-$methodName-")
         val failures = CopyOnWriteArrayList<Throwable>()
+        val preferences = InMemoryPreferencesProvider().apply {
+            node(PreferencesProvider.APPLICATION).putBoolean("help.overviewShown", true)
+        }
+        lifecycleOrdinal = 0
 
         previousUncaughtHandler = Thread.getDefaultUncaughtExceptionHandler()
         val delegatedUncaughtHandler = previousUncaughtHandler
@@ -67,61 +72,15 @@ class SwingUiFlowExtension(
         previousRepaintManager = RepaintManager.currentManager(null as JComponent?)
         RepaintManager.setCurrentManager(CapturingRepaintManager(failures))
 
-        var services: AppServices? = null
-        var application: SwingApplicationHandle? = null
-        var driver: SwingUiDriver? = null
         try {
-            val paths = AppDataPaths(workspace.toFile())
-            Files.createDirectories(paths.projects.toPath())
-            Files.createDirectories(paths.logs.toPath())
-            Files.createDirectories(paths.temporary.toPath())
-            val preferences = InMemoryPreferencesProvider().apply {
-                node(PreferencesProvider.APPLICATION).putBoolean("help.overviewShown", true)
-            }
-            val threadPrefix = "ui-flow-$className-$methodName"
-            val executors = TrackedExecutorProvider(threadPrefix, Duration.ofSeconds(3))
-            val mediaPlayers = FakeMediaPlayerFactory()
-            val renderService = FakeRenderService()
-            val filePicker = ScriptedFilePicker()
-            val dialogs = ScriptedDialogService()
-            val adjustments = AdjustmentsSession(executors.createScheduledExecutor("adjustments"), 25L)
-            val builtServices = AppServices(
-                paths = paths,
-                preferences = preferences,
-                executors = executors,
-                mediaPlayers = mediaPlayers,
-                renderService = renderService,
-                filePicker = filePicker,
-                dialogs = dialogs,
-                projectsRepository = FileProjectsRepository(paths.projects),
-                completedRenders = FileCompletedRendersRepository(paths.completedRenders),
-                adjustments = adjustments,
-            )
-            services = builtServices
-            val builtApplication = onEdt { SwingApplicationFactory.create(builtServices, show = true) }
-            application = builtApplication
-            val builtDriver = driverFactory()
-            driver = builtDriver
-            current = UiFlowContext(
+            current = createApplicationContext(
                 workspace = workspace,
                 artifactDirectory = artifactDirectory,
-                paths = paths,
                 preferences = preferences,
-                mediaPlayers = mediaPlayers,
-                renderService = renderService,
-                filePicker = filePicker,
-                dialogs = dialogs,
-                fixtures = UiFlowFixtureBuilder(paths.projects.toPath()),
-                services = builtServices,
-                application = builtApplication,
-                driver = builtDriver,
-                threadPrefix = threadPrefix,
-                asynchronousFailures = failures,
+                failures = failures,
+                threadPrefixBase = "ui-flow-$className-$methodName",
             )
         } catch (failure: Throwable) {
-            runCatching { driver?.close() }.exceptionOrNull()?.let(failure::addSuppressed)
-            runCatching { application?.close() }.exceptionOrNull()?.let(failure::addSuppressed)
-            runCatching { services?.close() }.exceptionOrNull()?.let(failure::addSuppressed)
             runCatching { disposeAllWindows() }.exceptionOrNull()?.let(failure::addSuppressed)
             restoreCaptureHooks()
             deleteTree(workspace, workspaceBase)
@@ -166,6 +125,89 @@ class SwingUiFlowExtension(
         activeContext()
 
     internal fun activeContext(): UiFlowContext = checkNotNull(current) { "UI flow context is not active" }
+
+    private fun restartApplication(previous: UiFlowContext): UiFlowContext {
+        check(current === previous) { "Only the active UI flow context can be restarted" }
+        var failure: Throwable? = null
+        failure = cleanupFailure(failure) { previous.application.close() }
+        failure = cleanupFailure(failure) { previous.driver.close() }
+        failure = cleanupFailure(failure) { previous.services.close() }
+        failure = cleanupFailure(failure) { disposeAllWindows() }
+        failure = cleanupFailure(failure) { requireOwnedThreadsStopped(previous.threadPrefix) }
+        failure?.let { throw it }
+
+        return createApplicationContext(
+            workspace = previous.workspace,
+            artifactDirectory = previous.artifactDirectory,
+            preferences = previous.preferences,
+            failures = previous.asynchronousFailures,
+            threadPrefixBase = previous.threadPrefix.substringBeforeLast("-lifecycle-"),
+        ).also { restarted -> current = restarted }
+    }
+
+    private fun createApplicationContext(
+        workspace: Path,
+        artifactDirectory: Path,
+        preferences: InMemoryPreferencesProvider,
+        failures: CopyOnWriteArrayList<Throwable>,
+        threadPrefixBase: String,
+    ): UiFlowContext {
+        val paths = AppDataPaths(workspace.toFile())
+        Files.createDirectories(paths.projects.toPath())
+        Files.createDirectories(paths.logs.toPath())
+        Files.createDirectories(paths.temporary.toPath())
+        val threadPrefix = "$threadPrefixBase-lifecycle-${++lifecycleOrdinal}"
+        val executors = TrackedExecutorProvider(threadPrefix, Duration.ofSeconds(3))
+        val mediaPlayers = FakeMediaPlayerFactory()
+        val renderService = FakeRenderService()
+        val filePicker = ScriptedFilePicker()
+        val dialogs = ScriptedDialogService()
+        val adjustments = AdjustmentsSession(executors.createScheduledExecutor("adjustments"), 25L)
+        val services = AppServices(
+            paths = paths,
+            preferences = preferences,
+            executors = executors,
+            mediaPlayers = mediaPlayers,
+            renderService = renderService,
+            filePicker = filePicker,
+            dialogs = dialogs,
+            projectsRepository = FileProjectsRepository(paths.projects),
+            completedRenders = FileCompletedRendersRepository(paths.completedRenders),
+            adjustments = adjustments,
+        )
+
+        var application: SwingApplicationHandle? = null
+        var driver: SwingUiDriver? = null
+        try {
+            val builtApplication = onEdt { SwingApplicationFactory.create(services, show = true) }
+            application = builtApplication
+            val builtDriver = driverFactory()
+            driver = builtDriver
+            return UiFlowContext(
+                workspace = workspace,
+                artifactDirectory = artifactDirectory,
+                paths = paths,
+                preferences = preferences,
+                mediaPlayers = mediaPlayers,
+                renderService = renderService,
+                filePicker = filePicker,
+                dialogs = dialogs,
+                fixtures = UiFlowFixtureBuilder(paths.projects.toPath()),
+                services = services,
+                application = builtApplication,
+                driver = builtDriver,
+                threadPrefix = threadPrefix,
+                asynchronousFailures = failures,
+            ).apply {
+                onRestart { restartApplication(this) }
+            }
+        } catch (failure: Throwable) {
+            runCatching { driver?.close() }.exceptionOrNull()?.let(failure::addSuppressed)
+            runCatching { application?.close() }.exceptionOrNull()?.let(failure::addSuppressed)
+            runCatching { services.close() }.exceptionOrNull()?.let(failure::addSuppressed)
+            throw failure
+        }
+    }
 
     private fun capture(flow: UiFlowContext, failure: Throwable) {
         try {

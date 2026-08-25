@@ -78,9 +78,9 @@ class RobotSwingDriver : SwingUiDriver {
         pressAndRelease(keyCode, modifierKeyCodes(keyStroke.modifiers))
     }
 
-    override fun requireShowing(name: String) {
-        waitUntil("component '$name' to be showing") {
-            componentSnapshot(name)?.showing == true
+    override fun requireShowing(name: String, showing: Boolean) {
+        waitUntil("component '$name' showing state to be $showing") {
+            componentSnapshotIncludingHidden(name)?.showing == showing
         }
     }
 
@@ -222,6 +222,12 @@ class RobotSwingDriver : SwingUiDriver {
         }
     }
 
+    private fun componentSnapshotIncludingHidden(name: String): ComponentSnapshot? = onEdt {
+        findByNameIncludingHiddenOnEdt(name)?.let { component ->
+            ComponentSnapshot(component, component.isShowing, component.isEnabled)
+        }
+    }
+
     private fun textSnapshot(name: String): String? = onEdt {
         findByNameOnEdt(name)?.let(::textOfOnEdt)
     }
@@ -232,6 +238,16 @@ class RobotSwingDriver : SwingUiDriver {
         check(EventQueue.isDispatchThread()) { "component hierarchy must be traversed on the EDT" }
         return Window.getWindows()
             .filter(Window::isShowing)
+            .asReversed()
+            .asSequence()
+            .flatMap(::descendants)
+            .firstOrNull { component -> component.name == name }
+    }
+
+    private fun findByNameIncludingHiddenOnEdt(name: String): Component? {
+        check(EventQueue.isDispatchThread()) { "component hierarchy must be traversed on the EDT" }
+        return Window.getWindows()
+            .filter(Window::isDisplayable)
             .asReversed()
             .asSequence()
             .flatMap(::descendants)
