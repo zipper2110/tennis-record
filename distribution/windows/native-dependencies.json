@@ -9,11 +9,11 @@
     "extractedDirectory": "vlc-3.0.23"
   },
   "ffmpeg": {
-    "version": "n7.1.4-6-g181cfa1008",
-    "variant": "win64-lgpl-shared-7.1",
-    "archiveName": "ffmpeg-n7.1.4-6-g181cfa1008-win64-lgpl-shared-7.1.zip",
-    "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-05-27-14-06/ffmpeg-n7.1.4-6-g181cfa1008-win64-lgpl-shared-7.1.zip",
-    "sha256": "9283bf0048c50fa6f9c1afa1845adb96d46aa06b7ad046d881ce800d31d47c29",
-    "extractedDirectory": "ffmpeg-n7.1.4-6-g181cfa1008-win64-lgpl-shared-7.1"
+    "version": "N-126277-ga8c7afa7d7",
+    "variant": "win64-lgpl-shared",
+    "archiveName": "ffmpeg-N-126277-ga8c7afa7d7-win64-lgpl-shared.zip",
+    "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-08-26-13-06/ffmpeg-N-126277-ga8c7afa7d7-win64-lgpl-shared.zip",
+    "sha256": "5468714ae763676281f627fe87119d9f1e89ef01a2e754c27fe8626623de6f82",
+    "extractedDirectory": "ffmpeg-N-126277-ga8c7afa7d7-win64-lgpl-shared"
   }
 }
