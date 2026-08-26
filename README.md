@@ -43,6 +43,11 @@ mvn -DskipTests package
   ```bash
   mvn test
   ```
+- Run the packaged Windows smoke workflow (requires a packaged app image, VLC, and FFmpeg):
+  ```powershell
+  pwsh -File qa/windows/Run-UiSmoke.ps1 -KeepArtifacts
+  ```
+  See [the executable checklist](qa/windows/ui-smoke.md) for the native UI and export checks.
 - Quick run for architecture dependency hygiene only:
   ```bash
   mvn -q -Dtest=ArchitectureDependencyHygieneTest test
