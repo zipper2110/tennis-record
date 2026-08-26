@@ -1,7 +1,6 @@
 package org.litvin.app
 
 import org.litvin.AppInfo
-import org.litvin.FFmpegCapabilities
 import org.litvin.SwingMainApp
 import org.litvin.WindowsGpuPreference
 import org.litvin.media.MediaScreen
@@ -117,22 +116,13 @@ object SwingApplicationFactory {
             ) { showHelp(HelpPage.SCORING) }
             closeActions += scoringPanel::close
 
-            val encoderIds = if (show) {
-                try {
-                    FFmpegCapabilities.h264Encoders()
-                } catch (_: Throwable) {
-                    emptySet()
-                }
-            } else {
-                emptySet()
-            }
             val exportPanel = SwingExportPanel(
                 ExportSettingsPreferences(services.preferences.node(PreferencesProvider.EXPORT)),
                 services.renderService,
                 services.completedRenders,
                 services.filePicker,
                 services.dialogs,
-                encoderIds,
+                services.encoderCapabilities,
             ) { showHelp(HelpPage.EXPORT) }
             closeActions += exportPanel::close
 

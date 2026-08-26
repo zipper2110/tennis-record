@@ -1,7 +1,10 @@
 package org.litvin.ui.flow.screens
 
 import org.litvin.markup.EdlIO
+import org.litvin.shared.util.Timecode
+import org.litvin.ui.commons.AppShortcuts
 import java.nio.file.Path
+import javax.swing.KeyStroke
 
 internal class RalliesScreen(application: ApplicationScreen) : UserFlowScreen(application) {
     fun open(): RalliesScreen = apply { open("nav-rallies", "rallies-point-start") }
@@ -17,12 +20,12 @@ internal class RalliesScreen(application: ApplicationScreen) : UserFlowScreen(ap
         application.eventually("rallies playhead to reach $startMs ms") {
             context.driver.requireText("rallies-current-time", formatTime(startMs))
         }
-        context.driver.click("rallies-point-start")
+        context.driver.press(KeyStroke.getKeyStroke(AppShortcuts.POINT_START.keyStroke))
         player.seek(endMs)
         application.eventually("rallies playhead to reach $endMs ms") {
             context.driver.requireText("rallies-current-time", formatTime(endMs))
         }
-        context.driver.click("rallies-point-end")
+        context.driver.press(KeyStroke.getKeyStroke(AppShortcuts.POINT_END.keyStroke))
     }
 
     fun assertPointCount(marked: Int, favorites: Int = 0) {
@@ -40,11 +43,16 @@ internal class RalliesScreen(application: ApplicationScreen) : UserFlowScreen(ap
         }
     }
 
-    private fun formatTime(ms: Long): String {
-        val hours = ms / 3_600_000
-        val minutes = (ms / 60_000) % 60
-        val seconds = (ms / 1_000) % 60
-        val millis = ms % 1_000
-        return "%02d:%02d:%02d.%03d".format(hours, minutes, seconds, millis)
+    fun assertSinglePointPersisted(projectDirectory: Path, startMs: Long, endMs: Long): String {
+        application.eventually("exactly one point $startMs..$endMs to be persisted") {
+            val points = EdlIO.readForProjectDir(projectDirectory.toString()).points
+            if (points.size != 1 || points.single().startMs.toLong() != startMs || points.single().endMs.toLong() != endMs) {
+                throw AssertionError("Persisted points were $points")
+            }
+            if (points.single().id.isBlank()) throw AssertionError("Persisted point id was blank")
+        }
+        return EdlIO.readForProjectDir(projectDirectory.toString()).points.single().id
     }
+
+    private fun formatTime(ms: Long): String = Timecode.format(ms)
 }

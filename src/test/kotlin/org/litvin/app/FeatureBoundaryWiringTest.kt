@@ -7,6 +7,7 @@ import org.litvin.RenderJob
 import org.litvin.adjustments.AdjustmentsSession
 import org.litvin.adjustments.AdjustmentsV1
 import org.litvin.export.CompletedRendersRepository
+import org.litvin.export.EncoderCapabilities
 import org.litvin.export.RenderService
 import org.litvin.media.PlayerStatus
 import org.litvin.media.StillFrameCaptureService
@@ -75,7 +76,7 @@ class FeatureBoundaryWiringTest {
                 completed,
                 picker,
                 dialogs,
-                emptySet(),
+                EncoderCapabilities.NONE,
             )
         }
 

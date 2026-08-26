@@ -14,6 +14,7 @@ import org.litvin.app.SwingApplicationFactory
 import org.litvin.app.SwingApplicationHandle
 import org.litvin.app.TrackedExecutorProvider
 import org.litvin.export.FileCompletedRendersRepository
+import org.litvin.export.EncoderCapabilities
 import org.litvin.projects.FileProjectsRepository
 import org.litvin.ui.flow.driver.RobotSwingDriver
 import org.litvin.ui.flow.driver.SwingUiDriver
@@ -174,6 +175,7 @@ class SwingUiFlowExtension(
             projectsRepository = FileProjectsRepository(paths.projects),
             completedRenders = FileCompletedRendersRepository(paths.completedRenders),
             adjustments = adjustments,
+            encoderCapabilities = EncoderCapabilities.NONE,
         )
 
         var application: SwingApplicationHandle? = null

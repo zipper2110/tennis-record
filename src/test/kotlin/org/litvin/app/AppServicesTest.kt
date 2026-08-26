@@ -5,6 +5,7 @@ import org.litvin.ActiveQueueSnapshot
 import org.litvin.RenderJob
 import org.litvin.adjustments.AdjustmentsSession
 import org.litvin.export.CompletedRendersRepository
+import org.litvin.export.EncoderCapabilities
 import org.litvin.export.RenderService
 import org.litvin.media.MediaPlayerFactory
 import org.litvin.media.MediaScreen
@@ -79,6 +80,7 @@ class AppServicesTest {
                             AdjustmentsSession(provider.createScheduledExecutor("construction-adjustments"))
                         },
                         renderService = { _, _ -> render },
+                        encoderCapabilities = { EncoderCapabilities.NONE },
                         afterConstruction = { throw IllegalStateException("construction failed") },
                     ),
                 )

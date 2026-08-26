@@ -46,4 +46,25 @@ class AdjustmentsUiConverterTest {
         assertEquals(1.0f, model.brightness)
         assertEquals(2.0f, model.contrast)
     }
+
+    @Test
+    fun `every integer slider value survives a model round trip`() {
+        for (value in -100..100) {
+            val model = AdjustmentsUiConverter.slidersToModel(
+                brightness = value,
+                contrast = value,
+                saturation = value,
+                temperature = value,
+                tint = value,
+            )
+
+            val sliders = AdjustmentsUiConverter.modelToSliderValues(model)
+
+            assertEquals(value, sliders.brightness, "brightness at $value")
+            assertEquals(value, sliders.contrast, "contrast at $value")
+            assertEquals(value, sliders.saturation, "saturation at $value")
+            assertEquals(value, sliders.temperature, "temperature at $value")
+            assertEquals(value, sliders.tint, "tint at $value")
+        }
+    }
 }

@@ -8,6 +8,7 @@ import org.litvin.RenderJob
 import org.litvin.adjustments.AdjustmentsSession
 import org.litvin.adjustments.AdjustmentsV1
 import org.litvin.export.CompletedRendersRepository
+import org.litvin.export.EncoderCapabilities
 import org.litvin.export.RenderService
 import org.litvin.media.MediaPlayerFactory
 import org.litvin.media.MediaScreen
@@ -36,6 +37,7 @@ import java.util.concurrent.ScheduledThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import java.util.prefs.AbstractPreferences
 import javax.swing.JFrame
+import javax.swing.JComboBox
 import javax.swing.JPanel
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -43,6 +45,35 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 class SwingApplicationFactoryTest {
+    @Test
+    fun visibleApplicationUsesInjectedEncoderCapabilitiesWithoutNativeProbe() {
+        val fixture = TestServices(EncoderCapabilities(setOf("h264_nvenc"), "h264_nvenc"))
+        val windowsBefore = Window.getWindows().toSet()
+        val previousFfmpeg = System.getProperty("tr.ffmpeg.path")
+        System.setProperty("tr.ffmpeg.path", fixture.root.resolve("must-not-run-ffmpeg.exe").absolutePath)
+        org.litvin.ApplicationLayout.resetForTests()
+        org.litvin.FFmpegCapabilities.refresh()
+        var handle: SwingApplicationHandle? = null
+
+        try {
+            val opened = GuiActionRunner.execute<SwingApplicationHandle> {
+                SwingApplicationFactory.create(fixture.services, show = true)
+            }
+            handle = opened
+
+            val encoderLabels = findComponents(opened.frame, JComboBox::class.java)
+                .flatMap { combo -> (0 until combo.itemCount).map { combo.getItemAt(it).toString() } }
+            assertTrue(encoderLabels.any { "NVENC" in it }, "Injected encoder options were $encoderLabels")
+        } finally {
+            handle?.close()
+            Window.getWindows().filterNot(windowsBefore::contains).forEach(Window::dispose)
+            if (previousFfmpeg == null) System.clearProperty("tr.ffmpeg.path")
+            else System.setProperty("tr.ffmpeg.path", previousFfmpeg)
+            org.litvin.ApplicationLayout.resetForTests()
+            org.litvin.FFmpegCapabilities.refresh()
+        }
+    }
+
     @Test
     fun invisibleApplicationStartsOnProjectsAndClosesEveryOwnedResourceOnce() {
         val fixture = TestServices()
@@ -78,8 +109,15 @@ class SwingApplicationFactoryTest {
         return root.components.firstNotNullOfOrNull { findComponent(it, type) }
     }
 
-    private class TestServices {
-        private val root = kotlin.io.path.createTempDirectory("swing-application-").toFile()
+    private fun <T : Component> findComponents(root: Component, type: Class<T>): List<T> = buildList {
+        if (type.isInstance(root)) add(type.cast(root))
+        if (root is Container) root.components.forEach { addAll(findComponents(it, type)) }
+    }
+
+    private class TestServices(
+        encoderCapabilities: EncoderCapabilities = EncoderCapabilities.NONE,
+    ) {
+        val root = kotlin.io.path.createTempDirectory("swing-application-").toFile()
         val executors = RecordingExecutorProvider()
         val mediaPlayers = RecordingMediaPlayerFactory()
         val renderService = RecordingRenderService()
@@ -97,6 +135,7 @@ class SwingApplicationFactoryTest {
             projectsRepository = EmptyProjectsRepository,
             completedRenders = EmptyCompletedRendersRepository,
             adjustments = AdjustmentsSession(adjustmentsExecutor, 60_000),
+            encoderCapabilities = encoderCapabilities,
         )
     }
 

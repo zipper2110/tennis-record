@@ -19,8 +19,11 @@ import javax.swing.JComboBox
 import javax.swing.JLabel
 import javax.swing.JSlider
 import javax.swing.KeyStroke
+import javax.swing.SwingConstants
 import javax.swing.SwingUtilities
+import javax.swing.plaf.basic.BasicSliderUI
 import javax.swing.text.JTextComponent
+import kotlin.math.abs
 
 class RobotSwingDriver : SwingUiDriver {
     private val robot = Robot().apply {
@@ -45,15 +48,25 @@ class RobotSwingDriver : SwingUiDriver {
 
     override fun setSlider(name: String, value: Int) {
         val slider = requireComponent(name, JSlider::class.java)
-        val minimum = onEdt { slider.minimum }
-        val maximum = onEdt { slider.maximum }
+        val snapshot = onEdt {
+            SliderSnapshot(slider.minimum, slider.maximum, slider.isShowing, slider.isEnabled)
+        }
+        val minimum = snapshot.minimum
+        val maximum = snapshot.maximum
         require(value in minimum..maximum) {
             "slider '$name' value $value is outside $minimum..$maximum"
         }
-        focus(slider, name)
-        pressAndRelease(KeyEvent.VK_HOME)
-        repeat(value - minimum) { pressAndRelease(KeyEvent.VK_RIGHT) }
-        waitUntil("slider '$name' to have value $value") { onEdt { slider.value } == value }
+        requireState(snapshot.showing, "slider '$name' to be showing")
+        requireState(snapshot.enabled, "slider '$name' to be enabled")
+        activate(slider)
+        SliderMouseController(
+            dragTo = { target -> dragSlider(slider, target) },
+            readValue = { onEdt { slider.value } },
+            pressKey = ::pressAndRelease,
+            awaitValue = { expected ->
+                waitUntil("slider '$name' to have value $expected") { onEdt { slider.value } == expected }
+            },
+        ).setValue(value, minimum, maximum)
     }
 
     override fun select(name: String, value: String) {
@@ -136,6 +149,33 @@ class RobotSwingDriver : SwingUiDriver {
         }
         robot.mouseMove(center.x, center.y)
         robot.mousePress(InputEvent.BUTTON1_DOWN_MASK)
+        robot.mouseRelease(InputEvent.BUTTON1_DOWN_MASK)
+        Toolkit.getDefaultToolkit().sync()
+        robot.waitForIdle()
+    }
+
+    private fun activate(component: Component) {
+        onEdt {
+            SwingUtilities.getWindowAncestor(component)?.let { window ->
+                window.toFront()
+                window.requestFocus()
+            }
+        }
+        robot.waitForIdle()
+    }
+
+    private fun dragSlider(slider: JSlider, target: Int) {
+        val gesture = onEdt {
+            val componentGesture = SliderDragGeometry.gesture(slider, target)
+            val location = slider.locationOnScreen
+            SliderDragGesture(
+                start = Point(location.x + componentGesture.start.x, location.y + componentGesture.start.y),
+                target = Point(location.x + componentGesture.target.x, location.y + componentGesture.target.y),
+            )
+        }
+        robot.mouseMove(gesture.start.x, gesture.start.y)
+        robot.mousePress(InputEvent.BUTTON1_DOWN_MASK)
+        robot.mouseMove(gesture.target.x, gesture.target.y)
         robot.mouseRelease(InputEvent.BUTTON1_DOWN_MASK)
         Toolkit.getDefaultToolkit().sync()
         robot.waitForIdle()
@@ -312,8 +352,80 @@ class RobotSwingDriver : SwingUiDriver {
         val button: AbstractButton,
     )
 
+    private data class SliderSnapshot(
+        val minimum: Int,
+        val maximum: Int,
+        val showing: Boolean,
+        val enabled: Boolean,
+    )
+
     private companion object {
         const val EVENT_DELAY_MILLIS = 20
         val POLL_INTERVAL_NANOS: Long = TimeUnit.MILLISECONDS.toNanos(20)
     }
 }
+
+internal class SliderMouseController(
+    private val dragTo: (Int) -> Unit,
+    private val readValue: () -> Int,
+    private val pressKey: (Int) -> Unit,
+    private val awaitValue: (Int) -> Unit,
+) {
+    fun setValue(target: Int, minimum: Int, maximum: Int) {
+        require(target in minimum..maximum) { "slider value $target is outside $minimum..$maximum" }
+        dragTo(target)
+        val observed = readValue()
+        val correction = target - observed
+        if (abs(correction) > MAX_DIRECTIONAL_CORRECTION) {
+            throw AssertionError(
+                "Slider drag landed at $observed, too far from target $target for a bounded keyboard correction"
+            )
+        }
+        val correctionKey = if (correction >= 0) KeyEvent.VK_RIGHT else KeyEvent.VK_LEFT
+        repeat(abs(correction)) { pressKey(correctionKey) }
+        awaitValue(target)
+    }
+
+    private companion object {
+        const val MAX_DIRECTIONAL_CORRECTION = 2
+    }
+}
+
+internal object SliderDragGeometry {
+    fun gesture(slider: JSlider, target: Int): SliderDragGesture {
+        check(EventQueue.isDispatchThread()) { "slider drag geometry must be calculated on the EDT" }
+        require(slider.orientation == SwingConstants.HORIZONTAL) { "only horizontal sliders are supported" }
+        require(target in slider.minimum..slider.maximum) {
+            "slider value $target is outside ${slider.minimum}..${slider.maximum}"
+        }
+        require(slider.width > 0 && slider.height > 0) { "slider must have live non-zero bounds" }
+        val ui = slider.ui as? BasicSliderUI
+            ?: throw AssertionError("Slider UI ${slider.ui.javaClass.name} does not expose semantic geometry")
+        return SliderDragGesture(
+            start = semanticPoint(slider, ui, slider.value),
+            target = semanticPoint(slider, ui, target),
+        )
+    }
+
+    private fun semanticPoint(slider: JSlider, ui: BasicSliderUI, value: Int): Point {
+        var firstX = -1
+        var lastX = -1
+        var bestDistance = Int.MAX_VALUE
+        for (x in 0 until slider.width) {
+            val distance = abs(ui.valueForXPosition(x) - value)
+            if (distance < bestDistance) {
+                bestDistance = distance
+                firstX = x
+                lastX = x
+            } else if (distance == bestDistance) {
+                lastX = x
+            }
+        }
+        return Point((firstX + lastX) / 2, slider.height / 2)
+    }
+}
+
+internal data class SliderDragGesture(
+    val start: Point,
+    val target: Point,
+)

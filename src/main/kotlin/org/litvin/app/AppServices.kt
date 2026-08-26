@@ -2,6 +2,7 @@ package org.litvin.app
 
 import org.litvin.adjustments.AdjustmentsSession
 import org.litvin.export.CompletedRendersRepository
+import org.litvin.export.EncoderCapabilities
 import org.litvin.export.FileCompletedRendersRepository
 import org.litvin.export.ProductionRenderService
 import org.litvin.export.RenderService
@@ -30,6 +31,7 @@ internal data class AppServicesProductionFactory(
     val renderService: (AdjustmentsSession, CompletedRendersRepository) -> RenderService = { adjustments, completed ->
         ProductionRenderService(adjustments, completed)
     },
+    val encoderCapabilities: () -> EncoderCapabilities = EncoderCapabilities::production,
     val afterConstruction: (AppServices) -> Unit = { },
 )
 
@@ -44,6 +46,7 @@ data class AppServices(
     val projectsRepository: ProjectsRepository,
     val completedRenders: CompletedRendersRepository,
     val adjustments: AdjustmentsSession,
+    val encoderCapabilities: EncoderCapabilities = EncoderCapabilities.NONE,
 ) : AutoCloseable {
     private val closed = AtomicBoolean(false)
 
@@ -95,6 +98,7 @@ data class AppServices(
                 val completedRenders = construct { factory.completedRenders(paths) }
                 val adjustments = construct { factory.adjustments(executors) }
                 val renderService = construct { factory.renderService(adjustments, completedRenders) }
+                val encoderCapabilities = factory.encoderCapabilities()
                 val services = AppServices(
                     paths = paths,
                     preferences = preferences,
@@ -106,6 +110,7 @@ data class AppServices(
                     projectsRepository = projectsRepository,
                     completedRenders = completedRenders,
                     adjustments = adjustments,
+                    encoderCapabilities = encoderCapabilities,
                 )
                 factory.afterConstruction(services)
                 return services

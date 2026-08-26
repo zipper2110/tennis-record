@@ -8,6 +8,7 @@ import org.litvin.RenderJob
 import org.litvin.adjustments.AdjustmentsStore
 import org.litvin.export.ProductionCompletedRendersRepository
 import org.litvin.export.CompletedRendersRepository
+import org.litvin.export.EncoderCapabilities
 import org.litvin.export.ProductionRenderService
 import org.litvin.export.RenderService
 import org.litvin.RenderStatus
@@ -49,7 +50,7 @@ class SwingExportPanel(
     private val completedRepository: CompletedRendersRepository,
     private val filePicker: FilePicker,
     private val dialogs: UserDialogService,
-    availableEncoderIds: Set<String>,
+    encoderCapabilities: EncoderCapabilities,
     private val onHelp: () -> Unit = {},
 ) : JPanel(BorderLayout()), AutoCloseable {
     constructor(onHelp: () -> Unit = {}) : this(
@@ -58,7 +59,7 @@ class SwingExportPanel(
         ProductionCompletedRendersRepository,
         SwingFilePicker(),
         SwingUserDialogService(),
-        try { FFmpegCapabilities.h264Encoders() } catch (_: Throwable) { emptySet() },
+        EncoderCapabilities.production(),
         onHelp,
     )
 
@@ -96,7 +97,10 @@ class SwingExportPanel(
     private val initButton = UiStyles.primaryButton("Initialize Render") { onInitializeRender() }.apply {
         name = "export-initialize"
     }
-    private val encoderPanel = EncoderSummaryPanel(savedVideoSettings.encoderId, availableEncoderIds)
+    private val encoderPanel = EncoderSummaryPanel(
+        savedVideoSettings.encoderId ?: encoderCapabilities.preferredId,
+        encoderCapabilities.availableIds,
+    )
 
     // Right side — Active + Completed
     private val progressBar = JProgressBar(0, 100).apply { name = "export-progress" }

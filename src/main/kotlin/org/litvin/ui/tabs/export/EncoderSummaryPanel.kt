@@ -1,6 +1,5 @@
 package org.litvin.ui.tabs.export
 
-import org.litvin.FFmpegCapabilities
 import org.litvin.ui.commons.Html
 import org.litvin.ui.UiStyles
 import java.awt.Dimension
@@ -11,7 +10,7 @@ import javax.swing.*
  */
 class EncoderSummaryPanel(
     preferredEncoderId: String? = null,
-    availableEncoderIds: Set<String> = try { FFmpegCapabilities.h264Encoders() } catch (_: Throwable) { emptySet() },
+    availableEncoderIds: Set<String>,
 ) {
     data class EncoderItem(val label: String, val id: String) { override fun toString() = label }
 
@@ -52,7 +51,6 @@ class EncoderSummaryPanel(
         encoderCombo.model = model
         val selectedId = preferredEncoderId
             ?.takeIf { saved -> items.any { it.id == saved } }
-            ?: FFmpegCapabilities.preferredH264Encoder(caps)
             ?: "libx264"
         encoderCombo.selectedItem = items.first { it.id == selectedId }
         val hint = if (hw.isEmpty()) "No hardware H.264 encoders detected. Ensure ffmpeg with NVENC/QSV/AMF is installed and on PATH, or set FFMPEG_PATH." else "Detected: ${hw.joinToString(", ")}"

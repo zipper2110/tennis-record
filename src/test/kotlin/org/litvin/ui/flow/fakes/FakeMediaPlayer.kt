@@ -155,6 +155,27 @@ class FakeMediaPlayerFactory : MediaPlayerFactory {
         return FakeMediaPlayer(screen, recordedCalls).also(createdPlayers::add)
     }
 
+    fun assertEditingFlowEvents() {
+        val snapshot = calls
+        val requiredScreens = setOf(MediaScreen.MARKUP, MediaScreen.COLORS, MediaScreen.SCORING)
+        val loadedScreens = snapshot.filter { it.action == "load" }.mapTo(linkedSetOf()) { it.screen }
+        check(loadedScreens.containsAll(requiredScreens)) {
+            "Expected media loads for $requiredScreens, recorded $snapshot"
+        }
+        check(snapshot.any { it.screen == MediaScreen.COLORS && it.action == "play" }) {
+            "Expected Colors playback to start, recorded $snapshot"
+        }
+        check(snapshot.any { it.screen == MediaScreen.COLORS && it.action == "pause" }) {
+            "Expected Colors playback to pause, recorded $snapshot"
+        }
+        check(snapshot.any { it.action == "seek" }) {
+            "Expected at least one fake-media seek, recorded $snapshot"
+        }
+        check(createdPlayers.all { it.javaClass == FakeMediaPlayer::class.java }) {
+            "Unexpected native media-player implementation: ${createdPlayers.map { it.javaClass.name }}"
+        }
+    }
+
     override fun createFrameCapture(): StillFrameCaptureService = frameCapture
 
     override fun close() {

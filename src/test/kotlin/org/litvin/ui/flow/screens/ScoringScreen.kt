@@ -2,13 +2,15 @@ package org.litvin.ui.flow.screens
 
 import org.litvin.scoring.Outcome
 import org.litvin.scoring.ScoreIO
+import org.litvin.ui.commons.AppShortcuts
 import java.nio.file.Path
+import javax.swing.KeyStroke
 
 internal class ScoringScreen(application: ApplicationScreen) : UserFlowScreen(application) {
     fun open(): ScoringScreen = apply { open("nav-scoring", "scoring-player-1-point") }
 
     fun awardPointToPlayer1(): ScoringScreen = apply {
-        context.driver.click("scoring-player-1-point")
+        context.driver.press(KeyStroke.getKeyStroke(AppShortcuts.SCORE_PLAYER_1.keyStroke))
     }
 
     fun awardPointToPlayer2(): ScoringScreen = apply {
