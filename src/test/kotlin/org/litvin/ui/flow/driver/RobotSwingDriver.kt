@@ -35,6 +35,7 @@ class RobotSwingDriver : SwingUiDriver {
         val snapshot = requireComponentSnapshot(name)
         requireState(snapshot.showing, "component '$name' to be showing")
         requireState(snapshot.enabled, "component '$name' to be enabled")
+        activate(snapshot.component, name)
         click(snapshot.component)
     }
 
@@ -69,6 +70,15 @@ class RobotSwingDriver : SwingUiDriver {
         ).setValue(value, minimum, maximum)
     }
 
+    override fun setSelected(name: String, selected: Boolean) {
+        val button = requireComponent(name, AbstractButton::class.java)
+        val snapshot = onEdt { SelectionSnapshot(button.isSelected, button.isShowing, button.isEnabled) }
+        requireState(snapshot.showing, "component '$name' to be showing")
+        requireState(snapshot.enabled, "component '$name' to be enabled")
+        if (snapshot.selected != selected) click(button)
+        waitUntil("component '$name' selected state to be $selected") { onEdt { button.isSelected } == selected }
+    }
+
     override fun select(name: String, value: String) {
         val comboBox = requireComponent(name, JComboBox::class.java)
         val itemIndex = onEdt {
@@ -100,6 +110,15 @@ class RobotSwingDriver : SwingUiDriver {
     override fun requireEnabled(name: String, enabled: Boolean) {
         waitUntil("component '$name' enabled state to be $enabled") {
             componentSnapshot(name)?.enabled == enabled
+        }
+    }
+
+    override fun requireAccessibleDescription(name: String, expectedSubstring: String) {
+        waitUntil("component '$name' accessible description to contain '$expectedSubstring'") {
+            onEdt {
+                val component = findByNameOnEdt(name) ?: return@onEdt false
+                component.accessibleContext.accessibleDescription?.contains(expectedSubstring, ignoreCase = true) == true
+            }
         }
     }
 
@@ -154,14 +173,17 @@ class RobotSwingDriver : SwingUiDriver {
         robot.waitForIdle()
     }
 
-    private fun activate(component: Component) {
-        onEdt {
-            SwingUtilities.getWindowAncestor(component)?.let { window ->
-                window.toFront()
-                window.requestFocus()
-            }
+    private fun activate(component: Component, componentName: String? = component.name) {
+        val window = onEdt {
+            SwingUtilities.getWindowAncestor(component)?.also { owner ->
+                owner.toFront()
+                owner.requestFocus()
+            } ?: throw AssertionError("Showing component '${componentName ?: component.javaClass.simpleName}' has no owning window")
         }
         robot.waitForIdle()
+        waitUntil("window containing '${componentName ?: component.javaClass.simpleName}' to become active") {
+            onEdt { window.isActive || window.isFocused }
+        }
     }
 
     private fun dragSlider(slider: JSlider, target: Int) {
@@ -355,6 +377,12 @@ class RobotSwingDriver : SwingUiDriver {
     private data class SliderSnapshot(
         val minimum: Int,
         val maximum: Int,
+        val showing: Boolean,
+        val enabled: Boolean,
+    )
+
+    private data class SelectionSnapshot(
+        val selected: Boolean,
         val showing: Boolean,
         val enabled: Boolean,
     )

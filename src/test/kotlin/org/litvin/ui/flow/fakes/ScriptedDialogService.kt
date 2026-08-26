@@ -22,6 +22,10 @@ class ScriptedDialogService(
     @Synchronized
     fun script(vararg scripted: DialogOutcome) = scripted.forEach { outcomes += it }
 
+    fun showNextAsRealModal() = script(DialogOutcome.RealModal)
+
+    fun answerNextConfirmation(response: Boolean) = script(DialogOutcome.Confirmation(response))
+
     override fun showInfo(parent: Component?, message: String, title: String) {
         requireReal("info", parent, message, title) { realDialogs.showInfo(parent, message, title) }
     }

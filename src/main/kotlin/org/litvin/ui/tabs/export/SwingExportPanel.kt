@@ -361,11 +361,6 @@ class SwingExportPanel(
             settingsPreferences.saveEncoder(encoderPanel.selectedEncoderId())
         }
         idleTrimCheck.addActionListener {
-            // If user tries to enable idle-trim with no marked points, prevent and explain
-            if (idleTrimCheck.isSelected && !hasAnyMarkedPoints()) {
-                idleTrimCheck.isSelected = false
-                dialogs.showInfo(this, "Cannot cut idle time: there are no marked points in the current project.", "Idle-trim unavailable")
-            }
             if (!idleTrimCheck.isSelected) favoriteOnlyCheck.isSelected = false
             updateFavoriteOnlyAvailability()
             updatePointsSummary()
@@ -637,14 +632,6 @@ class SwingExportPanel(
         return RenderFormatting.formatSize(bytes)
     }
 
-    private fun hasAnyMarkedPoints(): Boolean {
-        return try {
-            loadExportSummary().pointCount > 0
-        } catch (_: Throwable) {
-            false
-        }
-    }
-
     private fun validFavoriteCount(): Int {
         return try {
             loadExportSummary().favoriteCount
@@ -654,13 +641,15 @@ class SwingExportPanel(
     }
 
     private fun updateFavoriteOnlyAvailability() {
-        val available = idleTrimCheck.isSelected && validFavoriteCount() > 0
+        val available = manifestPath != null && idleTrimCheck.isSelected
         favoriteOnlyCheck.isEnabled = available
         if (!available) favoriteOnlyCheck.isSelected = false
-        favoriteOnlyCheck.toolTipText = if (available) {
+        favoriteOnlyCheck.toolTipText = if (available && validFavoriteCount() > 0) {
             "Render only points marked with a star."
+        } else if (available) {
+            "No valid favorite points are available. Selecting this option explains how to recover."
         } else {
-            "Requires idle-trim and at least one valid favorite point."
+            "Requires an open project with idle-trim enabled."
         }
     }
 
@@ -701,13 +690,6 @@ class SwingExportPanel(
         try {
             val summary = loadExportSummary()
 
-            // If there are no points, ensure idle-trim is not selected (requirement)
-            if (summary.pointCount == 0 && idleTrimCheck.isSelected) {
-                idleTrimCheck.isSelected = false
-                // Keep init button state consistent if selection changed
-                updateInitButtonState()
-            }
-
             // Set texts
             pointsCountLabel.text = "${summary.pointCount} points / ${summary.favoriteCount} favorites"
             pointsTotalLabel.text = "total ${RenderFormatting.formatDuration(summary.totalMs)} / favorites ${RenderFormatting.formatDuration(summary.favoriteTotalMs)}"
@@ -734,44 +716,27 @@ class SwingExportPanel(
     private fun updateInitButtonState() {
         try {
             val mp = manifestPath
-            // Default: disabled until proven OK
-            var enabled = false
-            var reason: String? = null
-            if (mp.isNullOrBlank()) {
-                reason = "Open a project first (Projects → Open)."
+            val manifest = try { mp?.let(ManifestIO::read) } catch (_: Throwable) { null }
+            val validPoints = if (mp.isNullOrBlank()) {
+                emptyList()
             } else {
-                val manifest = try { ManifestIO.read(mp) } catch (t: Throwable) { null }
-                val sourcePath = manifest?.sourceVideo
-                if (sourcePath.isNullOrBlank() || !File(sourcePath).exists()) {
-                    reason = "Source video not found. Set it in Projects/Markup."
-                } else {
-                    if (idleTrimCheck.isSelected) {
-                        val projectDir = EdlIO.projectDirFromManifest(mp)
-                        val edl = try { EdlIO.readForProjectDir(projectDir) } catch (_: Throwable) { null }
-                        val allValidPoints = ExportPlanner.validateEdl(edl)
-                        val keeps = ExportPlanner.selectedKeepPoints(
-                            validPoints = allValidPoints,
-                            idleTrim = true,
-                            favoriteOnly = favoriteOnlyCheck.isSelected,
-                        )
-                        if (favoriteOnlyCheck.isSelected && keeps.isEmpty()) {
-                            reason = "Favorite-only export is ON but no valid favorite points are available."
-                        } else if (keeps.isEmpty()) {
-                            reason = "EDL is empty/invalid while Idle‑trim is ON. Add keep intervals or turn Idle‑trim OFF."
-                        } else {
-                            enabled = true
-                        }
-                    } else {
-                        // Full render with no EDL requirements
-                        enabled = true
-                    }
-                }
+                val projectDir = EdlIO.projectDirFromManifest(mp)
+                ExportPlanner.validateEdl(try { EdlIO.readForProjectDir(projectDir) } catch (_: Throwable) { null })
             }
-            initButton.isEnabled = enabled
-            initButton.toolTipText = if (enabled) null else reason
+            val readiness = ExportPlanner.initializationReadiness(
+                hasProject = !mp.isNullOrBlank(),
+                sourceVideoExists = manifest?.sourceVideo?.let { File(it).isFile } == true,
+                idleTrim = idleTrimCheck.isSelected,
+                favoriteOnly = favoriteOnlyCheck.isSelected,
+                validPoints = validPoints,
+            )
+            initButton.isEnabled = readiness.enabled
+            initButton.toolTipText = readiness.disabledReason
+            initButton.accessibleContext.accessibleDescription = readiness.disabledReason
         } catch (_: Throwable) {
             initButton.isEnabled = false
             initButton.toolTipText = "Initialization unavailable due to an unexpected error."
+            initButton.accessibleContext.accessibleDescription = initButton.toolTipText
         }
     }
 }
