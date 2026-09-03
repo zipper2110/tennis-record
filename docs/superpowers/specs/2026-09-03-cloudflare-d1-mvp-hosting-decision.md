@@ -38,7 +38,7 @@ Enable Workers Logs with a low sample rate and a seven-day retention limit. Appl
 
 D1 uses SQLite rather than PostgreSQL. Store `session_id` as validated text, `received_at` as a UTC integer timestamp, and event properties as validated JSON text. Preserve the composite `(session_id, sequence_number)` primary key for idempotency.
 
-The MVP supports the product questions that need only simple SQL:
+The MVP supports the product questions through versioned SQL files under `docs/analytics/queries/`. The operator runs those files through the D1 CLI or Cloudflare dashboard; no custom reporting UI is part of the MVP. The initial query set answers:
 
 - Sessions, lifecycle completeness, and measured duration
 - Daily event counts by event name, app version, and OS family
