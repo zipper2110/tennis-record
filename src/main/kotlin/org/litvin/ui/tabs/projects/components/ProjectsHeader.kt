@@ -31,7 +31,9 @@ class ProjectsHeader(
                 addActionListener { onHelp() }
             })
             add(Box.createHorizontalStrut(8))
-            add(UiStyles.primaryButton("IMPORT NEW MATCH") { onImportNewMatch() })
+            add(UiStyles.primaryButton("IMPORT NEW MATCH") { onImportNewMatch() }.apply {
+                name = "projects-import-match"
+            })
         }
         add(titleBox, BorderLayout.WEST)
         add(actions, BorderLayout.EAST)

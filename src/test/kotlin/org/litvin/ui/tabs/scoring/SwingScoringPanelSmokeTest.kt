@@ -36,18 +36,22 @@ class SwingScoringPanelSmokeTest {
 
         // Basic composition assertions
         val p = requireNotNull(panel)
-        assertIs<BorderLayout>(p.layout)
-        // Two major regions should be present (left list + center)
-        assertTrue(p.componentCount >= 2, "Expected at least 2 child components in the container")
-
-        // Access a couple of public container hooks to ensure they are callable
-        // These should be no-ops/safe without an active project
         try {
-            p.onActivated()
-            p.onDeactivated()
-        } catch (t: Throwable) {
-            // If libvlc operations fail, skip instead of failing the suite
-            assumeTrue(false, "Panel lifecycle calls failed (likely VLC not present): ${t.javaClass.simpleName}: ${t.message}")
+            assertIs<BorderLayout>(p.layout)
+            // Two major regions should be present (left list + center)
+            assertTrue(p.componentCount >= 2, "Expected at least 2 child components in the container")
+
+            // Access a couple of public container hooks to ensure they are callable
+            // These should be no-ops/safe without an active project
+            try {
+                p.onActivated()
+                p.onDeactivated()
+            } catch (t: Throwable) {
+                // If libvlc operations fail, skip instead of failing the suite
+                assumeTrue(false, "Panel lifecycle calls failed (likely VLC not present): ${t.javaClass.simpleName}: ${t.message}")
+            }
+        } finally {
+            SwingUtilities.invokeAndWait { p.dispose() }
         }
     }
 }

@@ -1,9 +1,10 @@
 package org.litvin.ui.tabs.export
 
 import org.litvin.RenderJob
-import org.litvin.RenderQueueManager
+import org.litvin.export.RenderService
 import org.litvin.ui.UiStyles
 import org.litvin.ui.commons.applyDarkScrollbar
+import org.litvin.ui.commons.UserDialogService
 import java.awt.BorderLayout
 import java.awt.Component
 import java.awt.FlowLayout
@@ -14,7 +15,6 @@ import javax.swing.JComponent
 import javax.swing.JLabel
 import javax.swing.JList
 import javax.swing.JButton
-import javax.swing.JOptionPane
 import javax.swing.JPanel
 import javax.swing.JScrollPane
 import javax.swing.ListCellRenderer
@@ -22,7 +22,10 @@ import javax.swing.ListCellRenderer
 /**
  * Shows render jobs that are queued but not yet running.
  */
-class RenderQueueList {
+class RenderQueueList(
+    private val renderService: RenderService,
+    private val dialogs: UserDialogService,
+) {
     private val model = DefaultListModel<RenderJob>()
     private val list = JList(model)
 
@@ -109,9 +112,8 @@ class RenderQueueList {
 
     private fun cancelSelected() {
         val job = list.selectedValue ?: return
-        val r = JOptionPane.showConfirmDialog(panel, "Cancel queued render?", "Confirm", JOptionPane.YES_NO_OPTION)
-        if (r == JOptionPane.YES_OPTION) {
-            RenderQueueManager.cancelQueued(job.id)
+        if (dialogs.confirm(panel, "Cancel queued render?", "Confirm")) {
+            renderService.cancelQueued(job.id)
         }
     }
 

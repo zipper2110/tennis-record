@@ -16,6 +16,8 @@ import javax.swing.JPanel
 class ProjectCard(
     title: String,
     secondary: String,
+    titleComponentName: String? = null,
+    openButtonComponentName: String? = null,
     onOpen: (() -> Unit)? = null,
 ) : JPanel(BorderLayout()) {
     init {
@@ -29,10 +31,12 @@ class ProjectCard(
         maximumSize = Dimension(Int.MAX_VALUE, Int.MAX_VALUE)
         minimumSize = Dimension(200, 48)
 
-        add(textContent(title, secondary), BorderLayout.CENTER)
+        add(textContent(title, secondary, titleComponentName), BorderLayout.CENTER)
 
         if (onOpen != null) {
-            val openButton = UiStyles.primarySmallButton("Open Project") { onOpen() }
+            val openButton = UiStyles.primarySmallButton("Open Project") { onOpen() }.apply {
+                name = openButtonComponentName
+            }
             add(JPanel(BorderLayout()).apply {
                 isOpaque = false
                 add(openButton, BorderLayout.EAST)
@@ -46,11 +50,12 @@ class ProjectCard(
         }
     }
 
-    private fun textContent(title: String, secondary: String): JComponent {
+    private fun textContent(title: String, secondary: String, titleComponentName: String?): JComponent {
         return JPanel().apply {
             isOpaque = false
             layout = BoxLayout(this, BoxLayout.Y_AXIS)
             add(JLabel(title).apply {
+                name = titleComponentName
                 foreground = UiStyles.FG_PRIMARY
                 font = font.deriveFont(Font.BOLD, font.size2D + 1f)
             })

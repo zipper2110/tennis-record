@@ -3,15 +3,18 @@ package org.litvin.ui.tabs.markup
 import org.litvin.GeometryViewportPanel
 import org.litvin.projects.ManifestIO
 import org.litvin.adjustments.AdjustmentsStore
+import org.litvin.adjustments.AdjustmentsSession
 import org.litvin.markup.EdlIO
 import org.litvin.markup.EdlV1
 import org.litvin.markup.PointV1
 import org.litvin.markup.components.MarkupDispatcher
 import org.litvin.media.PlayerStatus
 import org.litvin.media.VlcjSwingMediaPlayerAdapter
+import org.litvin.media.SwingMediaPlayer
 import org.litvin.shared.util.Timecode
 import org.litvin.ui.UiStyles
-import org.litvin.ui.commons.Dialogs
+import org.litvin.ui.commons.SwingUserDialogService
+import org.litvin.ui.commons.UserDialogService
 import org.litvin.ui.tabs.markup.ui.SwingTimelineComponent
 import org.litvin.ui.tabs.markup.components.Keybindings
 import org.litvin.ui.tabs.markup.components.MarkupKeyActions
@@ -19,6 +22,9 @@ import org.litvin.ui.tabs.markup.ui.PointsCardsView
 import org.litvin.ui.tabs.markup.ui.TransportControls
 import java.awt.*
 import java.io.File
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.swing.*
 import kotlin.math.max
 
@@ -34,14 +40,27 @@ import kotlin.math.max
  *
  */
 class SwingMarkupPanel(
+    private val player: SwingMediaPlayer,
+    private val adjustments: AdjustmentsSession,
+    autosaveExecutor: ExecutorService,
+    private val dialogs: UserDialogService,
     private val onHelp: () -> Unit = {},
-) : JPanel(BorderLayout()) {
+) : JPanel(BorderLayout()), AutoCloseable {
+
+    constructor(onHelp: () -> Unit = {}) : this(
+        VlcjSwingMediaPlayerAdapter(),
+        AdjustmentsStore.legacySession(),
+        Executors.newSingleThreadExecutor { runnable -> Thread(runnable, "markup-autosave") },
+        SwingUserDialogService(),
+        onHelp,
+    )
 
     // Geometry viewport wrapper for VLC component
     private var geometryViewport: GeometryViewportPanel
 
     // Media
-    private val player = VlcjSwingMediaPlayerAdapter()
+    private val closed = AtomicBoolean(false)
+    private var unsubscribeAdjustments: (() -> Unit)? = null
 
     // Deferred media loading
     private var pendingMediaFile: File? = null
@@ -58,7 +77,7 @@ class SwingMarkupPanel(
     // UI controls
     private var transport: TransportControls
 
-    private val countBadge = JLabel("0 MARKED / 0 FAV")
+    private val countBadge = JLabel("0 MARKED / 0 FAV").apply { name = "rallies-point-count" }
 
     // Cards view (replaces legacy inline cards list)
     private var cardsView: PointsCardsView
@@ -109,14 +128,14 @@ class SwingMarkupPanel(
             isMediaLoaded = true
             // Re-apply current adjustments after media is loaded to ensure VLC picks them up
             try {
-                val current = AdjustmentsStore.get()
+                val current = adjustments.get()
                 player.applyPreviewAdjustments(current)
                 geometryViewport.refreshGeometry()
             } catch (_: Throwable) { /* ignore */ }
         } catch (t: Throwable) {
             if (!loadErrorShown) {
                 loadErrorShown = true
-                Dialogs.showError(this, t, "Failed to load project")
+                dialogs.showError(this, t.message ?: t.toString(), "Failed to load project")
 
             }
         }
@@ -176,18 +195,18 @@ class SwingMarkupPanel(
                 player.component.requestFocusInWindow()
 
             }
-        })
+        }).apply { name = "rallies-seek" }
 
     // Autosave controller (debounced, off-EDT persistence)
     private val autosave = AutosaveController(
-        debounceMs = 300, saver = {
+        debounceMs = 300, executor = autosaveExecutor, saver = {
             try {
                 val dir = projectDir ?: return@AutosaveController
                 val list = dispatcher.getCompletedPoints()
                 EdlIO.writeForProjectDir(dir, EdlV1(points = list, version = 1))
             } catch (t: Throwable) {
                 // Surface error on EDT
-                EventQueue.invokeLater { Dialogs.showError(this, t, "Autosave failed") }
+                EventQueue.invokeLater { dialogs.showError(this, t.message ?: t.toString(), "Autosave failed") }
             }
         })
 
@@ -276,17 +295,18 @@ class SwingMarkupPanel(
         leftColumn.isOpaque = false
         // Wrap VLC component with geometry viewport for live zoom/pan (Task 5.4)
         geometryViewport = GeometryViewportPanel(player.component)
+        geometryViewport.name = "rallies-video"
         leftColumn.add(geometryViewport, BorderLayout.CENTER)
         leftColumn.add(bottom, BorderLayout.SOUTH)
         leftColumn.minimumSize = Dimension(320, 0)
         center.leftComponent = leftColumn
         // Subscribe to central adjustments store to live-apply color and geometry
-        val unsub = AdjustmentsStore.subscribe { adj ->
+        unsubscribeAdjustments = adjustments.subscribe { adj ->
             player.applyPreviewAdjustments(adj)
             geometryViewport.refreshGeometry()
         }
         // Apply current state immediately
-        val currentAdjustments = AdjustmentsStore.get()
+        val currentAdjustments = adjustments.get()
         player.applyPreviewAdjustments(currentAdjustments)
         geometryViewport.refreshGeometry()
 
@@ -453,16 +473,16 @@ class SwingMarkupPanel(
         manifestPath = path
         projectDir = File(path).parentFile.absolutePath
         // Load adjustments for this project into the central store
-        AdjustmentsStore.load(projectDir!!)
+        adjustments.load(projectDir!!)
 
         // Load manifest and media
         try {
             val manifest = ManifestIO.read(path)
             val src = manifest.sourceVideo
             if (src.isNullOrBlank() || !File(src).exists()) {
-                Dialogs.showError(
+                dialogs.showError(
                     this,
-                    IllegalStateException("Source video missing"),
+                    "Source video missing",
                     "Select source video for project: ${manifest.name}"
                 )
                 return
@@ -476,7 +496,7 @@ class SwingMarkupPanel(
             loadErrorShown = false
             ensurePlayerLoaded()
         } catch (t: Throwable) {
-            Dialogs.showError(this, t, "Failed to load project")
+            dialogs.showError(this, t.message ?: t.toString(), "Failed to load project")
         }
     }
 
@@ -502,7 +522,7 @@ class SwingMarkupPanel(
             reloadingPointsFromProject = true
             dispatcher.setPoints(edl.points)
         } catch (t: Throwable) {
-            Dialogs.showError(this, t, "Failed to refresh point markers")
+            dialogs.showError(this, t.message ?: t.toString(), "Failed to refresh point markers")
             return
         } finally {
             reloadingPointsFromProject = false
@@ -650,7 +670,7 @@ class SwingMarkupPanel(
 
     private fun maybeShowDispatcherHint() {
         val m = dispatcher.consumeUserMessage() ?: return
-        JOptionPane.showMessageDialog(this, m, "Hint", JOptionPane.INFORMATION_MESSAGE)
+        dialogs.showInfo(this, m, "Hint")
     }
 
     private fun scheduleAutosave() {
@@ -669,5 +689,21 @@ class SwingMarkupPanel(
     // Expose manual save for File -> Save All integration
     fun saveNow() {
         autosaveNow()
+    }
+
+    override fun close() {
+        if (!closed.compareAndSet(false, true)) return
+        idleUiTimer.stop()
+        keybindings?.uninstall()
+        keybindings = null
+        dispatcher.onPointsChanged = null
+        unsubscribeAdjustments?.invoke()
+        unsubscribeAdjustments = null
+        autosave.flushAndClose()
+        adjustments.flush()
+        player.onTimeChanged = null
+        player.onStatusChanged = null
+        player.onReady = null
+        player.close()
     }
 }

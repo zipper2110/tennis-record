@@ -63,7 +63,8 @@ class SwingTestPanel : JPanel(BorderLayout()) {
             player.seek(target)
             refreshScrub()
         },
-        tooltip = "Seek test video"
+        tooltip = "Seek test video",
+        sliderComponentName = "test-seek",
     )
 
     private val idleUiTimer = Timer(100) {

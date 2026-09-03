@@ -2,6 +2,7 @@ package org.litvin.ui.tabs.adjustments
 
 import org.litvin.adjustments.AdjustmentsV1
 import org.litvin.adjustments.WhiteBalanceV1
+import kotlin.math.roundToInt
 
 /**
  * Centralized conversion between UI slider integer values and the adjustments data model.
@@ -47,11 +48,11 @@ object AdjustmentsUiConverter {
 
     fun modelToSliderValues(adj: AdjustmentsV1): SliderValues {
         val wb = adj.whiteBalance ?: WhiteBalanceV1()
-        val b = ((adj.brightness.coerceIn(0.0f, 2.0f) - 1.0f) * 100.0f).toInt()
-        val c = ((adj.contrast.coerceIn(0.0f, 2.0f) - 1.0f) * 100.0f).toInt()
-        val s = ((adj.saturation.coerceIn(0.0f, 2.0f) - 1.0f) * 100.0f).toInt()
-        val t = (wb.temperature.coerceIn(-1.0f, 1.0f) * 100.0f).toInt()
-        val ti = (wb.tint.coerceIn(-1.0f, 1.0f) * 100.0f).toInt()
+        val b = ((adj.brightness.coerceIn(0.0f, 2.0f) - 1.0f) * 100.0f).roundToInt()
+        val c = ((adj.contrast.coerceIn(0.0f, 2.0f) - 1.0f) * 100.0f).roundToInt()
+        val s = ((adj.saturation.coerceIn(0.0f, 2.0f) - 1.0f) * 100.0f).roundToInt()
+        val t = (wb.temperature.coerceIn(-1.0f, 1.0f) * 100.0f).roundToInt()
+        val ti = (wb.tint.coerceIn(-1.0f, 1.0f) * 100.0f).roundToInt()
         return SliderValues(b, c, s, t, ti)
     }
 }

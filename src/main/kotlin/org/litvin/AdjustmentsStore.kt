@@ -1,31 +1,30 @@
 package org.litvin.adjustments
 
-import org.litvin.shared.util.DebouncedSaver
 import java.io.File
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledExecutorService
+import java.util.concurrent.ScheduledFuture
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.swing.SwingUtilities
 
 /**
- * Central cross-tab adjustments state service (Task 5.5).
- * - Singleton store holding current AdjustmentsV1 for the open project
+ * Application-owned cross-tab adjustments state service.
+ * - Holds the current AdjustmentsV1 for the open project
  * - Subscribers are notified on the EDT within ~100 ms budget
  * - Debounced autosave (350 ms) to adjustments.json in the current project directory
  * - Thread-safe; prevents feedback loops by diffing state
  */
-object AdjustmentsStore {
+class AdjustmentsSession(
+    private val scheduler: ScheduledExecutorService,
+    private val saveDelayMs: Long = 350L,
+) : AutoCloseable {
     @Volatile private var state: AdjustmentsV1 = AdjustmentsV1()
     @Volatile private var projectDir: String? = null
-
     private val listeners = CopyOnWriteArrayList<(AdjustmentsV1) -> Unit>()
-
-    // Debounced autosave per spec (300–500 ms); use 350 ms as in UI
-    private var saver = DebouncedSaver(350) {
-        try {
-            val dir = projectDir ?: return@DebouncedSaver
-            AdjustmentsIO.writeForProjectDir(dir, state)
-        } catch (_: Throwable) {
-        }
-    }
+    private val closed = AtomicBoolean(false)
+    private var pendingSave: ScheduledFuture<*>? = null
 
     /** Current full state snapshot. */
     fun get(): AdjustmentsV1 = state
@@ -84,6 +83,17 @@ object AdjustmentsStore {
     @Synchronized
     fun save(projectDirPath: String? = null) {
         if (projectDirPath != null) projectDir = File(projectDirPath).absolutePath
+        persist()
+    }
+
+    @Synchronized
+    fun flush() {
+        pendingSave?.cancel(false)
+        pendingSave = null
+        persist()
+    }
+
+    private fun persist() {
         try {
             val dir = projectDir ?: return
             AdjustmentsIO.writeForProjectDir(dir, state)
@@ -109,7 +119,11 @@ object AdjustmentsStore {
     }
 
     private fun requestSave() {
-        try { saver.request() } catch (_: Throwable) { }
+        if (closed.get()) return
+        try {
+            pendingSave?.cancel(false)
+            pendingSave = scheduler.schedule({ save() }, saveDelayMs, TimeUnit.MILLISECONDS)
+        } catch (_: Throwable) { }
     }
 
     private fun notifyChange() {
@@ -127,4 +141,31 @@ object AdjustmentsStore {
             try { l(adj) } catch (_: Throwable) { }
         }
     }
+
+    override fun close() {
+        if (!closed.compareAndSet(false, true)) return
+        flush()
+        listeners.clear()
+    }
+}
+
+/**
+ * Transitional compatibility facade for callers that Task 6 will migrate to
+ * an application-owned [AdjustmentsSession].
+ */
+object AdjustmentsStore {
+    private val scheduler = Executors.newSingleThreadScheduledExecutor { runnable ->
+        Thread(runnable, "legacy-adjustments-autosave").apply { isDaemon = true }
+    }
+    private val session = AdjustmentsSession(scheduler)
+
+    fun get(): AdjustmentsV1 = session.get()
+    fun set(partial: (AdjustmentsV1) -> AdjustmentsV1) = session.set(partial)
+    fun set(newValue: AdjustmentsV1) = session.set(newValue)
+    fun reset() = session.reset()
+    fun subscribe(listener: (AdjustmentsV1) -> Unit): () -> Unit = session.subscribe(listener)
+    fun unsubscribe(listener: (AdjustmentsV1) -> Unit) = session.unsubscribe(listener)
+    fun load(projectDirPath: String) = session.load(projectDirPath)
+    fun save(projectDirPath: String? = null) = session.save(projectDirPath)
+    internal fun legacySession(): AdjustmentsSession = session
 }

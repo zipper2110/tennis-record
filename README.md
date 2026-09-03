@@ -48,6 +48,28 @@ mvn -DskipTests package
   mvn -q -Dtest=ArchitectureDependencyHygieneTest test
   ```
 
+## Testing UI flows
+
+UI changes should use the narrowest test lane that gives useful confidence. Run
+these commands from the repository root with JDK 17 selected.
+
+| Lane | Command | Use it for |
+| --- | --- | --- |
+| Fast checks | `mvn -B test` | General development and non-UI regressions. |
+| Deterministic Swing flows | `mvn -B -Pui-flow verify` | Every UI-affecting change: import/restart, editing across tabs, scoring, export configuration, and recovery flows. It uses fake media/export services so it is repeatable and fast. |
+| Packaged Windows smoke | `pwsh -File qa/windows/Run-UiSmoke.ps1 -KeepArtifacts` | Before a release or after changing VLC, FFmpeg, packaging, or native UI integration. It drives the real packaged application against the checked-in sample clip. |
+
+The UI-flow suite creates isolated app data and retains diagnostics under
+`target/ui-test-artifacts` only when a test fails. The packaged smoke runner
+prints its isolated app-data directory, report, and artifacts paths under
+`target/ui-smoke`; these outputs are intentionally ignored by Git.
+
+For the exact packaged-smoke checklist and report requirements, see
+[qa/windows/ui-smoke.md](qa/windows/ui-smoke.md). The first native run has
+validated import, real VLC playback, marking, scoring, and recents. Real
+FFmpeg export and adjustment controls remain a manual/package-smoke follow-up
+while the desktop-control helper's high-DPI targeting issue is resolved.
+
 ### Run (temporary)
 A proper desktop entrypoint (Compose Desktop) will be added with dependencies and packaging. For now, the skeleton app is minimal and only for verifying the toolchain.
 

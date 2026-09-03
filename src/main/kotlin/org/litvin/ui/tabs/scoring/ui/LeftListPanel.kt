@@ -145,10 +145,12 @@ class LeftListPanel(
         p1Label.foreground = Color(0xAD, 0xAA, 0xAA)
         p1Label.font = p1Label.font.deriveFont(Font.BOLD, 10f)
         p1NameField = nameField()
+        p1NameField.name = "scoring-player-1-name"
         val p2Label = JLabel("Player 2 name")
         p2Label.foreground = Color(0xAD, 0xAA, 0xAA)
         p2Label.font = p2Label.font.deriveFont(Font.BOLD, 10f)
         p2NameField = nameField()
+        p2NameField.name = "scoring-player-2-name"
 
         // Color pickers keep the action readable while showing the selected color separately.
         fun colorButton(): JButton {

@@ -150,7 +150,7 @@ Arbitrary sleeps are prohibited. Every timeout message must name the expected co
 
 Add `src/test/resources/media/ui-smoke.mp4` to regular Git. The file must:
 
-- Contain a 5-15 second tennis clip.
+- Contain a 3-15 second tennis clip.
 - Use H.264 video in an MP4 container.
 - Be no larger than 5 MiB.
 - Require no audio track for the scenarios to pass.

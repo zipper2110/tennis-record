@@ -16,7 +16,8 @@ import javax.swing.*
  */
 class TransportBar(
     private val onTogglePlayPause: () -> Unit,
-    private val onSeek: (deltaMs: Long) -> Unit
+    private val onSeek: (deltaMs: Long) -> Unit,
+    playPauseComponentName: String? = null,
 ) : JPanel() {
 
     private val btnSeekBack10 = JButton()
@@ -30,6 +31,7 @@ class TransportBar(
     init {
         isOpaque = false
         layout = BoxLayout(this, BoxLayout.X_AXIS)
+        btnPlayPause.name = playPauseComponentName
 
         fun styleSeek(b: JButton) {
             UiStyles.styleSecondary(b)

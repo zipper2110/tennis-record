@@ -1,5 +1,6 @@
 package org.litvin
 
+import org.litvin.app.AppDataPaths
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.io.File
@@ -81,12 +82,94 @@ class ApplicationLayoutResolverTest {
         assertNull(layout.vlcDirectory)
     }
 
+    @Test
+    fun resolves_app_data_from_system_property_before_environment() {
+        val propertyRoot = tempDir.resolve("property-data").toFile()
+        val environmentRoot = tempDir.resolve("environment-data").toFile()
+
+        val layout = resolver(
+            appHome = tempDir.toFile(),
+            properties = mapOf(
+                "os.name" to "Windows 11",
+                "user.home" to tempDir.resolve("home").toString(),
+                "tennis.record.appDataDir" to propertyRoot.path,
+            ),
+            environment = mapOf(
+                "TENNIS_RECORD_APP_DATA_DIR" to environmentRoot.path,
+                "APPDATA" to tempDir.resolve("roaming").toString(),
+            ),
+        ).resolve()
+
+        assertEquals(propertyRoot.absoluteFile.normalize(), layout.appDataDirectory)
+    }
+
+    @Test
+    fun resolves_app_data_from_environment_override_before_appdata() {
+        val environmentRoot = tempDir.resolve("environment-data").toFile()
+
+        val layout = resolver(
+            appHome = tempDir.toFile(),
+            properties = mapOf(
+                "os.name" to "Windows 11",
+                "user.home" to tempDir.resolve("home").toString(),
+            ),
+            environment = mapOf(
+                "TENNIS_RECORD_APP_DATA_DIR" to environmentRoot.path,
+                "APPDATA" to tempDir.resolve("roaming").toString(),
+            ),
+        ).resolve()
+
+        assertEquals(environmentRoot.absoluteFile.normalize(), layout.appDataDirectory)
+    }
+
+    @Test
+    fun resolves_app_data_below_windows_appdata_when_no_override_exists() {
+        val appData = tempDir.resolve("roaming").toFile()
+
+        val layout = resolver(
+            appHome = tempDir.toFile(),
+            properties = mapOf(
+                "os.name" to "Windows 11",
+                "user.home" to tempDir.resolve("home").toString(),
+            ),
+            environment = mapOf("APPDATA" to appData.path),
+        ).resolve()
+
+        assertEquals(appData.resolve("tennis-record"), layout.appDataDirectory)
+    }
+
+    @Test
+    fun resolves_app_data_below_user_home_when_no_windows_location_exists() {
+        val userHome = tempDir.resolve("home").toFile()
+
+        val layout = resolver(
+            appHome = tempDir.toFile(),
+            properties = mapOf("os.name" to "Linux", "user.home" to userHome.path),
+            environment = emptyMap(),
+        ).resolve()
+
+        assertEquals(userHome.resolve(".tennis-record"), layout.appDataDirectory)
+    }
+
+    @Test
+    fun app_data_paths_derive_every_external_path_from_one_root() {
+        val root = tempDir.resolve("isolated-data").toFile()
+
+        val paths = AppDataPaths(root)
+
+        assertEquals(root.resolve("projects"), paths.projects)
+        assertEquals(root.resolve("completed-renders.json"), paths.completedRenders)
+        assertEquals(root.resolve("logs"), paths.logs)
+        assertEquals(root.resolve("tmp"), paths.temporary)
+    }
+
     private fun resolver(
         appHome: File,
         properties: Map<String, String>,
+        environment: Map<String, String> = emptyMap(),
     ) = ApplicationLayoutResolver(
         properties = properties + ("tennis.record.appDir" to appHome.absolutePath),
-        environment = emptyMap(),
+        environment = environment,
         codeSourceLocation = null,
         workingDirectory = tempDir.toFile(),
     )

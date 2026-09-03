@@ -30,7 +30,7 @@ import kotlin.math.ceil
  */
 class VlcjSwingMediaPlayerAdapter(
     private val colorPreviewStrategy: ColorPreviewAdjustmentStrategy = CalibratedVlcColorPreviewAdjustmentStrategy,
-) {
+) : SwingMediaPlayer {
     private companion object {
         private val logger = KotlinLogging.logger {}
         private val playerIds = AtomicInteger(0)
@@ -46,7 +46,7 @@ class VlcjSwingMediaPlayerAdapter(
     private var embeddedComponent: EmbeddedMediaPlayerComponent? = null
     private var mediaPlayer: EmbeddedMediaPlayer? = null
 
-    val component: Component get() = componentHost
+    override val component: Component get() = componentHost
 
     private data class PlaybackRestore(
         val timeMs: Long,
@@ -66,11 +66,11 @@ class VlcjSwingMediaPlayerAdapter(
     @Volatile private var adjustSupportChecked: Boolean = false
     @Volatile private var adjustSupported: Boolean = false
 
-    var onReady: (() -> Unit)? = null
-    var onStatusChanged: ((PlayerStatus) -> Unit)? = null
-    var onTimeChanged: ((Long) -> Unit)? = null
+    override var onReady: (() -> Unit)? = null
+    override var onStatusChanged: ((PlayerStatus) -> Unit)? = null
+    override var onTimeChanged: ((Long) -> Unit)? = null
 
-    fun setRate(rate: Float) {
+    override fun setRate(rate: Float) {
         val nextRate = rate.takeIf { it.isFinite() && it > 0.0f } ?: return
         val previousRate = playbackRate
         playbackRate = nextRate
@@ -135,7 +135,7 @@ class VlcjSwingMediaPlayerAdapter(
         return if (options.isEmpty()) "<none>" else options.joinToString(" ")
     }
 
-    fun activatePreview(reason: String = "activate") {
+    override fun activatePreview(reason: String) {
         val file = mediaFile
         if (file != null && mediaPlayer == null) {
             playMedia(
@@ -149,11 +149,11 @@ class VlcjSwingMediaPlayerAdapter(
         }
     }
 
-    fun deactivatePreview(reason: String = "deactivate") {
+    override fun deactivatePreview(reason: String) {
         releaseNativePlayer(reason)
     }
 
-    fun applyPreviewRotation(rotationDeg: Float, reason: String = "apply rotation") {
+    override fun applyPreviewRotation(rotationDeg: Float, reason: String) {
         pendingRotationDeg = rotationDeg.coerceIn(-180.0f, 180.0f)
         val file = mediaFile ?: return
         val restore = PlaybackRestore(
@@ -266,7 +266,7 @@ class VlcjSwingMediaPlayerAdapter(
         }, "vlcj-preview-release").apply { isDaemon = true }.start()
     }
 
-    fun isAdjustSupported(): Boolean {
+    override fun isAdjustSupported(): Boolean {
         val player = mediaPlayer ?: return true
         if (!adjustSupportChecked) {
             adjustSupportChecked = true
@@ -304,7 +304,7 @@ class VlcjSwingMediaPlayerAdapter(
         }
     }
 
-    fun applyColorAdjustments(adj: AdjustmentsV1) {
+    override fun applyColorAdjustments(adj: AdjustmentsV1) {
         val preview = colorPreviewStrategy.map(adj)
         pendingBrightness = preview.brightness
         pendingContrast = preview.contrast
@@ -314,7 +314,7 @@ class VlcjSwingMediaPlayerAdapter(
         dirtyAdjust = true
     }
 
-    fun applyGeometryAdjustments(adj: AdjustmentsV1): Boolean {
+    override fun applyGeometryAdjustments(adj: AdjustmentsV1): Boolean {
         pendingZoom = adj.zoom.coerceIn(0.1f, 4.0f)
         pendingPanX = adj.panX.coerceIn(-1.0f, 1.0f)
         pendingPanY = adj.panY.coerceIn(-1.0f, 1.0f)
@@ -337,7 +337,7 @@ class VlcjSwingMediaPlayerAdapter(
         return true
     }
 
-    fun applyPreviewAdjustments(adj: AdjustmentsV1) {
+    override fun applyPreviewAdjustments(adj: AdjustmentsV1) {
         applyColorAdjustments(adj)
         applyGeometryAdjustments(adj)
     }
@@ -532,7 +532,7 @@ class VlcjSwingMediaPlayerAdapter(
         logger.info { "Created VLC preview host without native player." }
     }
 
-    fun load(file: File) {
+    override fun load(file: File) {
         mediaFile = file
         pendingPlaybackRestore = null
         durationMs = 0L
@@ -546,7 +546,7 @@ class VlcjSwingMediaPlayerAdapter(
         playMedia(file, pendingRotationDeg, PlaybackRestore(0L, playing = false, rate = playbackRate), "load")
     }
 
-    fun setSubtitleFile(file: File): Boolean {
+    override fun setSubtitleFile(file: File): Boolean {
         val player = mediaPlayer ?: return false
         return try {
             player.subpictures().setSubTitleFile(file)
@@ -647,7 +647,7 @@ class VlcjSwingMediaPlayerAdapter(
         }, "vlcj-preview-release").apply { isDaemon = true }.start()
     }
 
-    fun play() {
+    override fun play() {
         frameStepCursorMs = null
         mediaFile?.let { activatePreview("play") }
         mediaPlayer?.controls()?.let { controls ->
@@ -656,11 +656,11 @@ class VlcjSwingMediaPlayerAdapter(
         }
     }
 
-    fun pause() {
+    override fun pause() {
         mediaPlayer?.controls()?.setPause(true)
     }
 
-    fun seek(ms: Long) {
+    override fun seek(ms: Long) {
         val target = ms.coerceAtLeast(0L)
         frameStepCursorMs = null
         seekForFrameStep(target)
@@ -671,7 +671,7 @@ class VlcjSwingMediaPlayerAdapter(
         mediaPlayer?.controls()?.setTime(target)
     }
 
-    fun stepFrameForward(maximumTimeMs: Long = Long.MAX_VALUE): Long {
+    override fun stepFrameForward(maximumTimeMs: Long): Long {
         val base = frameStepCursorMs ?: currentTimeMs()
         val target = (base + frameDurationMs).coerceAtMost(maximumTimeMs.coerceAtLeast(0L))
         frameStepCursorMs = target
@@ -682,7 +682,7 @@ class VlcjSwingMediaPlayerAdapter(
         return target
     }
 
-    fun stepFrameBackward(minimumTimeMs: Long = 0L): Long {
+    override fun stepFrameBackward(minimumTimeMs: Long): Long {
         val base = frameStepCursorMs ?: currentTimeMs()
         val target = (base - frameDurationMs).coerceAtLeast(minimumTimeMs.coerceAtLeast(0L))
         frameStepCursorMs = target
@@ -690,13 +690,15 @@ class VlcjSwingMediaPlayerAdapter(
         return target
     }
 
-    fun nextFrame() = try {
-        mediaPlayer?.controls()?.nextFrame()
-    } catch (_: Throwable) {
+    override fun nextFrame() {
+        try {
+            mediaPlayer?.controls()?.nextFrame()
+        } catch (_: Throwable) {
+        }
     }
 
-    fun currentTimeMs(): Long = mediaPlayer?.status()?.time()?.also { lastKnownTimeMs = it } ?: lastKnownTimeMs
-    fun totalDurationMs(): Long = if (durationMs > 0) durationMs else mediaPlayer?.status()?.length() ?: 0L
+    override fun currentTimeMs(): Long = mediaPlayer?.status()?.time()?.also { lastKnownTimeMs = it } ?: lastKnownTimeMs
+    override fun totalDurationMs(): Long = if (durationMs > 0) durationMs else mediaPlayer?.status()?.length() ?: 0L
 
     private fun updateFrameDuration(player: MediaPlayer) {
         try {
@@ -713,7 +715,7 @@ class VlcjSwingMediaPlayerAdapter(
         }
     }
 
-    fun setPreviewOverlayImage(image: RenderedImage?) {
+    override fun setPreviewOverlayImage(image: RenderedImage?) {
         previewOverlayImage = image
         mediaPlayer?.let { applyPreviewOverlay(it) }
     }
@@ -764,7 +766,7 @@ class VlcjSwingMediaPlayerAdapter(
         return scaled
     }
 
-    fun status(): PlayerStatus {
+    override fun status(): PlayerStatus {
         val player = mediaPlayer ?: return PlayerStatus.STOPPED
         return when (player.status().state()) {
             State.PLAYING -> PlayerStatus.PLAYING
@@ -776,9 +778,11 @@ class VlcjSwingMediaPlayerAdapter(
         }
     }
 
-    fun dispose() {
+    override fun close() {
         adjustTimer.stop()
         rotationReloadTimer.stop()
         releaseNativePlayer("dispose")
     }
+
+    fun dispose() = close()
 }

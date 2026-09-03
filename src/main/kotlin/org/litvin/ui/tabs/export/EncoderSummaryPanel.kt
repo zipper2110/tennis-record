@@ -1,6 +1,5 @@
 package org.litvin.ui.tabs.export
 
-import org.litvin.FFmpegCapabilities
 import org.litvin.ui.commons.Html
 import org.litvin.ui.UiStyles
 import java.awt.Dimension
@@ -11,6 +10,7 @@ import javax.swing.*
  */
 class EncoderSummaryPanel(
     preferredEncoderId: String? = null,
+    availableEncoderIds: Set<String>,
 ) {
     data class EncoderItem(val label: String, val id: String) { override fun toString() = label }
 
@@ -25,7 +25,7 @@ class EncoderSummaryPanel(
         panel.background = UiStyles.CARD_BG
         panel.foreground = UiStyles.FG_PRIMARY
 
-        populateEncoders(preferredEncoderId)
+        populateEncoders(preferredEncoderId, availableEncoderIds)
         encoderCombo.maximumSize = Dimension(Short.MAX_VALUE.toInt(), 28)
         UiStyles.styleComboBox(encoderCombo)
         panel.add(encoderCombo)
@@ -39,10 +39,10 @@ class EncoderSummaryPanel(
         updateSummary()
     }
 
-    private fun populateEncoders(preferredEncoderId: String?) {
+    private fun populateEncoders(preferredEncoderId: String?, availableEncoderIds: Set<String>) {
         val items = mutableListOf<EncoderItem>()
         items += EncoderItem("H.264 (libx264) — software", "libx264")
-        val caps = try { FFmpegCapabilities.h264Encoders() } catch (_: Throwable) { emptySet() }
+        val caps = availableEncoderIds
         val hw = mutableListOf<String>()
         if ("h264_nvenc" in caps) { items += EncoderItem("H.264 (NVENC) — hardware", "h264_nvenc"); hw += "NVENC" }
         if ("h264_qsv" in caps) { items += EncoderItem("H.264 (QSV) — hardware", "h264_qsv"); hw += "QSV" }
@@ -51,7 +51,6 @@ class EncoderSummaryPanel(
         encoderCombo.model = model
         val selectedId = preferredEncoderId
             ?.takeIf { saved -> items.any { it.id == saved } }
-            ?: FFmpegCapabilities.preferredH264Encoder(caps)
             ?: "libx264"
         encoderCombo.selectedItem = items.first { it.id == selectedId }
         val hint = if (hw.isEmpty()) "No hardware H.264 encoders detected. Ensure ffmpeg with NVENC/QSV/AMF is installed and on PATH, or set FFMPEG_PATH." else "Detected: ${hw.joinToString(", ")}"

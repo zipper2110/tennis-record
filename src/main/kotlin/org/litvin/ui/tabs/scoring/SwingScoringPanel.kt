@@ -6,11 +6,13 @@ import org.litvin.ScoreboardTimelineBuilder
 import org.litvin.projects.ManifestIO
 import org.litvin.SessionSettings
 import org.litvin.adjustments.AdjustmentsStore
+import org.litvin.adjustments.AdjustmentsSession
 import org.litvin.markup.EdlIO
 import org.litvin.markup.EdlV1
 import org.litvin.markup.PointV1
 import org.litvin.media.PlayerStatus
 import org.litvin.media.VlcjSwingMediaPlayerAdapter
+import org.litvin.media.SwingMediaPlayer
 import org.litvin.scoring.Outcome
 import org.litvin.scoring.ScoreIO
 import org.litvin.scoring.ScoreV1
@@ -19,7 +21,8 @@ import org.litvin.scoring.ScoringEngine.MatchState
 import org.litvin.scoring.ScoringEngine.SetScore
 import org.litvin.ui.UiStyles
 import org.litvin.ui.commons.AspectPanel
-import org.litvin.ui.commons.Dialogs
+import org.litvin.ui.commons.SwingUserDialogService
+import org.litvin.ui.commons.UserDialogService
 import org.litvin.ui.commons.uiSafe
 import org.litvin.ui.commons.AppShortcuts
 import org.litvin.ui.tabs.scoring.ui.*
@@ -60,8 +63,17 @@ import javax.swing.border.EmptyBorder
  * while leaves depend only on the above contracts, per architecture rules.
  */
 class SwingScoringPanel(
+    private val player: SwingMediaPlayer,
+    private val adjustments: AdjustmentsSession,
+    private val dialogs: UserDialogService,
     private val onHelp: () -> Unit = {},
-) : JPanel(BorderLayout()) {
+) : JPanel(BorderLayout()), AutoCloseable {
+    constructor(onHelp: () -> Unit = {}) : this(
+        VlcjSwingMediaPlayerAdapter(),
+        AdjustmentsStore.legacySession(),
+        SwingUserDialogService(),
+        onHelp,
+    )
 
     private val videoPlayerActions = object : VideoPlayerActions {
         override fun playPause() {
@@ -112,6 +124,7 @@ class SwingScoringPanel(
 
     // Active state controlled by navigation
     private var isActive: Boolean = false
+    private var disposed: Boolean = false
 
     fun onActivated() = uiSafe {
         isActive = true
@@ -132,8 +145,26 @@ class SwingScoringPanel(
         saveNow()
     }
 
+    /** Release Swing and native-player resources; safe to call more than once. */
+    override fun close() {
+        if (disposed) return
+        disposed = true
+        namesSaveTimer.stop()
+        onDeactivated()
+        unsubscribeAdjustments?.invoke()
+        unsubscribeAdjustments = null
+        player.onTimeChanged = null
+        player.onStatusChanged = null
+        player.onReady = null
+        player.setPreviewOverlayImage(null)
+        adjustments.flush()
+        player.close()
+    }
+
+    fun dispose() = close()
+
     // Media player (reuse Markup adapter)
-    private val player = VlcjSwingMediaPlayerAdapter()
+    private var unsubscribeAdjustments: (() -> Unit)? = null
 
     // Deferred media loading
     private var pendingMediaFile: File? = null
@@ -156,14 +187,14 @@ class SwingScoringPanel(
             refreshVideoScoreboardOverlay()
             // Re-apply current adjustments after media is loaded to ensure VLC picks them up
             try {
-                val current = AdjustmentsStore.get()
+                val current = adjustments.get()
                 player.applyPreviewAdjustments(current)
                 if (::geometryViewport.isInitialized) {
                     geometryViewport.refreshGeometry()
                 }
             } catch (_: Throwable) { /* ignore */ }
         } catch (t: Throwable) {
-            Dialogs.showError(this, t, "Failed to load project")
+            dialogs.showError(this, t.message ?: t.toString(), "Failed to load project")
         }
     }
 
@@ -222,7 +253,7 @@ class SwingScoringPanel(
         namesSaveTimer.stop()
         this.projectDir = File(path).parentFile.absolutePath
         // Load adjustments for this project into the central store
-        AdjustmentsStore.load(projectDir!!)
+        adjustments.load(projectDir!!)
         // Load points from EDL (sorted by startMs)
         val edl = EdlIO.readForProjectDir(projectDir!!)
         points = edl.points.sortedBy { it.startMs }
@@ -495,13 +526,14 @@ class SwingScoringPanel(
         videoPanel.add(geometryViewport)
 
         // Apply adjustments from the central store (parity with Markup/Color tabs)
-        val adjUnsub = AdjustmentsStore.subscribe { adj ->
+        unsubscribeAdjustments?.invoke()
+        unsubscribeAdjustments = adjustments.subscribe { adj ->
             player.applyPreviewAdjustments(adj)
             geometryViewport.refreshGeometry()
         }
         // Apply current adjustments immediately
         try {
-            val current = AdjustmentsStore.get()
+            val current = adjustments.get()
             player.applyPreviewAdjustments(current)
             geometryViewport.refreshGeometry()
         } catch (_: Throwable) { /* ignore */ }
@@ -750,7 +782,7 @@ class SwingScoringPanel(
             points = updated
             rebuildPointsList()
         } catch (t: Throwable) {
-            Dialogs.showError(this, t, "Failed to save favorite")
+            dialogs.showError(this, t.message ?: t.toString(), "Failed to save favorite")
         }
     }
 
@@ -833,7 +865,7 @@ class SwingScoringPanel(
             ScoreIO.writeForProjectDir(dir, ScoreV1(outcomes = map, version = 1, player1Name = s1, player2Name = s2, player1ColorHex = c1, player2ColorHex = c2))
         } catch (t: Throwable) {
             // Non-fatal; show error similarly to Markup autosave
-            Dialogs.showError(this, t, "Autosave failed")
+            dialogs.showError(this, t.message ?: t.toString(), "Autosave failed")
         }
     }
 

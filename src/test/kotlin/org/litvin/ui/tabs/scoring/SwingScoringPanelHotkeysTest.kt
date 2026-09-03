@@ -26,19 +26,23 @@ class SwingScoringPanelHotkeysTest {
         }
 
         val p = requireNotNull(panel)
-        // Action name as bound in installKeyBindings()
-        val action = p.actionMap.get("togglePlayPause")
-        assertNotNull(action, "togglePlayPause action should be installed in ActionMap")
-        assertNotNull(p.actionMap.get("toggleFavorite"), "toggleFavorite action should be installed in ActionMap")
-
-        // Try invoking the action; if underlying VLC causes issues, skip rather than fail
         try {
-            // Fire on EDT to mimic real key handling
-            SwingUtilities.invokeAndWait {
-                action.actionPerformed(ActionEvent(p, ActionEvent.ACTION_PERFORMED, "test"))
+            // Action name as bound in installKeyBindings()
+            val action = p.actionMap.get("togglePlayPause")
+            assertNotNull(action, "togglePlayPause action should be installed in ActionMap")
+            assertNotNull(p.actionMap.get("toggleFavorite"), "toggleFavorite action should be installed in ActionMap")
+
+            // Try invoking the action; if underlying VLC causes issues, skip rather than fail
+            try {
+                // Fire on EDT to mimic real key handling
+                SwingUtilities.invokeAndWait {
+                    action.actionPerformed(ActionEvent(p, ActionEvent.ACTION_PERFORMED, "test"))
+                }
+            } catch (t: Throwable) {
+                assumeTrue(false, "Invoking togglePlayPause failed (likely VLC not present): ${t.javaClass.simpleName}: ${t.message}")
             }
-        } catch (t: Throwable) {
-            assumeTrue(false, "Invoking togglePlayPause failed (likely VLC not present): ${t.javaClass.simpleName}: ${t.message}")
+        } finally {
+            SwingUtilities.invokeAndWait { p.dispose() }
         }
     }
 }

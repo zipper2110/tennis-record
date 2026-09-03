@@ -5,12 +5,12 @@ import java.time.Instant
 
 /**
  * Provides Most-Recently-Used (MRU) projects list by scanning manifests on disk.
- * - Scans %USERPROFILE%\Documents\TennisRecord\Projects
+ * - Scans one repository-owned projects root
  * - Reads <projectName>.trproj in each subfolder
  * - Keeps only valid manifests; sorts by lastOpenedAt desc
  * - Supports simple in-memory remove-from-view
  */
-object RecentsProvider {
+class RecentsProvider(private val projectsRoot: File) {
     data class RecentEntry(
         val path: String,
         val name: String,
@@ -19,16 +19,10 @@ object RecentsProvider {
 
     private var cache: List<RecentEntry> = emptyList()
 
-    fun projectsRoot(): File {
-        val userHome = System.getProperty("user.home") ?: "."
-        return File(userHome, "Documents\\TennisRecord\\Projects")
-    }
-
     private fun scan(): List<RecentEntry> {
-        val root = projectsRoot()
         val items = mutableListOf<RecentEntry>()
-        if (root.exists() && root.isDirectory) {
-            root.listFiles { f -> f.isDirectory }?.forEach { dir ->
+        if (projectsRoot.exists() && projectsRoot.isDirectory) {
+            projectsRoot.listFiles { f -> f.isDirectory }?.forEach { dir ->
                 val manifests = dir.listFiles { f ->
                     f.isFile && f.name.endsWith(".trproj", ignoreCase = true)
                 }?.toList() ?: emptyList()

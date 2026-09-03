@@ -26,7 +26,7 @@ data class CompletedRender(
     val outHeight: Int,
     val bytesWritten: Long,
     val includeScoreboard: Boolean = false,
-    val createdAtEpochMs: Long = System.currentTimeMillis(),
+    val createdAtEpochMs: Long = 0L,
 )
 
 object CompletedRendersStore {
@@ -38,56 +38,77 @@ object CompletedRendersStore {
         .setSerializationInclusion(JsonInclude.Include.NON_NULL)
         .enable(SerializationFeature.INDENT_OUTPUT)
 
-    private val lock = ReentrantLock()
+    private val fileLocks = CanonicalFileLockRegistry()
 
-    private fun appDataDir(): File {
-        val dir = ApplicationLayout.current().appDataDirectory
-        if (!dir.exists()) dir.mkdirs()
-        return dir
+    internal val activeLockEntryCount: Int
+        get() = fileLocks.activeEntryCount
+
+    fun loadAll(file: File): List<CompletedRender> = withFileLock(file) {
+        loadAllUnlocked(file)
     }
 
-    private fun jsonFile(): File = File(appDataDir(), "completed-renders.json")
-
-    fun loadAll(): List<CompletedRender> = lock.withLock {
-        val f = jsonFile()
-        if (!f.exists()) return emptyList()
+    private fun loadAllUnlocked(file: File): List<CompletedRender> {
+        if (!file.exists()) return emptyList()
         return try {
-            mapper.readValue(f)
+            mapper.readValue(file)
         } catch (t: Throwable) {
             logger.warn(t) { "Failed to read completed renders. Resetting store." }
             emptyList()
         }
     }
 
-    private fun saveAll(items: List<CompletedRender>) = lock.withLock {
-        val f = jsonFile()
+    private fun saveAllUnlocked(file: File, items: List<CompletedRender>) {
         try {
-            mapper.writeValue(f, items)
+            file.parentFile?.let { if (!it.exists()) it.mkdirs() }
+            mapper.writeValue(file, items)
         } catch (t: Throwable) {
             logger.warn(t) { "Failed to write completed renders." }
         }
     }
 
-    fun append(job: RenderJob) {
-        val item = CompletedRender(
-            id = job.id,
-            projectId = job.projectId,
-            projectName = job.projectName,
-            outputPath = job.outputPath,
-            fileName = File(job.outputPath).name,
-            encoderLabel = job.encoderLabel,
-            outWidth = job.outWidth,
-            outHeight = job.outHeight,
-            bytesWritten = job.bytesWritten,
-            includeScoreboard = job.includeScoreboard,
-            createdAtEpochMs = System.currentTimeMillis(),
-        )
-        val items = loadAll().toMutableList()
+    fun append(file: File, item: CompletedRender) = withFileLock(file) {
+        val items = loadAllUnlocked(file).toMutableList()
         items.add(0, item) // newest first
-        saveAll(items)
+        saveAllUnlocked(file, items)
     }
 
-    fun clear() {
-        saveAll(emptyList())
+    fun clear(file: File) = withFileLock(file) {
+        saveAllUnlocked(file, emptyList())
+    }
+
+    private fun <T> withFileLock(file: File, action: () -> T): T {
+        return fileLocks.withLock(file, action)
+    }
+}
+
+internal class CanonicalFileLockRegistry {
+    private data class Entry(
+        val lock: ReentrantLock = ReentrantLock(),
+        var references: Int = 0,
+    )
+
+    private val monitor = Any()
+    private val entries = mutableMapOf<String, Entry>()
+
+    val activeEntryCount: Int
+        get() = synchronized(monitor) { entries.size }
+
+    fun <T> withLock(file: File, action: () -> T): T {
+        val key = try {
+            file.canonicalPath
+        } catch (_: Throwable) {
+            file.absoluteFile.toPath().normalize().toString()
+        }
+        val entry = synchronized(monitor) {
+            entries.getOrPut(key) { Entry() }.also { it.references++ }
+        }
+        try {
+            return entry.lock.withLock(action)
+        } finally {
+            synchronized(monitor) {
+                entry.references--
+                if (entry.references == 0) entries.remove(key, entry)
+            }
+        }
     }
 }

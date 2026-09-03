@@ -27,19 +27,19 @@ class CropTransformControls(
     private val onResetTransform: () -> Unit,
 ) : JPanel(BorderLayout()) {
     private val zoomSlider = JSlider(10, 400, 100).apply {
-        name = "adj-zoom"
+        name = "crop-zoom"
         toolTipText = "Zoom"
     }
     private val panXSlider = JSlider(-100, 100, 0).apply {
-        name = "adj-pan-x"
+        name = "crop-pan-x"
         toolTipText = "Pan X"
     }
     private val panYSlider = JSlider(-100, 100, 0).apply {
-        name = "adj-pan-y"
+        name = "crop-pan-y"
         toolTipText = "Pan Y"
     }
     private val rotationSlider = JSlider(-360, 360, 0).apply {
-        name = "adj-rot"
+        name = "crop-rotation"
         toolTipText = "Rotation"
     }
 
@@ -73,7 +73,7 @@ class CropTransformControls(
                 font = font.deriveFont(font.style, font.size2D + 3.0f)
             }
             val reset = JButton("Reset").apply {
-                name = "adj-transform-reset"
+                name = "crop-reset"
                 toolTipText = "Reset Transform"
                 addActionListener { onResetTransform() }
             }
