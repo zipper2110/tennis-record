@@ -24,9 +24,12 @@ The expected hosting cost is **$5 USD per month plus applicable taxes**. No cust
 | Emergency shutdown | A Worker configuration flag makes the endpoint return `410` before parsing or writing data |
 | Backups and restoration | D1 Time Travel; Workers Paid retains restore points for 30 days |
 | Operations | Cloudflare account MFA, scoped API tokens, Workers metrics, D1 usage dashboard, and sampled Workers Logs |
+| Deployment | Manual Wrangler deployment from a reviewed local checkout; no GitHub Actions deployment workflow or repository-held Cloudflare credential |
 | Privacy notice | GitHub Pages at the stable `/privacy/analytics/` URL |
 
 The worker is the only component with a D1 binding. The desktop application has no database credential, API key, or other ingestion secret.
+
+Deploy the Worker manually with Wrangler. Run the local test suite, apply the reviewed D1 migration to the remote database, then run `npx wrangler deploy` from the project checkout. A later continuous-deployment workflow must use a scoped Cloudflare API token and receives a separate security review.
 
 ## Data location and logs
 
