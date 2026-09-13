@@ -2,6 +2,8 @@ package org.litvin
 
 import org.litvin.markup.EdlIO
 import org.litvin.markup.EdlV1
+import org.litvin.markup.CommentDefaultsV1
+import org.litvin.markup.CommentV1
 import org.litvin.markup.PointV1
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -83,5 +85,33 @@ class EdlIOTest {
 
         assertEquals(1, readBack.points.size)
         assertFalse(readBack.points[0].favorite)
+    }
+
+    @Test
+    fun roundTrip_preservesCommentsAndProjectColorDefault() {
+        val tmpDir: Path = Files.createTempDirectory("edl_comments_rt_")
+        val edlPath = tmpDir.resolve("edl.json").toFile().absolutePath
+        val edl = EdlV1(
+            comments = listOf(CommentV1(7, 1_250, 3_500, "Ball was in", "#22AAFF")),
+            commentDefaults = CommentDefaultsV1("#22AAFF"),
+            nextCommentId = 8,
+        )
+
+        EdlIO.write(edlPath, edl)
+
+        assertEquals(edl, EdlIO.read(edlPath))
+    }
+
+    @Test
+    fun read_legacyEdl_suppliesEmptyCommentsWhiteDefaultAndFirstId() {
+        val tmpDir: Path = Files.createTempDirectory("edl_comments_legacy_")
+        val edlPath = tmpDir.resolve("edl.json")
+        Files.writeString(edlPath, """{"version":1,"points":[]}""")
+
+        val read = EdlIO.read(edlPath.toFile().absolutePath)
+
+        assertEquals(emptyList(), read.comments)
+        assertEquals("#FFFFFF", read.commentDefaults.colorHex)
+        assertEquals(1, read.nextCommentId)
     }
 }
