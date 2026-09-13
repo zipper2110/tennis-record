@@ -33,6 +33,14 @@ data class OverlaySpan(
     val completedSets: List<Pair<Int, Int>> = emptyList(),
 )
 
+data class CommentOverlaySpan(
+    val id: Int,
+    val startMs: Long,
+    val endMs: Long,
+    val text: String,
+    val colorHex: String,
+)
+
 object ScoreboardTimelineBuilder {
     private const val PREVIEW_SUBTITLE_PREROLL_MS = 250L
 

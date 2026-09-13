@@ -39,6 +39,8 @@ data class RenderJob(
     val includeScoreboard: Boolean = false,
     val overlayTimeline: List<OverlaySpan> = emptyList(),
     val outputPath: String,
+    val includeComments: Boolean = false,
+    val commentOverlayTimeline: List<CommentOverlaySpan> = emptyList(),
     // Runtime fields
     var status: RenderStatus = RenderStatus.QUEUED,
     var progress: Double = 0.0,          // 0.0 .. 1.0
