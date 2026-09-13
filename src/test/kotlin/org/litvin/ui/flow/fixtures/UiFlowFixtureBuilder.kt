@@ -4,6 +4,7 @@ import org.litvin.adjustments.AdjustmentsIO
 import org.litvin.adjustments.AdjustmentsV1
 import org.litvin.markup.EdlIO
 import org.litvin.markup.EdlV1
+import org.litvin.markup.CommentV1
 import org.litvin.markup.PointV1
 import org.litvin.projects.ManifestIO
 import org.litvin.projects.ProjectManifestV1
@@ -78,7 +79,10 @@ class UiFlowFixtureBuilder(
         return create(
             name = name,
             source = sourceVideo,
-            edl = EdlV1(points),
+            edl = EdlV1(
+                points = points,
+                comments = listOf(CommentV1(1, 1_000, 2_000, "Ball was in", "#FFFFFF")),
+            ),
             adjustments = AdjustmentsV1(),
             score = ScoreV1(outcomes = mapOf("point-1" to Outcome.P1, "point-2" to Outcome.P2)),
         )

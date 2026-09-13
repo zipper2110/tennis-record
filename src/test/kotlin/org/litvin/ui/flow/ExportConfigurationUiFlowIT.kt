@@ -25,6 +25,7 @@ class ExportConfigurationUiFlowIT {
                 idleTrim = true,
                 favoritesOnly = false,
                 scoreboard = true,
+                comments = true,
             )
             .initialize(output)
             .assertExactlyOneRenderQueued()
@@ -42,6 +43,8 @@ class ExportConfigurationUiFlowIT {
         assertEquals(true, job.idleTrim)
         assertEquals(false, job.favoriteOnly)
         assertEquals(true, job.includeScoreboard)
+        assertEquals(true, job.includeComments)
+        assertEquals(listOf(1), job.commentOverlayTimeline.map { it.id })
         assertEquals(output.toAbsolutePath().normalize(), Path.of(job.outputPath).toAbsolutePath().normalize())
         assertFalse(Files.exists(output), "Fake render service must not create the output file")
         assertFalse(Files.exists(Path.of("$output.part")), "Fake render service must not create an FFmpeg part file")

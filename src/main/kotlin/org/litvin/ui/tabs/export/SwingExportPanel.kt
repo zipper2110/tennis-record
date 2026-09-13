@@ -94,6 +94,10 @@ class SwingExportPanel(
         name = "export-scoreboard"
         toolTipText = "Burn in a simple scoreboard overlay that updates after each point. Uses current Scoring data; fixed English labels in v0.1.0."
     }
+    private val commentsCheck = JCheckBox("Include comments", false).apply {
+        name = "export-comments"
+        toolTipText = "Burn Rallies comments into the video as centered lower-third text."
+    }
     private val initButton = UiStyles.primaryButton("Initialize Render") { onInitializeRender() }.apply {
         name = "export-initialize"
     }
@@ -182,6 +186,8 @@ class SwingExportPanel(
         left.add(favoriteOnlyCheck)
         UiStyles.styleCheckBox(scoreboardCheck)
         left.add(scoreboardCheck)
+        UiStyles.styleCheckBox(commentsCheck)
+        left.add(commentsCheck)
         left.add(Box.createRigidArea(Dimension(0, 12)))
 
         // Video settings
@@ -566,6 +572,7 @@ class SwingExportPanel(
                 idleTrim = idleTrimCheck.isSelected,
                 favoriteOnly = favoriteOnly,
                 includeScoreboard = scoreboardCheck.isSelected,
+                includeComments = commentsCheck.isSelected,
                 outputPath = out.absolutePath,
             )
         )
