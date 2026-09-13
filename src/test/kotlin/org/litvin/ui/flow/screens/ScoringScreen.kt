@@ -17,6 +17,10 @@ internal class ScoringScreen(application: ApplicationScreen) : UserFlowScreen(ap
         context.driver.click("scoring-player-2-point")
     }
 
+    fun awardNoPoint(): ScoringScreen = apply {
+        context.driver.click("no-point")
+    }
+
     fun assertVisibleScore(expected: String) {
         application.eventually("visible score to become '$expected'") {
             context.driver.requireText("scoring-score-summary", expected)

@@ -72,6 +72,7 @@ class SwingExportPanel(
         // Refresh points summary and button gating on activation to reflect current project context
         updatePointsSummary()
         updateInitButtonState()
+        updateScoreboardDefault()
     }
     // Project context (manifest path) — optional; user can still pick output file.
     private var manifestPath: String? = null
@@ -459,19 +460,7 @@ class SwingExportPanel(
         updatePointsSummary()
         updateFavoriteOnlyAvailability()
         updateInitButtonState()
-        try {
-            val mp = manifestPath
-            val projectDir = if (!mp.isNullOrBlank()) EdlIO.projectDirFromManifest(mp) else null
-            if (projectDir != null) {
-                val score = ScoreIO.readForProjectDir(projectDir)
-                val anyWon = score.outcomes.values.any { it == Outcome.P1 || it == Outcome.P2 }
-                scoreboardCheck.isSelected = anyWon
-            } else {
-                scoreboardCheck.isSelected = false
-            }
-        } catch (_: Throwable) {
-            scoreboardCheck.isSelected = false
-        }
+        updateScoreboardDefault()
     }
 
     private fun onInitializeRender() {
@@ -655,10 +644,14 @@ class SwingExportPanel(
 
     private fun hasAnyScoredPoints(): Boolean {
         return try {
-            loadExportSummary().scoredCount > 0
+            readCurrentProjectScore().outcomes.values.any { it == Outcome.P1 || it == Outcome.P2 }
         } catch (_: Throwable) {
             false
         }
+    }
+
+    private fun updateScoreboardDefault() {
+        scoreboardCheck.isSelected = hasAnyScoredPoints()
     }
 
     private fun loadExportSummary() = ExportPlanner.summarize(
