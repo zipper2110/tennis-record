@@ -30,6 +30,7 @@ class TransportControls(
 
     private val btnStart = JButton("Point Start [C]").apply { name = "rallies-point-start" }
     private val btnEnd = JButton("Point End [V]").apply { name = "rallies-point-end" }
+    private val btnComment = JButton("Add comment").apply { name = "rallies-add-comment" }
     private val timeLabel = JLabel("00:00:00.000").apply { name = "rallies-current-time" }
 
     private val transportBar = TransportBar(
@@ -42,9 +43,10 @@ class TransportControls(
         isOpaque = false
 
         // Style point boundary buttons
-        listOf(btnStart, btnEnd).forEach { UiStyles.styleSecondary(it) }
+        listOf(btnStart, btnEnd, btnComment).forEach { UiStyles.styleSecondary(it) }
         btnStart.addActionListener { actions.setStartAtPlayhead() }
         btnEnd.addActionListener { actions.setEndAtPlayhead() }
+        btnComment.addActionListener { actions.addCommentAtPlayhead() }
 
         val pointActions = JPanel()
         pointActions.name = "markup-point-actions"
@@ -53,6 +55,8 @@ class TransportControls(
         pointActions.add(btnStart)
         pointActions.add(Box.createHorizontalStrut(8))
         pointActions.add(btnEnd)
+        pointActions.add(Box.createHorizontalStrut(8))
+        pointActions.add(btnComment)
 
         transportBar.name = "markup-video-controls"
 

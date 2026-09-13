@@ -7,6 +7,9 @@ import org.litvin.adjustments.AdjustmentsSession
 import org.litvin.markup.EdlIO
 import org.litvin.markup.EdlV1
 import org.litvin.markup.PointV1
+import org.litvin.markup.components.CommentDispatcher
+import org.litvin.markup.components.CommentPatch as DispatcherCommentPatch
+import org.litvin.markup.components.CommentState
 import org.litvin.markup.components.MarkupDispatcher
 import org.litvin.media.PlayerStatus
 import org.litvin.media.VlcjSwingMediaPlayerAdapter
@@ -16,6 +19,7 @@ import org.litvin.ui.UiStyles
 import org.litvin.ui.commons.SwingUserDialogService
 import org.litvin.ui.commons.UserDialogService
 import org.litvin.ui.tabs.markup.ui.SwingTimelineComponent
+import org.litvin.ui.tabs.markup.ui.EditCommentDialog
 import org.litvin.ui.tabs.markup.components.Keybindings
 import org.litvin.ui.tabs.markup.components.MarkupKeyActions
 import org.litvin.ui.tabs.markup.ui.PointsCardsView
@@ -69,6 +73,7 @@ class SwingMarkupPanel(
 
     // EDL Dispatcher
     private val dispatcher = MarkupDispatcher()
+    private val commentDispatcher = CommentDispatcher()
 
     // Current project manifest path (projectDir derived from it)
     private var manifestPath: String? = null
@@ -82,7 +87,7 @@ class SwingMarkupPanel(
     // Cards view (replaces legacy inline cards list)
     private var cardsView: PointsCardsView
     private var selectedVisualIndex: Int = -1 // visual index within composed list (pending at 0 when present)
-    private var reloadingPointsFromProject: Boolean = false
+    private var reloadingProjectFromDisk: Boolean = false
 
     // Consolidated keybindings helper
     private var keybindings: Keybindings? = null
@@ -146,18 +151,7 @@ class SwingMarkupPanel(
         val playing = player.status() == PlayerStatus.PLAYING
         val time = player.currentTimeMs()
         val pending = dispatcher.getPendingStart()?.toLong()
-        val list = dispatcher.getCompletedPoints()
-
-        val dto = list.map { p ->
-            PointDto(
-                id = p.id,
-                startMs = p.startMs.toLong(),
-                endMs = p.endMs.toLong(),
-                label = p.label,
-                flags = emptySet(),
-                favorite = p.favorite,
-            )
-        }
+        val events = buildEvents()
         val autos = AutosaveState(pending = autosave.isPending(), lastSavedAtMs = autosave.lastSavedAtMs)
 
         val sel = selectedVisualIndex.takeIf { it >= 0 }
@@ -166,9 +160,32 @@ class SwingMarkupPanel(
             currentTimeMs = time,
             selectedVisualIndex = sel,
             pendingDraftStartMs = pending,
-            points = dto,
+            events = events,
             autosave = autos,
         )
+    }
+
+    private fun buildEvents(): List<MarkupEventDto> {
+        val rallies = dispatcher.getCompletedPoints().map { point ->
+            RallyEventDto(PointDto(
+                id = point.id,
+                startMs = point.startMs.toLong(),
+                endMs = point.endMs.toLong(),
+                label = point.label,
+                flags = emptySet(),
+                favorite = point.favorite,
+            ))
+        }
+        val comments = commentDispatcher.state().comments.map { comment ->
+            CommentDto(
+                id = comment.id,
+                startMs = comment.startMs.toLong(),
+                durationMs = comment.durationMs.toLong(),
+                text = comment.text,
+                colorHex = comment.colorHex,
+            )
+        }
+        return (rallies + comments).sortedWith(compareBy<MarkupEventDto> { it.startMs }.thenBy { it.stableKey })
     }
 
     private fun pushCardsState() {
@@ -186,24 +203,35 @@ class SwingMarkupPanel(
                 refreshUiAtCurrentTime()
                 // If user clicked on a point interval on the timeline, select and scroll to it
 
-                val pts = dispatcher.getCompletedPoints()
-                val idx = pts.indexOfFirst { it.startMs <= t && t < it.endMs }
-                if (idx >= 0) {
-                    setSelectedVisualAndScroll(idx)
+                val point = dispatcher.getCompletedPoints().firstOrNull { it.startMs <= t && t < it.endMs }
+                if (point != null) {
+                    selectEventAndScroll("rally:${point.id}")
                 }
 
                 player.component.requestFocusInWindow()
 
             }
-        }).apply { name = "rallies-seek" }
+        },
+        commentsProvider = { commentDispatcher.state().comments },
+        onCommentSelected = { id -> EventQueue.invokeLater { selectEventAndScroll("comment:$id") } },
+    ).apply { name = "rallies-seek" }
 
     // Autosave controller (debounced, off-EDT persistence)
     private val autosave = AutosaveController(
         debounceMs = 300, executor = autosaveExecutor, saver = {
             try {
                 val dir = projectDir ?: return@AutosaveController
-                val list = dispatcher.getCompletedPoints()
-                EdlIO.writeForProjectDir(dir, EdlV1(points = list, version = 1))
+                val comments = commentDispatcher.state()
+                EdlIO.writeForProjectDir(
+                    dir,
+                    EdlV1(
+                        points = dispatcher.getCompletedPoints(),
+                        comments = comments.comments,
+                        commentDefaults = comments.defaults,
+                        nextCommentId = comments.nextCommentId,
+                        version = 1,
+                    ),
+                )
             } catch (t: Throwable) {
                 // Surface error on EDT
                 EventQueue.invokeLater { dialogs.showError(this, t.message ?: t.toString(), "Autosave failed") }
@@ -255,15 +283,24 @@ class SwingMarkupPanel(
                 dispatcher.onPointStart(ms)
             }
 
-            override fun editPoint(id: String, patch: PointPatch) { /* not used here */
+            override fun editPoint(id: String, patch: PointPatch) {
+                this@SwingMarkupPanel.editPoint(id, patch)
             }
 
-            override fun deletePoint(id: String) { /* not used here */
+            override fun deletePoint(id: String) {
+                this@SwingMarkupPanel.deletePoint(id)
             }
 
             override fun toggleFavorite(id: String) {
                 this@SwingMarkupPanel.toggleFavorite(id)
             }
+
+            override fun addCommentAtPlayhead() = this@SwingMarkupPanel.addCommentAtPlayhead()
+            override fun createComment(startMs: Long, durationMs: Long, text: String, colorHex: String) =
+                this@SwingMarkupPanel.createComment(startMs, durationMs, text, colorHex)
+            override fun editComment(id: Int, patch: CommentPatch) = this@SwingMarkupPanel.editComment(id, patch)
+            override fun deleteComment(id: Int) = this@SwingMarkupPanel.deleteComment(id)
+            override fun updateCommentColor(id: Int, colorHex: String) = this@SwingMarkupPanel.updateCommentColor(id, colorHex)
 
             override fun selectByVisualIndex(index: Int) {
                 this@SwingMarkupPanel.setSelectedVisualAndScroll(index)
@@ -320,7 +357,7 @@ class SwingMarkupPanel(
         val header = JPanel(BorderLayout())
         header.isOpaque = false
         header.border = BorderFactory.createEmptyBorder(0, 0, 4, 0)
-        header.add(JLabel("Marked points"), BorderLayout.WEST)
+        header.add(JLabel("Rallies & events"), BorderLayout.WEST)
         countBadge.horizontalAlignment = SwingConstants.CENTER
         countBadge.border = BorderFactory.createCompoundBorder(
             BorderFactory.createLineBorder(Color(0x44, 0x88, 0x00)), BorderFactory.createEmptyBorder(2, 6, 2, 6)
@@ -365,16 +402,24 @@ class SwingMarkupPanel(
                 dispatcher.onPointStart(ms)
             }
 
-            override fun editPoint(id: String, patch: PointPatch) { /* not used by cards */
+            override fun editPoint(id: String, patch: PointPatch) {
+                this@SwingMarkupPanel.editPoint(id, patch)
             }
 
             override fun deletePoint(id: String) {
-                dispatcher.deletePoint(id)
+                this@SwingMarkupPanel.deletePoint(id)
             }
 
             override fun toggleFavorite(id: String) {
                 this@SwingMarkupPanel.toggleFavorite(id)
             }
+
+            override fun addCommentAtPlayhead() = this@SwingMarkupPanel.addCommentAtPlayhead()
+            override fun createComment(startMs: Long, durationMs: Long, text: String, colorHex: String) =
+                this@SwingMarkupPanel.createComment(startMs, durationMs, text, colorHex)
+            override fun editComment(id: Int, patch: CommentPatch) = this@SwingMarkupPanel.editComment(id, patch)
+            override fun deleteComment(id: Int) = this@SwingMarkupPanel.deleteComment(id)
+            override fun updateCommentColor(id: Int, colorHex: String) = this@SwingMarkupPanel.updateCommentColor(id, colorHex)
 
             override fun selectByVisualIndex(index: Int) {
                 setSelectedVisualAndScroll(index)
@@ -425,16 +470,8 @@ class SwingMarkupPanel(
         player.onStatusChanged = { _ -> EventQueue.invokeLater { updatePlayPauseButton(); refreshUiAtCurrentTime() } }
 
         // Dispatcher callback to refresh UI for all leaf components
-        dispatcher.onPointsChanged = {
-            val skipAutosave = reloadingPointsFromProject
-            EventQueue.invokeLater {
-                val pts = dispatcher.getCompletedPoints()
-                updateCountBadge(pts)
-                pushCardsState()
-                timeline.repaint()
-                if (!skipAutosave) scheduleAutosave()
-            }
-        }
+        dispatcher.onPointsChanged = ::onMarkupChanged
+        commentDispatcher.onCommentsChanged = ::onMarkupChanged
 
         // Consolidated keybindings helper
         keybindings = Keybindings(this, { isTextEditingFocus() }, object : MarkupKeyActions {
@@ -488,8 +525,7 @@ class SwingMarkupPanel(
                 return
             }
             // Load EDL if present
-            val edl = EdlIO.readForProjectDir(projectDir!!)
-            dispatcher.setPoints(edl.points)
+            loadEdl(EdlIO.readForProjectDir(projectDir!!))
             // Defer VLCJ media load until component becomes displayable
             pendingMediaFile = File(src)
             isMediaLoaded = false
@@ -514,30 +550,26 @@ class SwingMarkupPanel(
 
     private fun refreshPointsFromProject() {
         val dir = projectDir ?: return
-        val currentPoints = dispatcher.getCompletedPoints()
-        val selectedId = currentPoints.getOrNull(selectedVisualIndex)?.id
-        val wasPendingSelected = dispatcher.getPendingStart() != null && selectedVisualIndex == currentPoints.size
+        val selectedKey = selectedEvent()?.stableKey
+        val wasPendingSelected = dispatcher.getPendingStart() != null && selectedVisualIndex == buildEvents().size
         try {
-            val edl = EdlIO.readForProjectDir(dir)
-            reloadingPointsFromProject = true
-            dispatcher.setPoints(edl.points)
+            loadEdl(EdlIO.readForProjectDir(dir))
         } catch (t: Throwable) {
-            dialogs.showError(this, t.message ?: t.toString(), "Failed to refresh point markers")
+            dialogs.showError(this, t.message ?: t.toString(), "Failed to refresh rallies and events")
             return
-        } finally {
-            reloadingPointsFromProject = false
         }
 
-        val refreshedPoints = dispatcher.getCompletedPoints()
-        val restoredIndex = selectedId?.let { id -> refreshedPoints.indexOfFirst { it.id == id } } ?: -1
+        val refreshedEvents = buildEvents()
+        val restoredIndex = selectedKey?.let { key -> refreshedEvents.indexOfFirst { it.stableKey == key } } ?: -1
         when {
             restoredIndex >= 0 -> setSelectedVisualAndScroll(restoredIndex)
-            wasPendingSelected && dispatcher.getPendingStart() != null -> setSelectedVisualAndScroll(refreshedPoints.size)
-            selectedVisualIndex in refreshedPoints.indices -> setSelectedVisual(selectedVisualIndex)
+            wasPendingSelected && dispatcher.getPendingStart() != null -> setSelectedVisualAndScroll(refreshedEvents.size)
+            selectedVisualIndex in refreshedEvents.indices -> setSelectedVisual(selectedVisualIndex)
             else -> setSelectedVisual(-1)
         }
-        updateCountBadge(refreshedPoints)
+        updateCountBadge(dispatcher.getCompletedPoints())
         pushCardsState()
+        timeline.revalidate()
         timeline.repaint()
     }
 
@@ -563,26 +595,131 @@ class SwingMarkupPanel(
         cardsView.scrollToVisualIndex(visualIndex)
     }
 
+    private fun selectedEvent(): MarkupEventDto? = buildEvents().getOrNull(selectedVisualIndex)
+
+    private fun selectEventAndScroll(stableKey: String) {
+        val index = buildEvents().indexOfFirst { it.stableKey == stableKey }
+        if (index >= 0) setSelectedVisualAndScroll(index)
+    }
+
+    private fun loadEdl(edl: EdlV1) {
+        reloadingProjectFromDisk = true
+        try {
+            dispatcher.setPoints(edl.points)
+            commentDispatcher.load(CommentState(edl.comments, edl.commentDefaults, edl.nextCommentId))
+        } finally {
+            reloadingProjectFromDisk = false
+        }
+    }
+
+    private fun onMarkupChanged() {
+        val skipAutosave = reloadingProjectFromDisk
+        EventQueue.invokeLater {
+            updateCountBadge(dispatcher.getCompletedPoints())
+            pushCardsState()
+            timeline.revalidate()
+            timeline.repaint()
+            if (!skipAutosave) scheduleAutosave()
+        }
+    }
+
+    private fun addCommentAtPlayhead() {
+        EditCommentDialog.showCreate(
+            parent = this,
+            initialStartMs = player.currentTimeMs(),
+            defaultColor = commentDispatcher.state().defaults.colorHex,
+            actions = commentActions,
+        )
+    }
+
+    private val commentActions: MarkupActions = object : MarkupActions {
+        override fun togglePlayPause() = this@SwingMarkupPanel.togglePlayPause()
+        override fun seekTo(ms: Long) = player.seek(ms)
+        override fun jumpToSelected() = this@SwingMarkupPanel.jumpToSelected()
+        override fun setStartAtPlayhead() = this@SwingMarkupPanel.onStartAtPlayhead()
+        override fun setEndAtPlayhead() = this@SwingMarkupPanel.onEndAtPlayhead()
+        override fun createPointAt(ms: Long) = dispatcher.onPointStart(ms)
+        override fun editPoint(id: String, patch: PointPatch) = this@SwingMarkupPanel.editPoint(id, patch)
+        override fun deletePoint(id: String) = this@SwingMarkupPanel.deletePoint(id)
+        override fun toggleFavorite(id: String) = this@SwingMarkupPanel.toggleFavorite(id)
+        override fun selectByVisualIndex(index: Int) = this@SwingMarkupPanel.setSelectedVisualAndScroll(index)
+        override fun saveNow() = this@SwingMarkupPanel.saveNow()
+        override fun addCommentAtPlayhead() = this@SwingMarkupPanel.addCommentAtPlayhead()
+        override fun createComment(startMs: Long, durationMs: Long, text: String, colorHex: String) =
+            this@SwingMarkupPanel.createComment(startMs, durationMs, text, colorHex)
+        override fun editComment(id: Int, patch: CommentPatch) = this@SwingMarkupPanel.editComment(id, patch)
+        override fun deleteComment(id: Int) = this@SwingMarkupPanel.deleteComment(id)
+        override fun updateCommentColor(id: Int, colorHex: String) = this@SwingMarkupPanel.updateCommentColor(id, colorHex)
+    }
+
+    private fun createComment(startMs: Long, durationMs: Long, text: String, colorHex: String) {
+        val comment = commentDispatcher.create(
+            startMs = startMs.toCommentIntOrNull() ?: return showCommentRangeError(),
+            durationMs = durationMs.toCommentIntOrNull() ?: return showCommentRangeError(),
+            text = text,
+            colorHex = colorHex,
+        )
+        maybeShowCommentHint()
+        comment?.let { EventQueue.invokeLater { selectEventAndScroll("comment:${it.id}") } }
+    }
+
+    private fun editComment(id: Int, patch: CommentPatch) {
+        val updated = commentDispatcher.update(
+            id,
+            DispatcherCommentPatch(
+                startMs = patch.startMs?.toCommentIntOrNull() ?: patch.startMs?.let { return showCommentRangeError() },
+                durationMs = patch.durationMs?.toCommentIntOrNull() ?: patch.durationMs?.let { return showCommentRangeError() },
+                text = patch.text,
+                colorHex = patch.colorHex,
+            ),
+        )
+        maybeShowCommentHint()
+        if (updated) EventQueue.invokeLater { selectEventAndScroll("comment:$id") }
+    }
+
+    private fun deleteComment(id: Int) {
+        if (commentDispatcher.delete(id)) setSelectedVisual(-1)
+        maybeShowCommentHint()
+    }
+
+    private fun updateCommentColor(id: Int, colorHex: String) {
+        if (commentDispatcher.update(id, DispatcherCommentPatch(colorHex = colorHex))) {
+            EventQueue.invokeLater { selectEventAndScroll("comment:$id") }
+        }
+        maybeShowCommentHint()
+    }
+
+    private fun editPoint(id: String, patch: PointPatch) {
+        val existing = dispatcher.getCompletedPoints().firstOrNull { it.id == id } ?: return
+        val updated = dispatcher.updatePoint(
+            id,
+            patch.startMs ?: existing.startMs.toLong(),
+            patch.endMs ?: existing.endMs.toLong(),
+            patch.label ?: existing.label,
+        )
+        maybeShowDispatcherHint()
+        if (updated) EventQueue.invokeLater { selectEventAndScroll("rally:$id") }
+    }
+
+    private fun deletePoint(id: String) {
+        if (dispatcher.deletePoint(id)) setSelectedVisual(-1)
+    }
+
+    private fun Long.toCommentIntOrNull(): Int? = takeIf { it in 0..Int.MAX_VALUE.toLong() }?.toInt()
+
+    private fun showCommentRangeError() {
+        dialogs.showInfo(this, "Comment times must fit within the supported video timeline.", "Invalid comment")
+    }
+
     private fun jumpToSelected() {
-        val hasPending = dispatcher.getPendingStart() != null
-        val sel = selectedVisualIndex
-        if (sel < 0) return
-        val pts = dispatcher.getCompletedPoints()
-        val pendingIndex = if (hasPending) pts.size else -1
-        if (sel == pendingIndex) return
-        val dataIndex = sel
-        if (dataIndex !in pts.indices) return
-        val p = pts[dataIndex]
-        player.seek(p.startMs.toLong())
+        val event = selectedEvent() ?: return
+        player.seek(event.startMs)
         EventQueue.invokeLater { refreshUiAtCurrentTime(); player.component.requestFocusInWindow() }
     }
 
     private fun toggleFavoriteSelectedPoint() {
-        val sel = selectedVisualIndex
-        if (sel < 0) return
-        val pts = dispatcher.getCompletedPoints()
-        if (sel !in pts.indices) return
-        toggleFavorite(pts[sel].id)
+        val rally = selectedEvent() as? RallyEventDto ?: return
+        toggleFavorite(rally.point.id)
     }
 
     private fun toggleFavorite(id: String) {
@@ -599,11 +736,11 @@ class SwingMarkupPanel(
         // half-open interval [start, end)
         val idx = p.indexOfFirst { it.startMs <= t && t < it.endMs }
         if (idx >= 0) {
-            setSelectedVisual(idx)
+            selectEventAndScroll("rally:${p[idx].id}")
         } else {
             // Keep pending selected if present; otherwise clear selection
             if (hasPending) {
-                val pendingIndex = p.size // pending is visually last
+                val pendingIndex = buildEvents().size // pending is visually last
                 setSelectedVisual(pendingIndex)
             } else {
                 setSelectedVisual(-1)
@@ -642,8 +779,7 @@ class SwingMarkupPanel(
         EventQueue.invokeLater {
             rebuildCards()
             if (dispatcher.getPendingStart() != null) {
-                val pts = dispatcher.getCompletedPoints()
-                val pendingIndex = pts.size // pending is visually last
+                val pendingIndex = buildEvents().size // pending is visually last
                 setSelectedVisual(pendingIndex)
             }
         }
@@ -659,11 +795,7 @@ class SwingMarkupPanel(
             if (prevPending != null && nowPending == null) {
                 // A point was likely created; select the row matching prevPending start
                 val pts = dispatcher.getCompletedPoints()
-                val idx = pts.indexOfFirst { it.startMs == prevPending }
-                if (idx >= 0) {
-                    val visual = idx // no pending row now
-                    setSelectedVisual(visual)
-                }
+                pts.firstOrNull { it.startMs == prevPending }?.let { selectEventAndScroll("rally:${it.id}") }
             }
         }
     }
@@ -671,6 +803,11 @@ class SwingMarkupPanel(
     private fun maybeShowDispatcherHint() {
         val m = dispatcher.consumeUserMessage() ?: return
         dialogs.showInfo(this, m, "Hint")
+    }
+
+    private fun maybeShowCommentHint() {
+        val message = commentDispatcher.consumeUserMessage() ?: return
+        dialogs.showInfo(this, message, "Hint")
     }
 
     private fun scheduleAutosave() {
@@ -697,6 +834,7 @@ class SwingMarkupPanel(
         keybindings?.uninstall()
         keybindings = null
         dispatcher.onPointsChanged = null
+        commentDispatcher.onCommentsChanged = null
         unsubscribeAdjustments?.invoke()
         unsubscribeAdjustments = null
         autosave.flushAndClose()

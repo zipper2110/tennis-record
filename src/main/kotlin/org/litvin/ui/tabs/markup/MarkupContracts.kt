@@ -18,6 +18,12 @@ interface MarkupActions {
     fun deletePoint(id: String)
     fun toggleFavorite(id: String)
 
+    fun addCommentAtPlayhead() {}
+    fun createComment(startMs: Long, durationMs: Long, text: String, colorHex: String) {}
+    fun editComment(id: Int, patch: CommentPatch) {}
+    fun deleteComment(id: Int) {}
+    fun updateCommentColor(id: Int, colorHex: String) {}
+
     /**
      * Selects an item by its visual index (index within the composed view list).
      */
@@ -32,9 +38,31 @@ data class MarkupViewState(
     val currentTimeMs: Long,
     val selectedVisualIndex: Int?,
     val pendingDraftStartMs: Long?,
-    val points: List<PointDto>,
+    val events: List<MarkupEventDto>,
     val autosave: AutosaveState,
 )
+
+sealed interface MarkupEventDto {
+    val startMs: Long
+    val stableKey: String
+}
+
+data class RallyEventDto(
+    val point: PointDto,
+) : MarkupEventDto {
+    override val startMs: Long get() = point.startMs
+    override val stableKey: String get() = "rally:${point.id}"
+}
+
+data class CommentDto(
+    val id: Int,
+    override val startMs: Long,
+    val durationMs: Long,
+    val text: String,
+    val colorHex: String,
+) : MarkupEventDto {
+    override val stableKey: String get() = "comment:$id"
+}
 
 /** Lightweight DTO for a markup point shown in UI components. */
 data class PointDto(
@@ -53,6 +81,14 @@ data class PointPatch(
     val label: String? = null,
     val flags: Set<String>? = null,
     val favorite: Boolean? = null,
+)
+
+/** Partial update to a comment. Fields set to null are not modified. */
+data class CommentPatch(
+    val startMs: Long? = null,
+    val durationMs: Long? = null,
+    val text: String? = null,
+    val colorHex: String? = null,
 )
 
 /** Autosave status surfaced to the toolbar and other indicators. */
