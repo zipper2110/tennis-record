@@ -126,13 +126,16 @@ class RenderQueueList(
             job.idleTrim -> "Idle trim: ${job.edlSnapshot.size} points"
             else -> "Full render"
         }
-        val scoreboard = if (job.includeScoreboard) "Scoreboard on" else "Scoreboard off"
+        val overlays = listOfNotNull(
+            "Scoreboard".takeIf { job.includeScoreboard },
+            "Comments".takeIf { job.includeComments },
+        ).joinToString(" + ").ifEmpty { "None" }
         val details = listOf(
             "Preset: ${job.presetId}",
             "Resolution: $resolution (${job.outWidth} x ${job.outHeight})",
             "Encoder: ${job.encoderLabel}",
             trim,
-            scoreboard,
+            "Overlays: $overlays",
             "Output: ${job.outputPath}"
         ).joinToString("  |  ")
         return "<html><b>${escape(project + file)}</b><br><span style='color:#ADAAAA'>${escape(details)}</span></html>"

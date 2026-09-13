@@ -26,6 +26,7 @@ data class CompletedRender(
     val outHeight: Int,
     val bytesWritten: Long,
     val includeScoreboard: Boolean = false,
+    val includeComments: Boolean = false,
     val createdAtEpochMs: Long = 0L,
 )
 

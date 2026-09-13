@@ -411,8 +411,11 @@ class SwingExportPanel(
                     progressBar.isVisible = true
                     stats.isVisible = true
 
-                    val sbFlag = if (cur.includeScoreboard) "  ·  Scoreboard" else ""
-                    nameLabel.text = File(cur.outputPath).name + sbFlag
+                    val overlays = listOfNotNull(
+                        "Scoreboard".takeIf { cur.includeScoreboard },
+                        "Comments".takeIf { cur.includeComments },
+                    ).joinToString(" + ").takeIf { it.isNotEmpty() }?.let { "  ·  $it" }.orEmpty()
+                    nameLabel.text = File(cur.outputPath).name + overlays
                     jobIdLabel.text = "Job ID: ${cur.id}"
                     progressBar.value = (cur.progress * 100).toInt()
                     progressBar.string = "${(cur.progress * 100).toInt()}%"
@@ -614,11 +617,14 @@ class SwingExportPanel(
 
     private fun formatCompletedItem(item: CompletedRender): String {
         val size = formatSize(item.bytesWritten)
-        val sb = if (item.includeScoreboard) "  ·  Scoreboard" else ""
+        val overlays = listOfNotNull(
+            "Scoreboard".takeIf { item.includeScoreboard },
+            "Comments".takeIf { item.includeComments },
+        ).joinToString(" + ").takeIf { it.isNotEmpty() }?.let { "  ·  $it" }.orEmpty()
         val res = if (item.outHeight >= 2160 || item.outWidth >= 3840) "4K" else "1080p"
         val proj = item.projectName?.takeIf { it.isNotBlank() }
         val left = if (proj != null) "[$proj] ${item.fileName}" else item.fileName
-        return "$left$sb  —  ${item.encoderLabel} / $res  —  $size"
+        return "$left$overlays  —  ${item.encoderLabel} / $res  —  $size"
     }
 
     private fun formatEta(secs: Long): String {

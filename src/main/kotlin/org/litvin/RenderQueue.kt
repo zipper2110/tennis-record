@@ -226,16 +226,13 @@ object RenderQueueManager {
                 }
                 if (abortIfCanceled(request, partOut)) continue
 
-                // Prepare scoreboard overlay ASS file if requested
+                // Prepare the requested overlay ASS file.
                 var assFile: java.io.File? = null
-                if (job.includeScoreboard && job.overlayTimeline.isNotEmpty()) {
-                    try {
-                        assFile = java.io.File(partOut.absolutePath + ".ass")
-                        AssOverlayWriter.write(assFile!!, job.overlayTimeline, job.outWidth, job.outHeight)
-                    } catch (t: Throwable) {
-                        logger.warn(t) { "Failed to prepare overlay ASS; proceeding without overlay" }
-                        assFile = null
-                    }
+                try {
+                    assFile = RenderOverlayScript.writeFor(job, partOut)
+                } catch (t: Throwable) {
+                    logger.warn(t) { "Failed to prepare overlay ASS; proceeding without overlay" }
+                    assFile = null
                 }
                 if (abortIfCanceled(request, partOut, assFile)) continue
 

@@ -27,6 +27,7 @@ class CompletedRendersStoreTest {
                 encoderLabel = "H.264 (libx264)",
                 idleTrim = false,
                 includeScoreboard = true,
+                includeComments = true,
                 overlayTimeline = emptyList(),
                 outputPath = File(tempDir, "out.mp4").absolutePath,
             )
@@ -45,6 +46,7 @@ class CompletedRendersStoreTest {
             assertEquals(job.outHeight, item.outHeight)
             assertEquals(job.bytesWritten, item.bytesWritten)
             assertTrue(item.includeScoreboard)
+            assertTrue(item.includeComments)
             assertEquals(1_234L, item.createdAtEpochMs)
 
             assertTrue(second.loadAll().isEmpty())
