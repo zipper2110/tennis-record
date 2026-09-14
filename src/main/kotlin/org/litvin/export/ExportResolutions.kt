@@ -28,8 +28,8 @@ object ExportResolutions {
     }
 
     fun preferredOption(options: List<ExportResolutionOption>, savedResolution: String?): ExportResolutionOption? =
-        options.firstOrNull { it.resolution.label == savedResolution }
-            ?: options.firstOrNull { it.isSourceResolution }
+        options.firstOrNull { it.isSourceResolution }
+            ?: options.firstOrNull { it.resolution.label == savedResolution }
             ?: options.firstOrNull()
 }
 

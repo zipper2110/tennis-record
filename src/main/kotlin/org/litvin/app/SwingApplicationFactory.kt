@@ -46,9 +46,16 @@ object SwingApplicationFactory {
     private const val CARD_ADJ_CROP_ROTATE = "adjustments-crop-rotate"
     private const val CARD_TEST = "test"
 
+    internal fun shouldShowGpuRestartNotification(
+        show: Boolean,
+        testEnabled: Boolean,
+        gpuPreferenceChanged: Boolean,
+    ): Boolean = show && !testEnabled && gpuPreferenceChanged
+
     fun create(
         services: AppServices,
         show: Boolean = true,
+        onWindowClosed: () -> Unit = {},
     ): SwingApplicationHandle {
         check(EventQueue.isDispatchThread()) { "Swing application must be created on the EDT" }
 
@@ -292,7 +299,11 @@ object SwingApplicationFactory {
             frame.addWindowListener(object : WindowAdapter() {
                 override fun windowClosing(event: WindowEvent?) {
                     analytics?.record(AnalyticsEvent.SessionEnded)
-                    handle.close()
+                    try {
+                        handle.close()
+                    } finally {
+                        onWindowClosed()
+                    }
                 }
             })
 
@@ -303,7 +314,7 @@ object SwingApplicationFactory {
                 EventQueue.invokeLater { AnalyticsConsentDialog.show(frame, analytics, analyticsConfig.privacyUrl) }
             }
 
-            if (show && WindowsGpuPreference.wasChangeApplied()) {
+            if (shouldShowGpuRestartNotification(show, testEnabled, WindowsGpuPreference.wasChangeApplied())) {
                 JOptionPane.showMessageDialog(
                     frame,
                     "We set a Windows preference for this app to use the dedicated/external GPU on future launches.\n\n" +

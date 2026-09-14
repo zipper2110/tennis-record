@@ -18,6 +18,7 @@ import org.litvin.media.StillFrameMediaInfo
 import org.litvin.media.SwingMediaPlayer
 import org.litvin.projects.ProjectManifestV1
 import org.litvin.projects.ProjectSummary
+import org.litvin.projects.FileProjectsRepository
 import org.litvin.projects.ProjectsRepository
 import org.litvin.ui.commons.FilePicker
 import org.litvin.ui.commons.UserDialogService
@@ -26,6 +27,7 @@ import java.awt.Component
 import java.awt.Container
 import java.awt.Dimension
 import java.awt.Window
+import java.awt.event.WindowEvent
 import java.awt.image.BufferedImage
 import java.awt.image.RenderedImage
 import java.io.File
@@ -36,8 +38,10 @@ import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.ScheduledThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import java.util.prefs.AbstractPreferences
+import javax.swing.AbstractButton
 import javax.swing.JFrame
 import javax.swing.JComboBox
+import javax.swing.JLabel
 import javax.swing.JPanel
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -45,6 +49,93 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 class SwingApplicationFactoryTest {
+    @Test
+    fun `test mode suppresses the GPU restart notification`() {
+        assertTrue(
+            SwingApplicationFactory.shouldShowGpuRestartNotification(
+                show = true,
+                testEnabled = false,
+                gpuPreferenceChanged = true,
+            )
+        )
+        assertFalse(
+            SwingApplicationFactory.shouldShowGpuRestartNotification(
+                show = true,
+                testEnabled = true,
+                gpuPreferenceChanged = true,
+            )
+        )
+    }
+
+    @Test
+    fun `a project can return to Projects after opening`() {
+        val projectFixture = OpenProjectFixture()
+        val fixture = TestServices(projectsRepository = projectFixture.repository)
+        val windowsBefore = Window.getWindows().toSet()
+        var handle: SwingApplicationHandle? = null
+
+        try {
+            val opened = GuiActionRunner.execute<SwingApplicationHandle> {
+                SwingApplicationFactory.create(fixture.services, show = true)
+            }
+            handle = opened
+
+            GuiActionRunner.execute {
+                checkNotNull(findComponent<AbstractButton>(opened.frame) { it.name == "projects-open-${projectFixture.project.id}" })
+                    .doClick()
+            }
+            assertTrue(checkNotNull(findComponent(opened.frame) { it.name == "rallies-point-start" }).isShowing)
+
+            GuiActionRunner.execute {
+                checkNotNull(findComponent<AbstractButton>(opened.frame) { it.name == "nav-projects" }).doClick()
+            }
+            assertEquals("Tennis Record — Projects", opened.frame.title)
+            assertTrue(checkNotNull(findComponent(opened.frame) { it.name == "projects-import-match" }).isShowing)
+            assertEquals(
+                projectFixture.project.name,
+                checkNotNull(findComponent<JLabel>(opened.frame) { it.name == "projects-current-name" }).text,
+            )
+        } finally {
+            handle?.close()
+            Window.getWindows().filterNot(windowsBefore::contains).forEach(Window::dispose)
+        }
+    }
+
+    @Test
+    fun `window close cleans resources before it requests process exit`() {
+        val fixture = TestServices()
+        val windowsBefore = Window.getWindows().toSet()
+        var exitRequests = 0
+        var handle: SwingApplicationHandle? = null
+
+        try {
+            val opened = GuiActionRunner.execute<SwingApplicationHandle> {
+                SwingApplicationFactory.create(
+                    services = fixture.services,
+                    show = true,
+                    onWindowClosed = {
+                        assertTrue(fixture.mediaPlayers.players.all { it.closeCalls == 1 })
+                        assertEquals(1, fixture.mediaPlayers.frameCapture.closeCalls)
+                        assertEquals(1, fixture.renderService.closeCalls)
+                        assertEquals(1, fixture.executors.closeCalls)
+                        exitRequests++
+                    },
+                )
+            }
+            handle = opened
+
+            GuiActionRunner.execute {
+                opened.frame.dispatchEvent(WindowEvent(opened.frame, WindowEvent.WINDOW_CLOSING))
+            }
+
+            assertEquals(1, exitRequests)
+            assertTrue(Window.getWindows().filterNot(windowsBefore::contains).none(Window::isDisplayable))
+        } finally {
+            handle?.close()
+            Window.getWindows().filterNot(windowsBefore::contains).forEach(Window::dispose)
+        }
+    }
+
     @Test
     fun visibleApplicationUsesInjectedEncoderCapabilitiesWithoutNativeProbe() {
         val fixture = TestServices(EncoderCapabilities(setOf("h264_nvenc"), "h264_nvenc"))
@@ -103,6 +194,11 @@ class SwingApplicationFactoryTest {
     private inline fun <reified T : Component> findComponent(root: Component): T? =
         findComponent(root, T::class.java)
 
+    private inline fun <reified T : Component> findComponent(
+        root: Component,
+        noinline predicate: (T) -> Boolean,
+    ): T? = findComponents(root, T::class.java).firstOrNull(predicate)
+
     private fun <T : Component> findComponent(root: Component, type: Class<T>): T? {
         if (type.isInstance(root)) return type.cast(root)
         if (root !is Container) return null
@@ -116,6 +212,7 @@ class SwingApplicationFactoryTest {
 
     private class TestServices(
         encoderCapabilities: EncoderCapabilities = EncoderCapabilities.NONE,
+        projectsRepository: ProjectsRepository = EmptyProjectsRepository,
     ) {
         val root = kotlin.io.path.createTempDirectory("swing-application-").toFile()
         val executors = RecordingExecutorProvider()
@@ -132,11 +229,18 @@ class SwingApplicationFactoryTest {
             renderService = renderService,
             filePicker = NoOpFilePicker,
             dialogs = NoOpDialogs,
-            projectsRepository = EmptyProjectsRepository,
+            projectsRepository = projectsRepository,
             completedRenders = EmptyCompletedRendersRepository,
             adjustments = AdjustmentsSession(adjustmentsExecutor, 60_000),
             encoderCapabilities = encoderCapabilities,
         )
+    }
+
+    private class OpenProjectFixture {
+        val root = kotlin.io.path.createTempDirectory("swing-project-navigation-").toFile()
+        val source = root.resolve("source.mp4").apply { writeText("") }
+        val repository = FileProjectsRepository(root.resolve("projects"))
+        val project = repository.createProject(source.absolutePath)
     }
 
     private class RecordingExecutorProvider : ExecutorProvider {

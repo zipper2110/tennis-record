@@ -65,9 +65,8 @@ object ExportFrameRates {
     fun preferredOption(
         options: List<ExportFrameRateOption>,
         savedFrameRate: String?,
-    ): ExportFrameRateOption? = options.firstOrNull {
-        it.frameRate.ffmpegArgument == savedFrameRate
-    } ?: options.firstOrNull { it.isSourceRate }
+    ): ExportFrameRateOption? = options.firstOrNull { it.isSourceRate }
+        ?: options.firstOrNull { it.frameRate.ffmpegArgument == savedFrameRate }
 
     private const val EPSILON = 0.0001
 }

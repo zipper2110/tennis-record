@@ -48,7 +48,10 @@ object SwingMainApp {
             try {
                 WindowsGpuPreference.ensureHighPerformancePreference()
                 applyBaseTheme()
-                SwingApplicationFactory.create(services)
+                SwingApplicationFactory.create(
+                    services = services,
+                    onWindowClosed = { kotlin.system.exitProcess(0) },
+                )
             } catch (failure: Throwable) {
                 logger.error(failure) { "Application startup failed." }
                 services.dialogs.showError(null, failure.message ?: failure.toString(), "Startup error")
