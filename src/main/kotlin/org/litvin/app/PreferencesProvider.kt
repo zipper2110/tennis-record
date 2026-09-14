@@ -14,6 +14,7 @@ fun interface PreferencesProvider {
         const val PROJECTS = "projects"
         const val COLOR_ADJUSTMENTS = "color-adjustments"
         const val EXPORT = "export"
+        const val ANALYTICS = "analytics"
 
         fun production(): PreferencesProvider = ProductionPreferencesProvider
     }
@@ -25,6 +26,7 @@ private object ProductionPreferencesProvider : PreferencesProvider {
         PreferencesProvider.PROJECTS to DefaultProjectsPresenter::class.java,
         PreferencesProvider.COLOR_ADJUSTMENTS to SwingColorAdjustmentsPanel::class.java,
         PreferencesProvider.EXPORT to SwingExportPanel::class.java,
+        PreferencesProvider.ANALYTICS to SwingMainApp::class.java,
     )
 
     override fun node(key: String): Preferences {

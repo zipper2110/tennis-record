@@ -36,7 +36,12 @@ object FFmpegCommandBuilder {
 
     fun build(params: BuildParams): Result {
         val p = params
-        val v = p.preset.video
+        val v = ExportQualityProfiles.resolve(
+            preset = p.preset,
+            outWidth = p.outWidth,
+            outHeight = p.outHeight,
+            outputFrameRate = p.outputFrameRate,
+        ).video
         val a = p.preset.audio
         val c = p.preset.container
 

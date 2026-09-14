@@ -1,0 +1,15 @@
+name = "tennis-record-analytics"
+main = "src/index.ts"
+compatibility_date = "2026-09-03"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+ANALYTICS_INGESTION_ENABLED = "false"
+
+[[d1_databases]]
+binding = "ANALYTICS_DB"
+database_name = "replace-locally"
+database_id = "replace-locally"
+
+[[triggers.crons]]
+cron = "0 3 * * *"

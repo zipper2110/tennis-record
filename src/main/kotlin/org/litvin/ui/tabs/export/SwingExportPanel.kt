@@ -3,6 +3,7 @@ import org.litvin.ActiveQueueSnapshot
 import org.litvin.ApplicationLayout
 import org.litvin.CompletedRender
 import org.litvin.FFmpegCapabilities
+import org.litvin.ExportQualityProfiles
 import org.litvin.ExportPresetsIO
 import org.litvin.RenderJob
 import org.litvin.adjustments.AdjustmentsStore
@@ -16,6 +17,9 @@ import org.litvin.export.ExportPlanner
 import org.litvin.export.ExportFrameRateOption
 import org.litvin.export.ExportFrameRateProbe
 import org.litvin.export.ExportFrameRates
+import org.litvin.export.ExportResolutionOption
+import org.litvin.export.ExportResolutionProbe
+import org.litvin.export.ExportResolutions
 import org.litvin.export.ExportRenderPlanRequest
 import org.litvin.export.RenderFormatting
 import org.litvin.markup.EdlIO
@@ -83,7 +87,7 @@ class SwingExportPanel(
     private val presets = ExportPresetsIO.load()
     private val savedVideoSettings = settingsPreferences.load()
     private val presetCombo = JComboBox(presets.map { it.label }.toTypedArray()).apply { name = "export-preset" }
-    private val resCombo = JComboBox(arrayOf("1920x1080", "3840x2160")).apply { name = "export-resolution" }
+    private val resCombo = JComboBox<ExportResolutionOption>().apply { name = "export-resolution" }
     private val frameRateCombo = JComboBox<ExportFrameRateOption>()
     private var refreshingFrameRateOptions = false
     private val idleTrimCheck = JCheckBox("Cut idle time between points", true).apply { name = "export-idle-trim" }
@@ -188,19 +192,9 @@ class SwingExportPanel(
         // Video settings
         left.add(sectionLabel("Video Settings"))
         left.add(Box.createRigidArea(Dimension(0, 8)))
-        left.add(sectionLabel("Preset"))
-        presetCombo.maximumSize = Dimension(Short.MAX_VALUE.toInt(), 28)
-        UiStyles.styleComboBox(presetCombo)
-        left.add(presetCombo)
-        UiStyles.styleHelper(qualityLabel)
-        qualityLabel.text = ""
-        left.add(Box.createRigidArea(Dimension(0, 4)))
-        left.add(qualityLabel)
-        left.add(Box.createRigidArea(Dimension(0, 12)))
-
         left.add(sectionLabel("Resolution"))
-        val resModel = DefaultComboBoxModel(arrayOf("1080p", "4K"))
-        resCombo.model = resModel
+        val initialResolutionOptions = ExportResolutions.availableFor(null)
+        resCombo.model = DefaultComboBoxModel(initialResolutionOptions.toTypedArray())
         resCombo.maximumSize = Dimension(Short.MAX_VALUE.toInt(), 28)
         UiStyles.styleComboBox(resCombo)
         left.add(resCombo)
@@ -217,6 +211,16 @@ class SwingExportPanel(
         UiStyles.styleComboBox(frameRateCombo)
         frameRateCombo.isEnabled = false
         left.add(frameRateCombo)
+        left.add(Box.createRigidArea(Dimension(0, 12)))
+
+        left.add(sectionLabel("Bitrate (quality)"))
+        presetCombo.maximumSize = Dimension(Short.MAX_VALUE.toInt(), 28)
+        UiStyles.styleComboBox(presetCombo)
+        left.add(presetCombo)
+        UiStyles.styleHelper(qualityLabel)
+        qualityLabel.text = ""
+        left.add(Box.createRigidArea(Dimension(0, 4)))
+        left.add(qualityLabel)
         left.add(Box.createRigidArea(Dimension(0, 12)))
 
         left.add(sectionLabel("Encoder"))
@@ -300,36 +304,32 @@ class SwingExportPanel(
         add(center, BorderLayout.CENTER)
 
         // --- Wiring updates like JavaFX implementation ---
-        fun defaultResForPreset(presetId: String): String = if (presetId.equals("quality", true)) "4K" else "1080p"
-        fun targetDimsFor(sel: String): Pair<Int, Int> = if (sel == "4K") 3840 to 2160 else 1920 to 1080
+        fun selectedResolution() = (resCombo.selectedItem as? ExportResolutionOption)?.resolution
+            ?: ExportPlanner.parseResolution("1080p")
         fun updateQualitySummary(idx: Int) {
             if (idx !in presets.indices) return
             val p = presets[idx]
-            val v = p.video
-            val parts = mutableListOf<String>()
-            v.crf?.let { parts.add("CRF $it") }
-            v.x264Preset?.let { parts.add("x264 $it") }
-            v.vbvMaxrateK?.let { parts.add("Maxrate ${it}k") }
-            if (parts.isEmpty()) p.description?.let { parts.add(it) }
-            Html.setWrapped(qualityLabel, parts.filter { it.isNotBlank() }.joinToString(" · "))
+            val resolution = selectedResolution()
+            val frameRate = (frameRateCombo.selectedItem as? ExportFrameRateOption)?.frameRate?.ffmpegArgument
+            Html.setWrapped(qualityLabel, ExportQualityProfiles.description(p, resolution.width, resolution.height, frameRate).orEmpty())
         }
         fun updateResolutionPreview() {
-            val sel = resCombo.selectedItem as? String ?: "1080p"
-            val (w, h) = targetDimsFor(sel)
-            resSummaryLabel.text = "Output: $w x $h ($sel)"
+            val resolution = selectedResolution()
+            resSummaryLabel.text = "Output: ${resolution.width} x ${resolution.height} (${resolution.label})"
         }
 
         // Restore the last video settings, falling back to the original defaults.
         val defIdx = ExportPresetsIO.defaultBalancedIndex(presets)
         if (presets.isNotEmpty()) {
-            val restoredPresetIndex = presets.indexOfFirst { it.id == savedVideoSettings.presetId }
+            val restoredPresetId = ExportQualityProfiles.normalizedId(savedVideoSettings.presetId)
+            val restoredPresetIndex = presets.indexOfFirst { it.id == restoredPresetId }
                 .takeIf { it >= 0 }
                 ?: defIdx
             presetCombo.selectedIndex = restoredPresetIndex
-            val res = savedVideoSettings.resolution
-                ?.takeIf { it == "1080p" || it == "4K" }
-                ?: defaultResForPreset(presets[restoredPresetIndex].id)
-            resCombo.selectedItem = res
+            resCombo.selectedItem = ExportResolutions.preferredOption(
+                options = initialResolutionOptions,
+                savedResolution = savedVideoSettings.resolution,
+            )
             updateQualitySummary(restoredPresetIndex)
         }
         updateResolutionPreview()
@@ -339,20 +339,21 @@ class SwingExportPanel(
         presetCombo.addActionListener {
             val idx = presetCombo.selectedIndex
             if (idx in presets.indices) {
-                val res = defaultResForPreset(presets[idx].id)
-                resCombo.selectedItem = res
                 updateQualitySummary(idx)
-                updateResolutionPreview()
                 settingsPreferences.savePreset(presets[idx].id)
-                settingsPreferences.saveResolution(res)
             }
         }
         resCombo.addActionListener {
             updateResolutionPreview()
-            (resCombo.selectedItem as? String)?.let(settingsPreferences::saveResolution)
+            updateQualitySummary(presetCombo.selectedIndex)
+            (resCombo.selectedItem as? ExportResolutionOption)
+                ?.resolution
+                ?.label
+                ?.let(settingsPreferences::saveResolution)
         }
         frameRateCombo.addActionListener {
             if (refreshingFrameRateOptions) return@addActionListener
+            updateQualitySummary(presetCombo.selectedIndex)
             (frameRateCombo.selectedItem as? ExportFrameRateOption)
                 ?.frameRate
                 ?.ffmpegArgument
@@ -456,6 +457,7 @@ class SwingExportPanel(
 
     fun setProjectManifest(path: String?) {
         manifestPath = path
+        refreshResolutionOptions()
         refreshFrameRateOptions()
         updatePointsSummary()
         updateFavoriteOnlyAvailability()
@@ -506,7 +508,10 @@ class SwingExportPanel(
             ExportPlanner.suggestFilename(
                 projectName = manifest?.name ?: File(source).nameWithoutExtension,
                 presetId = selPreset.id,
-                resolutionLabel = resCombo.selectedItem as String,
+                resolutionLabel = (resCombo.selectedItem as? ExportResolutionOption)
+                    ?.resolution
+                    ?.label
+                    ?: "1080p",
             )
         )
         var out = filePicker.chooseExportDestination(
@@ -524,7 +529,8 @@ class SwingExportPanel(
             if (!dialogs.confirm(this, "File exists. Overwrite?", "Confirm overwrite")) return
         }
 
-        val resolution = ExportPlanner.parseResolution(resCombo.selectedItem as String)
+        val resolution = (resCombo.selectedItem as? ExportResolutionOption)?.resolution
+            ?: ExportPlanner.parseResolution("1080p")
         val outputFrameRate = (frameRateCombo.selectedItem as? ExportFrameRateOption)
             ?.frameRate
             ?.ffmpegArgument
@@ -648,6 +654,24 @@ class SwingExportPanel(
         } catch (_: Throwable) {
             false
         }
+    }
+
+    private fun refreshResolutionOptions() {
+        val sourcePath = try {
+            manifestPath?.let(ManifestIO::read)?.sourceVideo
+        } catch (_: Throwable) {
+            null
+        }
+        val sourceResolution = sourcePath
+            ?.takeIf { File(it).isFile }
+            ?.let { ExportResolutionProbe.probe(it, ApplicationLayout.current().ffprobeExecutable) }
+        val options = ExportResolutions.availableFor(sourceResolution)
+        val savedResolution = settingsPreferences.load().resolution
+        resCombo.model = DefaultComboBoxModel(options.toTypedArray())
+        resCombo.selectedItem = ExportResolutions.preferredOption(
+            options = options,
+            savedResolution = savedResolution,
+        )
     }
 
     private fun updateScoreboardDefault() {

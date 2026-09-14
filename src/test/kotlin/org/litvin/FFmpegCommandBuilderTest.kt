@@ -114,4 +114,23 @@ class FFmpegCommandBuilderTest {
         assertTrue(argsStr.contains("-cq 21"), "Expected NVENC CQ mapped from CRF=21")
         assertTrue(argsStr.contains("-preset p5"), "Expected medium → p5 preset for NVENC")
     }
+
+    @Test
+    fun build_balanced4k60_capsVideoAt20Mbps() {
+        val res = FFmpegCommandBuilder.build(
+            FFmpegCommandBuilder.BuildParams(
+                sourcePath = "input.mp4",
+                outputPath = "out.mp4",
+                preset = preset,
+                outWidth = 3840,
+                outHeight = 2160,
+                outputFrameRate = "60",
+                encoderLabel = "H.264 (libx264)",
+                idleTrim = false,
+            )
+        )
+
+        assertEquals("20000k", res.args[res.args.indexOf("-maxrate") + 1])
+        assertEquals("40000k", res.args[res.args.indexOf("-bufsize") + 1])
+    }
 }

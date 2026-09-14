@@ -1,0 +1,13 @@
+{
+  "invalidBatches": [
+    { "name": "unknown envelope key", "payload": { "schema_version": 1, "notice_version": 1, "session_id": "00000000-0000-4000-8000-000000000003", "app_version": "synthetic-smoke", "os_family": "linux", "events": [{ "sequence_number": 0, "name": "session_started", "elapsed_ms": 0, "properties": {} }], "metadata": {} } },
+    { "name": "unknown event key", "payload": { "schema_version": 1, "notice_version": 1, "session_id": "00000000-0000-4000-8000-000000000003", "app_version": "synthetic-smoke", "os_family": "linux", "events": [{ "sequence_number": 0, "name": "session_started", "elapsed_ms": 0, "properties": {}, "path": "C:\\secret.mp4" }] } },
+    { "name": "unknown event name", "payload": { "schema_version": 1, "notice_version": 1, "session_id": "00000000-0000-4000-8000-000000000003", "app_version": "synthetic-smoke", "os_family": "linux", "events": [{ "sequence_number": 0, "name": "video_opened", "elapsed_ms": 0, "properties": {} }] } },
+    { "name": "unknown enum", "payload": { "schema_version": 1, "notice_version": 1, "session_id": "00000000-0000-4000-8000-000000000003", "app_version": "synthetic-smoke", "os_family": "linux", "events": [{ "sequence_number": 0, "name": "source_video_opened", "elapsed_ms": 0, "properties": { "result": "C:\\secret.mp4" } }] } },
+    { "name": "email shaped text", "payload": { "schema_version": 1, "notice_version": 1, "session_id": "00000000-0000-4000-8000-000000000003", "app_version": "synthetic-smoke", "os_family": "linux", "events": [{ "sequence_number": 0, "name": "source_video_opened", "elapsed_ms": 0, "properties": { "result": "person@example.test" } }] } },
+    { "name": "exception shaped text", "payload": { "schema_version": 1, "notice_version": 1, "session_id": "00000000-0000-4000-8000-000000000003", "app_version": "synthetic-smoke", "os_family": "linux", "events": [{ "sequence_number": 0, "name": "source_video_opened", "elapsed_ms": 0, "properties": { "result": "java.lang.IllegalStateException" } }] } },
+    { "name": "oversized event array", "raw": "{\"schema_version\":1,\"notice_version\":1,\"session_id\":\"00000000-0000-4000-8000-000000000003\",\"app_version\":\"synthetic-smoke\",\"os_family\":\"linux\",\"events\":[]}" },
+    { "name": "malformed json", "raw": "{\"schema_version\":1," },
+    { "name": "deeply nested json", "raw": "{\"schema_version\":1,\"notice_version\":1,\"session_id\":\"00000000-0000-4000-8000-000000000003\",\"app_version\":\"synthetic-smoke\",\"os_family\":\"linux\",\"events\":[{\"sequence_number\":0,\"name\":\"session_started\",\"elapsed_ms\":0,\"properties\":{\"nested\":{\"a\":{\"b\":{\"c\":{\"d\":{}}}}}}}]}" }
+  ]
+}

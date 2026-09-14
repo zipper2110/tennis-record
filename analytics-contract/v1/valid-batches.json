@@ -1,0 +1,37 @@
+{
+  "validBatches": [
+    {
+      "schema_version": 1,
+      "notice_version": 1,
+      "session_id": "00000000-0000-4000-8000-000000000001",
+      "app_version": "1.0.0",
+      "os_family": "windows",
+      "events": [
+        { "sequence_number": 0, "name": "session_started", "elapsed_ms": 0, "properties": {} },
+        { "sequence_number": 1, "name": "session_heartbeat", "elapsed_ms": 1, "properties": {} },
+        { "sequence_number": 2, "name": "session_ended", "elapsed_ms": 2, "properties": {} },
+        { "sequence_number": 3, "name": "project_created", "elapsed_ms": 3, "properties": {} },
+        { "sequence_number": 4, "name": "project_opened", "elapsed_ms": 4, "properties": {} },
+        { "sequence_number": 5, "name": "source_video_opened", "elapsed_ms": 5, "properties": { "result": "success" } },
+        { "sequence_number": 6, "name": "markup_point_added", "elapsed_ms": 6, "properties": {} },
+        { "sequence_number": 7, "name": "markup_point_removed", "elapsed_ms": 7, "properties": {} },
+        { "sequence_number": 8, "name": "score_point_recorded", "elapsed_ms": 8, "properties": {} },
+        { "sequence_number": 9, "name": "adjustment_changed", "elapsed_ms": 9, "properties": { "adjustment_category": "color" } },
+        { "sequence_number": 10, "name": "export_started", "elapsed_ms": 10, "properties": { "container": "mp4", "encoder_family": "software" } },
+        { "sequence_number": 11, "name": "export_completed", "elapsed_ms": 11, "properties": { "container": "mov", "encoder_family": "nvidia", "duration_ms": 11 } },
+        { "sequence_number": 12, "name": "export_failed", "elapsed_ms": 12, "properties": { "failure_category": "processing", "duration_ms": 12 } },
+        { "sequence_number": 13, "name": "export_cancelled", "elapsed_ms": 13, "properties": { "duration_ms": 13 } }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "notice_version": 1,
+      "session_id": "00000000-0000-4000-8000-000000000002",
+      "app_version": "12345678901234567890123456789012",
+      "os_family": "other",
+      "events": [
+        { "sequence_number": 1000000, "name": "source_video_opened", "elapsed_ms": 604800000, "properties": { "result": "other" } }
+      ]
+    }
+  ]
+}

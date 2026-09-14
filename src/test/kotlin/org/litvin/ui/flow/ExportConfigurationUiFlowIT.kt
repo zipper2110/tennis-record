@@ -88,6 +88,41 @@ class ExportConfigurationUiFlowIT {
         assertFalse(Files.exists(Path.of("$output.part")), "Fake render service must not create an FFmpeg part file")
     }
 
+    @Test
+    fun `changing bitrate quality keeps the selected resolution`(context: UiFlowContext) {
+        val project = context.fixtures.exportReadyProject()
+        val output = context.workspace.resolve("exports").resolve("four-k-match.mp4")
+        val application = ApplicationScreen(context)
+
+        application.projects.open().openRecent(project.manifest.id)
+        application.export.open()
+            .selectResolution("4K")
+            .selectBitrateQuality("Balanced")
+            .initialize(output)
+            .assertExactlyOneRenderQueued()
+
+        val job = context.renderService.jobs.single()
+        assertEquals(3840, job.outWidth)
+        assertEquals(2160, job.outHeight)
+    }
+
+    @Test
+    fun `source resolution option is labelled and exports at source dimensions`(context: UiFlowContext) {
+        val project = context.fixtures.exportReadyProject()
+        val output = context.workspace.resolve("exports").resolve("source-resolution-match.mp4")
+        val application = ApplicationScreen(context)
+
+        application.projects.open().openRecent(project.manifest.id)
+        application.export.open()
+            .selectResolution("720x486 (source)")
+            .initialize(output)
+            .assertExactlyOneRenderQueued()
+
+        val job = context.renderService.jobs.single()
+        assertEquals(720, job.outWidth)
+        assertEquals(486, job.outHeight)
+    }
+
     companion object {
         @JvmField
         @RegisterExtension

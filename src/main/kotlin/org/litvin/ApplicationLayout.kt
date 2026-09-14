@@ -68,6 +68,7 @@ class ApplicationLayoutResolver(
             return File(it).absoluteFile.normalize()
         }
         return File(nativeRoot, "vlc").takeIf { it.isDirectory }
+            ?: File(workingDirectory, "target/native/windows-x64/vlc").takeIf { it.isDirectory }
     }
 
     private fun resolveFfprobe(nativeRoot: File, ffmpegExecutable: String): String {

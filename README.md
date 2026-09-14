@@ -33,6 +33,17 @@ Rationale, trade‑offs, and module plan are explained in the [solution outline]
 - FFmpeg (ffmpeg/ffprobe) available in PATH (for export stage)
 - VLC installed or bundled libVLC (for preview at runtime)
 
+On Windows, provision the pinned native runtime before launching from IntelliJ
+or another source-run configuration:
+
+```powershell
+.\distribution\windows\Get-NativeDependencies.ps1
+```
+
+This places VLC under `target/native/windows-x64/vlc`, which source runs prefer
+over a machine-wide VLC installation. Packaged Windows builds already include
+the same pinned runtime.
+
 ### Build
 ```bash
 mvn -DskipTests package

@@ -83,6 +83,29 @@ class ApplicationLayoutResolverTest {
     }
 
     @Test
+    fun uses_pinned_development_vlc_when_the_packaged_bundle_is_absent() {
+        val workspace = tempDir.resolve("workspace").toFile().apply { mkdirs() }
+        val appHome = workspace.resolve("target/classes").apply { mkdirs() }
+        val developmentVlc = workspace.resolve("target/native/windows-x64/vlc").apply {
+            resolve("plugins").mkdirs()
+            resolve("libvlc.dll").writeText("")
+        }
+
+        val layout = ApplicationLayoutResolver(
+            properties = mapOf(
+                "os.name" to "Windows 11",
+                "user.home" to tempDir.resolve("home").toString(),
+                "tennis.record.appDir" to appHome.absolutePath,
+            ),
+            environment = emptyMap(),
+            codeSourceLocation = null,
+            workingDirectory = workspace,
+        ).resolve()
+
+        assertEquals(developmentVlc.absoluteFile, layout.vlcDirectory)
+    }
+
+    @Test
     fun resolves_app_data_from_system_property_before_environment() {
         val propertyRoot = tempDir.resolve("property-data").toFile()
         val environmentRoot = tempDir.resolve("environment-data").toFile()

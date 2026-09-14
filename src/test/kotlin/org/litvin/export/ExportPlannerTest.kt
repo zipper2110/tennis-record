@@ -115,6 +115,7 @@ class ExportPlannerTest {
             ExportPlanner.ensureExtension(File("render.mov"), "mp4"),
         )
         assertEquals(ExportResolution("4K", 3840, 2160), ExportPlanner.parseResolution("4K"))
+        assertEquals(ExportResolution("4K", 3840, 2160), ExportPlanner.parseResolution("4K (source)"))
         assertEquals(ExportResolution("2560x1440", 2560, 1440), ExportPlanner.parseResolution("2560x1440"))
     }
 

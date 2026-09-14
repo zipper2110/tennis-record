@@ -25,6 +25,14 @@ internal class ExportScreen(application: ApplicationScreen) : UserFlowScreen(app
         context.driver.setSelected("export-idle-trim", enabled)
     }
 
+    fun selectResolution(resolution: String): ExportScreen = apply {
+        context.driver.select("export-resolution", resolution)
+    }
+
+    fun selectBitrateQuality(quality: String): ExportScreen = apply {
+        context.driver.select("export-preset", quality)
+    }
+
     fun enableFavoritesOnlyAndDismissUnavailable(): ExportScreen = apply {
         context.dialogs.showNextAsRealModal()
         context.driver.click("export-favorites-only")

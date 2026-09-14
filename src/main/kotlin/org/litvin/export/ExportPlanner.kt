@@ -97,19 +97,20 @@ object ExportPlanner {
     }
 
     fun parseResolution(selection: String): ExportResolution {
-        return when (selection) {
-            "4K" -> ExportResolution(selection, 3840, 2160)
-            "1080p" -> ExportResolution(selection, 1920, 1080)
+        val normalized = selection.removeSuffix(" (source)")
+        return when (normalized) {
+            "4K" -> ExportResolution(normalized, 3840, 2160)
+            "1080p" -> ExportResolution(normalized, 1920, 1080)
             else -> {
-                val parts = selection.lowercase().split("x")
+                val parts = normalized.lowercase().split("x")
                 if (parts.size == 2) {
                     ExportResolution(
-                        label = selection,
+                        label = normalized,
                         width = parts[0].toIntOrNull() ?: 1920,
                         height = parts[1].toIntOrNull() ?: 1080,
                     )
                 } else {
-                    ExportResolution(selection, 1920, 1080)
+                    ExportResolution(normalized, 1920, 1080)
                 }
             }
         }

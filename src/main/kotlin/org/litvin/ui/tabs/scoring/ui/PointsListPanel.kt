@@ -224,6 +224,7 @@ class PointsListPanel : JPanel(BorderLayout()) {
             font = font.deriveFont(Font.BOLD, 9f)
             foreground = if (favorite) UiStyles.YELLOW else UiStyles.FG_SECONDARY
             name = "favorite-point"
+            isFocusable = false
         }
         right.add(favBtn)
         row.add(right, BorderLayout.EAST)

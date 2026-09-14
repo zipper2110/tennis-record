@@ -25,8 +25,8 @@ import kotlin.math.min
  * - Playhead line bound to media time
  *
  * Interactions:
- * - Click anywhere to seek to that time
- * - Click on a mark span to seek to its start
+ * - Press anywhere to seek to that time
+ * - Press on a mark span to seek to its start
  */
 class SwingTimelineComponent(
     private val timeProvider: () -> Long,
@@ -50,10 +50,10 @@ class SwingTimelineComponent(
         background = bg
 
         addMouseListener(object : MouseAdapter() {
-            override fun mouseClicked(e: MouseEvent) {
+            override fun mousePressed(e: MouseEvent) {
                 val total = max(1L, durationProvider())
                 val t = ((e.x.toDouble() / width.toDouble()) * total).toLong().coerceIn(0L, total)
-                // Check if clicking on a mark span: prefer snapping to its start for convenience
+                // Check if pressing on a mark span: prefer snapping to its start for convenience
                 val points = pointsProvider()
                 val pxPerMs = pxPerMs(total)
                 val markTop = rulerHeight() + trackHeight() + trackGap()

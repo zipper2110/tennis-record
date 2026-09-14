@@ -19,6 +19,10 @@ import org.litvin.ui.tabs.projects.SwingProjectsPanel
 import org.litvin.ui.tabs.projects.presenter.DefaultProjectsPresenter
 import org.litvin.ui.tabs.scoring.SwingScoringPanel
 import org.litvin.ui.tabs.test.SwingTestPanel
+import org.litvin.analytics.AnalyticsBuildConfig
+import org.litvin.analytics.AnalyticsEvent
+import org.litvin.ui.privacy.AnalyticsConsentDialog
+import org.litvin.ui.privacy.PrivacySettingsDialog
 import java.awt.BorderLayout
 import java.awt.CardLayout
 import java.awt.Dimension
@@ -72,6 +76,7 @@ object SwingApplicationFactory {
             lateinit var btnScoring: UiStyles.SidebarButton
             lateinit var btnExport: UiStyles.SidebarButton
             lateinit var btnCropRotate: UiStyles.SidebarButton
+            var btnPrivacy: UiStyles.SidebarButton? = null
             var btnTest: UiStyles.SidebarButton? = null
 
             fun addItem(button: UiStyles.SidebarButton) {
@@ -239,6 +244,14 @@ object SwingApplicationFactory {
                 goTo(CARD_EXPORT)
             }.apply { name = "nav-export" }
             addItem(btnExport)
+            val analytics = services.analyticsController
+            val analyticsConfig = services.analyticsConfig as? AnalyticsBuildConfig.Enabled
+            if (analytics != null && analyticsConfig != null && services.analyticsPreferences != null) {
+                btnPrivacy = UiStyles.sidebarButton("Privacy", UiStyles.targetIcon()) {
+                    PrivacySettingsDialog.show(frame, analytics, services.analyticsPreferences, analyticsConfig.privacyUrl)
+                }.apply { name = "nav-privacy" }
+                addItem(btnPrivacy!!)
+            }
             if (testEnabled) {
                 btnTest = UiStyles.sidebarButton("Test", UiStyles.targetIcon()) {
                     frame.title = "Tennis Record — Test"
@@ -277,11 +290,18 @@ object SwingApplicationFactory {
             }
 
             frame.addWindowListener(object : WindowAdapter() {
-                override fun windowClosing(event: WindowEvent?) = handle.close()
+                override fun windowClosing(event: WindowEvent?) {
+                    analytics?.record(AnalyticsEvent.SessionEnded)
+                    handle.close()
+                }
             })
 
             btnProjects.doClick()
             frame.isVisible = show
+
+            if (show && analytics != null && analyticsConfig != null && services.analyticsPreferences?.resolve()?.needsChoice == true) {
+                EventQueue.invokeLater { AnalyticsConsentDialog.show(frame, analytics, analyticsConfig.privacyUrl) }
+            }
 
             if (show && WindowsGpuPreference.wasChangeApplied()) {
                 JOptionPane.showMessageDialog(

@@ -14,6 +14,9 @@ import org.litvin.ui.commons.FilePicker
 import org.litvin.ui.commons.SwingFilePicker
 import org.litvin.ui.commons.SwingUserDialogService
 import org.litvin.ui.commons.UserDialogService
+import org.litvin.analytics.AnalyticsBuildConfig
+import org.litvin.analytics.AnalyticsController
+import org.litvin.analytics.AnalyticsPreferences
 import java.util.concurrent.atomic.AtomicBoolean
 
 internal data class AppServicesProductionFactory(
@@ -47,6 +50,9 @@ data class AppServices(
     val completedRenders: CompletedRendersRepository,
     val adjustments: AdjustmentsSession,
     val encoderCapabilities: EncoderCapabilities = EncoderCapabilities.NONE,
+    val analyticsConfig: AnalyticsBuildConfig = AnalyticsBuildConfig.Disabled("not_configured"),
+    val analyticsPreferences: AnalyticsPreferences? = null,
+    val analyticsController: AnalyticsController? = null,
 ) : AutoCloseable {
     private val closed = AtomicBoolean(false)
 
@@ -63,6 +69,7 @@ data class AppServices(
             completedRenders,
             adjustments,
             renderService,
+            analyticsController,
         )
         var firstFailure: Throwable? = null
         resourcesInConstructionOrder.asReversed().forEach { resource ->
@@ -99,6 +106,13 @@ data class AppServices(
                 val adjustments = construct { factory.adjustments(executors) }
                 val renderService = construct { factory.renderService(adjustments, completedRenders) }
                 val encoderCapabilities = factory.encoderCapabilities()
+                val analyticsConfig = AnalyticsBuildConfig.fromSystemProperties()
+                val analyticsPreferences = if (analyticsConfig is AnalyticsBuildConfig.Enabled) {
+                    AnalyticsPreferences(preferences.node(PreferencesProvider.ANALYTICS))
+                } else null
+                val analyticsController = analyticsPreferences?.let { preferencesForAnalytics ->
+                    construct { AnalyticsController(analyticsConfig, preferencesForAnalytics) }.also { it.startIfConsented() }
+                }
                 val services = AppServices(
                     paths = paths,
                     preferences = preferences,
@@ -111,6 +125,9 @@ data class AppServices(
                     completedRenders = completedRenders,
                     adjustments = adjustments,
                     encoderCapabilities = encoderCapabilities,
+                    analyticsConfig = analyticsConfig,
+                    analyticsPreferences = analyticsPreferences,
+                    analyticsController = analyticsController,
                 )
                 factory.afterConstruction(services)
                 return services
