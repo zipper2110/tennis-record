@@ -21,7 +21,24 @@ object AssOverlayWriter {
         outWidth: Int,
         outHeight: Int,
         style: ScoreboardStyle = ScoreboardStyles.default(),
+    ) = write(
+        file = file,
+        scoreboardSpans = spans,
+        commentSpans = emptyList(),
+        outWidth = outWidth,
+        outHeight = outHeight,
+        style = style,
+    )
+
+    fun write(
+        file: File,
+        scoreboardSpans: List<OverlaySpan>,
+        commentSpans: List<CommentOverlaySpan>,
+        outWidth: Int,
+        outHeight: Int,
+        style: ScoreboardStyle = ScoreboardStyles.default(),
     ) {
+        val spans = scoreboardSpans
         val playResX = outWidth.coerceAtLeast(16)
         val playResY = outHeight.coerceAtLeast(16)
         val scale = (playResY / 1080.0).coerceAtLeast(0.25)
@@ -51,8 +68,8 @@ object AssOverlayWriter {
         file.parentFile?.mkdirs()
         file.bufferedWriter(Charsets.UTF_8).use { w ->
             // Use per-span colors when provided; fall back to the selected style.
-            val c1Rgb = ScoreboardComponent.parseHexRgbOrDefault(spans.first().p1ColorHex, style.palette.player1Rgb)
-            val c2Rgb = ScoreboardComponent.parseHexRgbOrDefault(spans.first().p2ColorHex, style.palette.player2Rgb)
+            val c1Rgb = ScoreboardComponent.parseHexRgbOrDefault(spans.firstOrNull()?.p1ColorHex, style.palette.player1Rgb)
+            val c2Rgb = ScoreboardComponent.parseHexRgbOrDefault(spans.firstOrNull()?.p2ColorHex, style.palette.player2Rgb)
 
             // Header
             w.appendLine("[Script Info]")
@@ -74,6 +91,8 @@ object AssOverlayWriter {
             val black = assColor(0x000000, 0x00)
             val p1Square = assColor(c1Rgb, 0x30)
             val p2Square = assColor(c2Rgb, 0x30)
+            val commentFont = (52 * scale).coerceIn(18.0, 96.0)
+            val commentBackdrop = assColor(0x000000, 0x80)
 
             // Base styles
             w.appendLine("Style: Title,${style.fontFamily},${fmt(titleFont)},$neon,&H000000FF,&H00000000,$black,1,0,0,0,100,100,2,0,1,1.5,0,7,0,0,0,0")
@@ -85,6 +104,8 @@ object AssOverlayWriter {
             w.appendLine("Style: Panel,${style.fontFamily},20,${withAlpha(black, 0x50)},&H000000FF,&H00000000,$black,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,0")
             w.appendLine("Style: SquareP1,${style.fontFamily},20,${withAlpha(p1Square, 0x30)},&H000000FF,&H00000000,$black,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,0")
             w.appendLine("Style: SquareP2,${style.fontFamily},20,${withAlpha(p2Square, 0x30)},&H000000FF,&H00000000,$black,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,0")
+            w.appendLine("Style: CommentText,${style.fontFamily},${fmt(commentFont)},$white,&H000000FF,&H00000000,$black,1,0,0,0,100,100,0,0,1,1.2,0,2,0,0,0,0")
+            w.appendLine("Style: CommentBackdrop,${style.fontFamily},20,$commentBackdrop,&H000000FF,&H00000000,$black,0,0,0,0,100,100,0,0,1,0,0,2,0,0,0,0")
             w.appendLine()
 
             // Events
@@ -203,6 +224,30 @@ object AssOverlayWriter {
                 w.appendLine("Dialogue: 3,$start,$end,$style1,,0,0,0,,{\\an9} {\\pos(${scoreX},${scoreY1})}${display.player1PointText}")
                 w.appendLine("Dialogue: 3,$start,$end,$style2,,0,0,0,,{\\an9} {\\pos(${scoreX},${scoreY2})}${display.player2PointText}")
             }
+
+            for (comment in commentSpans) {
+                if (comment.endMs <= comment.startMs || comment.text.isBlank()) continue
+                val lines = wrapCommentLines(comment.text, maxCommentLineLength(playResX, commentFont))
+                val longestLine = lines.maxOfOrNull { it.length } ?: 0
+                val horizontalPadding = (28 * scale).toInt().coerceAtLeast(8)
+                val verticalPadding = (18 * scale).toInt().coerceAtLeast(6)
+                val lineHeight = (commentFont * 1.25).toInt().coerceAtLeast(18)
+                val boxWidth = ((longestLine * commentFont * 0.56).toInt() + horizontalPadding * 2)
+                    .coerceIn(1, (playResX * 0.86).toInt())
+                val boxHeight = (lines.size * lineHeight + verticalPadding * 2).coerceAtLeast(1)
+                val lowerThirdY = (playResY * 0.82).toInt()
+                val boxLeft = ((playResX - boxWidth) / 2).coerceAtLeast(0)
+                val boxTop = (lowerThirdY - boxHeight).coerceAtLeast(0)
+                val box = drawRect(boxLeft, boxTop, boxLeft + boxWidth, boxTop + boxHeight)
+                val colorRgb = comment.colorHex.removePrefix("#").toIntOrNull(16) ?: 0xFFFFFF
+                val start = toAssTs(comment.startMs)
+                val end = toAssTs(comment.endMs)
+                val escapedText = lines.joinToString("\\N") { escapeAssText(it) }
+                val textY = lowerThirdY - verticalPadding
+
+                w.appendLine("Dialogue: 4,$start,$end,CommentBackdrop,,0,0,0,,{\\p1}\\1c$commentBackdrop$box{\\p0}")
+                w.appendLine("Dialogue: 5,$start,$end,CommentText,,0,0,0,,{\\an2\\pos(${playResX / 2},$textY)\\1c${assColor(colorRgb, 0x00)}}$escapedText")
+            }
         }
     }
 
@@ -290,6 +335,45 @@ object AssOverlayWriter {
         if (mine > other) return "Ad"
         return "40"
     }
+
+    private fun maxCommentLineLength(playResX: Int, fontSize: Double): Int =
+        ((playResX * 0.72) / (fontSize * 0.56)).toInt().coerceAtLeast(12)
+
+    private fun wrapCommentLines(text: String, maxChars: Int): List<String> =
+        text.replace("\r\n", "\n").replace('\r', '\n').split('\n').flatMap { line ->
+            wrapCommentLine(line, maxChars)
+        }
+
+    private fun wrapCommentLine(line: String, maxChars: Int): List<String> {
+        if (line.isEmpty()) return listOf("")
+        val lines = mutableListOf<String>()
+        var current = ""
+        for (word in line.trim().split(Regex("\\s+"))) {
+            if (word.length > maxChars) {
+                if (current.isNotEmpty()) {
+                    lines += current
+                    current = ""
+                }
+                val chunks = word.chunked(maxChars)
+                lines += chunks.dropLast(1)
+                current = chunks.last()
+            } else if (current.isEmpty()) {
+                current = word
+            } else if (current.length + 1 + word.length <= maxChars) {
+                current += " $word"
+            } else {
+                lines += current
+                current = word
+            }
+        }
+        if (current.isNotEmpty()) lines += current
+        return lines
+    }
+
+    private fun escapeAssText(text: String): String = text
+        .replace("\\", "\\\\")
+        .replace("{", "\\{")
+        .replace("}", "\\}")
 
     // ----- ASS helpers -----
     private fun toAssTs(ms: Long): String {

@@ -146,11 +146,14 @@ class CompletedRendersList(
 
     private fun formatItem(item: CompletedRender): String {
         val size = RenderFormatting.formatSize(item.bytesWritten)
-        val sb = if (item.includeScoreboard) "  ·  Scoreboard" else ""
+        val overlays = listOfNotNull(
+            "Scoreboard".takeIf { item.includeScoreboard },
+            "Comments".takeIf { item.includeComments },
+        ).joinToString(" + ").takeIf { it.isNotEmpty() }?.let { "  ·  $it" }.orEmpty()
         val res = if (item.outHeight >= 2160 || item.outWidth >= 3840) "4K" else "1080p"
         val proj = item.projectName?.takeIf { it.isNotBlank() }
         val left = if (proj != null) "[$proj] ${item.fileName}" else item.fileName
-        return "$left$sb  —  ${item.encoderLabel} / $res  —  $size"
+        return "$left$overlays  —  ${item.encoderLabel} / $res  —  $size"
     }
 
 }

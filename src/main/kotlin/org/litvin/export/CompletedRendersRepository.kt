@@ -31,6 +31,7 @@ class FileCompletedRendersRepository(
             outHeight = job.outHeight,
             bytesWritten = job.bytesWritten,
             includeScoreboard = job.includeScoreboard,
+            includeComments = job.includeComments,
             createdAtEpochMs = nowEpochMs(),
         ),
     )

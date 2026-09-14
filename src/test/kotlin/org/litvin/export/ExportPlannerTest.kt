@@ -1,6 +1,8 @@
 package org.litvin.export
 
 import org.litvin.ExportPreset
+import org.litvin.CommentOverlaySpan
+import org.litvin.markup.CommentV1
 import org.litvin.markup.EdlV1
 import org.litvin.markup.PointV1
 import org.litvin.projects.ProjectManifestV1
@@ -162,9 +164,89 @@ class ExportPlannerTest {
         assertEquals("1:02:03", RenderFormatting.formatDuration(3_723_000))
     }
 
+    @Test
+    fun trimmedExport_includesCommentStartingInKeptPointAndCarriesDurationAcrossGap() {
+        val edl = EdlV1(
+            points = listOf(point("p1", 1_000, 4_000), point("p2", 10_000, 14_000)),
+            comments = listOf(CommentV1(3, 3_000, 5_000, "Line call", "#FFFFFF")),
+        )
+
+        val plan = buildPlan(edl, idleTrim = true, favoriteOnly = false, includeComments = true)
+
+        assertEquals(
+            listOf(CommentOverlaySpan(3, 2_000, 7_000, "Line call", "#FFFFFF")),
+            plan.commentOverlayTimeline,
+        )
+        assertEquals(plan.commentOverlayTimeline, plan.job.commentOverlayTimeline)
+    }
+
+    @Test
+    fun trimmedExport_omitsCommentsBeginningOutsideKeptIntervals() {
+        val edl = EdlV1(
+            points = listOf(point("fav", 0, 1_000, favorite = true), point("other", 2_000, 3_000)),
+            comments = listOf(
+                CommentV1(1, 1_000, 500, "Boundary", "#FFFFFF"),
+                CommentV1(2, 1_500, 500, "Gap", "#FFFFFF"),
+                CommentV1(3, 2_100, 500, "Non-favorite", "#FFFFFF"),
+            ),
+        )
+
+        val plan = buildPlan(edl, idleTrim = true, favoriteOnly = true, includeComments = true)
+
+        assertEquals(emptyList(), plan.commentOverlayTimeline)
+    }
+
+    @Test
+    fun fullVideoExport_keepsSourceTimeAndConfiguredDuration() {
+        val edl = EdlV1(comments = listOf(CommentV1(5, 6_000, 750, "Net cord", "#112233")))
+
+        val plan = buildPlan(edl, idleTrim = false, favoriteOnly = false, includeComments = true)
+
+        assertEquals(
+            listOf(CommentOverlaySpan(5, 6_000, 6_750, "Net cord", "#112233")),
+            plan.commentOverlayTimeline,
+        )
+    }
+
+    @Test
+    fun disabledCommentsCheckbox_omitsCommentSnapshot() {
+        val edl = EdlV1(
+            points = listOf(point("p1", 0, 1_000)),
+            comments = listOf(CommentV1(1, 500, 500, "In", "#FFFFFF")),
+        )
+
+        val plan = buildPlan(edl, idleTrim = true, favoriteOnly = false, includeComments = false)
+
+        assertEquals(emptyList(), plan.commentOverlayTimeline)
+        assertEquals(false, plan.job.includeComments)
+        assertEquals(emptyList(), plan.job.commentOverlayTimeline)
+    }
+
     private fun point(id: String, startMs: Int, endMs: Int, favorite: Boolean = false): PointV1 {
         return PointV1(id = id, startMs = startMs, endMs = endMs, favorite = favorite)
     }
+
+    private fun buildPlan(
+        edl: EdlV1,
+        idleTrim: Boolean,
+        favoriteOnly: Boolean,
+        includeComments: Boolean,
+    ): ExportRenderPlan = ExportPlanner.buildRenderPlan(
+        ExportRenderPlanRequest(
+            manifest = manifest(),
+            sourcePath = "input.mp4",
+            edl = edl,
+            score = ScoreV1(),
+            preset = preset,
+            resolution = ExportResolution("1080p", 1920, 1080),
+            encoderLabel = "H.264 (libx264)",
+            idleTrim = idleTrim,
+            favoriteOnly = favoriteOnly,
+            includeScoreboard = false,
+            includeComments = includeComments,
+            outputPath = "out.mp4",
+        ),
+    )
 
     private fun manifest(): ProjectManifestV1 {
         return ProjectManifestV1(

@@ -39,6 +39,8 @@ data class RenderJob(
     val includeScoreboard: Boolean = false,
     val overlayTimeline: List<OverlaySpan> = emptyList(),
     val outputPath: String,
+    val includeComments: Boolean = false,
+    val commentOverlayTimeline: List<CommentOverlaySpan> = emptyList(),
     // Runtime fields
     var status: RenderStatus = RenderStatus.QUEUED,
     var progress: Double = 0.0,          // 0.0 .. 1.0
@@ -224,16 +226,13 @@ object RenderQueueManager {
                 }
                 if (abortIfCanceled(request, partOut)) continue
 
-                // Prepare scoreboard overlay ASS file if requested
+                // Prepare the requested overlay ASS file.
                 var assFile: java.io.File? = null
-                if (job.includeScoreboard && job.overlayTimeline.isNotEmpty()) {
-                    try {
-                        assFile = java.io.File(partOut.absolutePath + ".ass")
-                        AssOverlayWriter.write(assFile!!, job.overlayTimeline, job.outWidth, job.outHeight)
-                    } catch (t: Throwable) {
-                        logger.warn(t) { "Failed to prepare overlay ASS; proceeding without overlay" }
-                        assFile = null
-                    }
+                try {
+                    assFile = RenderOverlayScript.writeFor(job, partOut)
+                } catch (t: Throwable) {
+                    logger.warn(t) { "Failed to prepare overlay ASS; proceeding without overlay" }
+                    assFile = null
                 }
                 if (abortIfCanceled(request, partOut, assFile)) continue
 

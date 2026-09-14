@@ -19,7 +19,9 @@ class EditingAcrossTabsUiFlowIT {
 
         application.rallies.assertReady()
         application.rallies.markPoint(1_000, 2_000)
+            .addComment(1_250, "2", "Ball was in")
         val pointId = application.rallies.assertSinglePointPersisted(project.directory, 1_000, 2_000)
+        application.rallies.assertCommentPersisted(project.directory, 1, 1_250, 2_000, "Ball was in", "#FFFFFF")
 
         application.colors.open()
             .setBrightness(20)
@@ -29,6 +31,9 @@ class EditingAcrossTabsUiFlowIT {
         application.crop.open()
             .setZoomPercent(125)
             .setRotationDegrees(15f)
+
+        application.rallies.open()
+            .assertCommentPersisted(project.directory, 1, 1_250, 2_000, "Ball was in", "#FFFFFF")
 
         application.scoring.open()
         application.crop.assertTransformPersisted(

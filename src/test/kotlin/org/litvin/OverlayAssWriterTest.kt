@@ -40,6 +40,55 @@ class OverlayAssWriterTest {
         assertTrue(text.contains("BOB"))
     }
 
+    @Test
+    fun writesWrappedLowerThirdCommentAlongsideScoreboard() {
+        val tmp = File.createTempFile("comment-score", ".ass")
+        tmp.deleteOnExit()
+
+        AssOverlayWriter.write(
+            file = tmp,
+            scoreboardSpans = listOf(
+                OverlaySpan(
+                    startMs = 0,
+                    endMs = 1_000,
+                    text = "Player 1: pts 15, games 0, sets 0  |  Player 2: pts 0, games 0, sets 0",
+                    p1Name = "ALICE",
+                    p2Name = "BOB",
+                ),
+            ),
+            commentSpans = listOf(
+                CommentOverlaySpan(12, 1_000, 3_000, "IN {review}\nGreat rally", "#22AAFF"),
+            ),
+            outWidth = 1_920,
+            outHeight = 1_080,
+        )
+
+        val ass = tmp.readText()
+        assertTrue(ass.contains("Style: CommentText"))
+        assertTrue(ass.contains("Style: CommentBackdrop"))
+        assertTrue(ass.contains("\\N"))
+        assertTrue(ass.contains("\\{"))
+        assertTrue(ass.contains("FFAA22"))
+        assertTrue(ass.contains("ALICE"))
+    }
+
+    @Test
+    fun wrapsLongCommentAtWordBoundaries() {
+        val tmp = File.createTempFile("comment-wrap", ".ass")
+        tmp.deleteOnExit()
+        val text = "This long comment needs enough words to wrap safely inside the lower third without overflowing the video frame"
+
+        AssOverlayWriter.write(
+            file = tmp,
+            scoreboardSpans = emptyList(),
+            commentSpans = listOf(CommentOverlaySpan(1, 0, 1_000, text, "#FFFFFF")),
+            outWidth = 640,
+            outHeight = 360,
+        )
+
+        assertTrue(tmp.readText().contains("\\N"))
+    }
+
     private fun sha256(data: ByteArray): String {
         val md = MessageDigest.getInstance("SHA-256")
         val digest = md.digest(data)

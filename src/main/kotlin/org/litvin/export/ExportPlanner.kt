@@ -4,6 +4,9 @@ import org.litvin.ExportPreset
 import org.litvin.OverlaySpan
 import org.litvin.RenderJob
 import org.litvin.ScoreboardTimelineBuilder
+import org.litvin.CommentOverlaySpan
+import org.litvin.markup.CommentV1
+import org.litvin.markup.EdlIO
 import org.litvin.markup.EdlV1
 import org.litvin.markup.PointV1
 import org.litvin.projects.ProjectManifestV1
@@ -38,6 +41,7 @@ data class ExportRenderPlan(
     val keptPoints: List<PointV1>,
     val effectiveIdleTrim: Boolean,
     val overlayTimeline: List<OverlaySpan>,
+    val commentOverlayTimeline: List<CommentOverlaySpan>,
 )
 
 data class ExportRenderPlanRequest(
@@ -53,6 +57,7 @@ data class ExportRenderPlanRequest(
     val favoriteOnly: Boolean,
     val includeScoreboard: Boolean,
     val outputPath: String,
+    val includeComments: Boolean = false,
 )
 
 object ExportPlanner {
@@ -185,6 +190,15 @@ object ExportPlanner {
         } else {
             emptyList()
         }
+        val commentOverlayTimeline = if (request.includeComments) {
+            buildCommentOverlayTimeline(
+                comments = request.edl?.comments.orEmpty(),
+                keptPoints = keptPoints,
+                idleTrim = effectiveIdleTrim,
+            )
+        } else {
+            emptyList()
+        }
 
         val job = RenderJob(
             projectId = request.manifest?.id,
@@ -201,6 +215,8 @@ object ExportPlanner {
             includeScoreboard = request.includeScoreboard,
             overlayTimeline = overlayTimeline,
             outputPath = request.outputPath,
+            includeComments = request.includeComments,
+            commentOverlayTimeline = commentOverlayTimeline,
         )
 
         return ExportRenderPlan(
@@ -209,7 +225,56 @@ object ExportPlanner {
             keptPoints = keptPoints,
             effectiveIdleTrim = effectiveIdleTrim,
             overlayTimeline = overlayTimeline,
+            commentOverlayTimeline = commentOverlayTimeline,
         )
+    }
+
+    fun buildCommentOverlayTimeline(
+        comments: List<CommentV1>,
+        keptPoints: List<PointV1>,
+        idleTrim: Boolean,
+    ): List<CommentOverlaySpan> {
+        val validComments = comments
+            .asSequence()
+            .filter { comment ->
+                comment.id > 0 &&
+                    comment.startMs >= 0 &&
+                    comment.durationMs > 0 &&
+                    comment.text.isNotBlank() &&
+                    EdlIO.normalizeColorHex(comment.colorHex) != null
+            }
+            .sortedWith(compareBy<CommentV1> { it.startMs }.thenBy { it.id })
+            .toList()
+        if (!idleTrim) {
+            return validComments.map { comment ->
+                CommentOverlaySpan(
+                    id = comment.id,
+                    startMs = comment.startMs.toLong(),
+                    endMs = comment.startMs.toLong() + comment.durationMs.toLong(),
+                    text = comment.text,
+                    colorHex = EdlIO.normalizeColorHex(comment.colorHex)!!,
+                )
+            }
+        }
+
+        val orderedPoints = keptPoints.sortedBy { it.startMs }
+        return validComments.mapNotNull { comment ->
+            var elapsedMs = 0L
+            for (point in orderedPoints) {
+                if (point.startMs <= comment.startMs && comment.startMs < point.endMs) {
+                    val startMs = elapsedMs + (comment.startMs - point.startMs).toLong()
+                    return@mapNotNull CommentOverlaySpan(
+                        id = comment.id,
+                        startMs = startMs,
+                        endMs = startMs + comment.durationMs.toLong(),
+                        text = comment.text,
+                        colorHex = EdlIO.normalizeColorHex(comment.colorHex)!!,
+                    )
+                }
+                elapsedMs += (point.endMs - point.startMs).toLong().coerceAtLeast(0L)
+            }
+            null
+        }
     }
 
     private fun buildOverlayTimeline(
