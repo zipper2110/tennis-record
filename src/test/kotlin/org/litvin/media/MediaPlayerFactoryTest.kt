@@ -3,7 +3,6 @@ package org.litvin.media
 import org.junit.jupiter.api.Test
 import org.litvin.adjustments.AdjustmentsV1
 import java.awt.Component
-import java.awt.image.BufferedImage
 import java.awt.image.RenderedImage
 import java.io.File
 import java.util.concurrent.CountDownLatch
@@ -16,25 +15,21 @@ import kotlin.test.assertTrue
 
 class MediaPlayerFactoryTest {
     @Test
-    fun consumerAndFactoryClosePlayersAndCaptureServicesExactlyOnce() {
+    fun consumerAndFactoryClosePlayersExactlyOnce() {
         val player = CountingSwingMediaPlayer()
-        val capture = CountingStillFrameCaptureService()
-        val factory = VlcjMediaPlayerFactory(
-            playerCreator = { player },
-            frameCaptureCreator = { capture },
-        )
+        val factoryOwned = CountingSwingMediaPlayer()
+        val created = ArrayDeque(listOf(player, factoryOwned))
+        val factory = VlcjMediaPlayerFactory(playerCreator = { created.removeFirst() })
 
         val managedPlayer = factory.create(MediaScreen.MARKUP)
-        val managedCapture = factory.createFrameCapture()
+        factory.create(MediaScreen.CROP)
         managedPlayer.close()
         managedPlayer.close()
         factory.close()
         factory.close()
-        managedCapture.close()
-        managedCapture.close()
 
         assertEquals(1, player.closeCount.get())
-        assertEquals(1, capture.closeCount.get())
+        assertEquals(1, factoryOwned.closeCount.get())
     }
 
     @Test
@@ -49,7 +44,6 @@ class MediaPlayerFactoryTest {
                 allowCreation.await()
                 player
             },
-            frameCaptureCreator = { CountingStillFrameCaptureService() },
         )
         var result: Result<SwingMediaPlayer>? = null
         val creator = Thread({
@@ -76,7 +70,6 @@ class MediaPlayerFactoryTest {
         val player = CountingSwingMediaPlayer()
         val factory = VlcjMediaPlayerFactory(
             playerCreator = { player },
-            frameCaptureCreator = { CountingStillFrameCaptureService() },
             afterRegistration = {
                 registered.countDown()
                 allowClosedCheck.await()
@@ -130,13 +123,4 @@ class MediaPlayerFactoryTest {
         }
     }
 
-    private class CountingStillFrameCaptureService : StillFrameCaptureService {
-        val closeCount = AtomicInteger(0)
-        override fun load(file: File) = StillFrameMediaInfo(0L, null)
-        override fun captureAt(ms: Long): BufferedImage? = null
-        override fun durationMs(): Long = 0L
-        override fun close() {
-            closeCount.incrementAndGet()
-        }
-    }
 }

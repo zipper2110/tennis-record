@@ -1,7 +1,7 @@
 package org.litvin.ui.tabs.crop.presenter
 
 import org.litvin.adjustments.AdjustmentsV1
-import java.awt.image.BufferedImage
+import java.io.File
 
 interface CropRotateView {
     fun render(state: CropRotateViewState)
@@ -18,17 +18,11 @@ interface CropRotatePresenter {
 
 data class CropRotateViewState(
     val adjustments: AdjustmentsV1 = AdjustmentsV1(),
-    val seekMs: Long = 0L,
-    val durationMs: Long = 0L,
-    val frame: BufferedImage? = null,
-    val frameLoading: Boolean = false,
-    val outputAspect: Double = 16.0 / 9.0,
-    val banner: String? = null,
+    val sourceVideo: File? = null,
 )
 
 sealed class CropRotateIntent {
     data class LoadProject(val manifestPath: String) : CropRotateIntent()
-    data class SeekTo(val ms: Long, val immediate: Boolean = false) : CropRotateIntent()
     data class ChangeTransform(val adjustments: AdjustmentsV1) : CropRotateIntent()
     data object ResetTransform : CropRotateIntent()
     data object ResetAll : CropRotateIntent()

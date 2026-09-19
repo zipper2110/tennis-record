@@ -86,8 +86,9 @@ object HelpCatalog {
             page = HelpPage.CROP,
             summary = "Reframe the output by zooming, panning, resizing, and rotating the source.",
             workflow = listOf(
-                "Use the seek bar to choose a frame for alignment.",
+                "Play the video or use the seek bar to choose a moment for alignment.",
                 "Drag inside the crop rectangle to move it, drag handles to resize it, and drag the round handle to rotate.",
+                "Click the video before you use the arrow keys to move the crop rectangle.",
                 "Use the Zoom, Pan X, Pan Y, and Rotation sliders or type exact values.",
             ),
             actions = listOf(
@@ -95,6 +96,7 @@ object HelpCatalog {
                 "Hold Shift while rotating to snap the angle.",
             ),
             shortcuts = listOf(
+                HelpShortcut(AppShortcuts.PLAY_PAUSE, "Play or pause"),
                 HelpShortcut(AppShortcuts.LEFT, "Move the focused crop rectangle left by 1 pixel"),
                 HelpShortcut(AppShortcuts.RIGHT, "Move the focused crop rectangle right by 1 pixel"),
                 HelpShortcut(AppShortcuts.UP, "Move the focused crop rectangle up by 1 pixel"),

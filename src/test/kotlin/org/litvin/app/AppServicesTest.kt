@@ -9,7 +9,6 @@ import org.litvin.export.EncoderCapabilities
 import org.litvin.export.RenderService
 import org.litvin.media.MediaPlayerFactory
 import org.litvin.media.MediaScreen
-import org.litvin.media.StillFrameCaptureService
 import org.litvin.media.SwingMediaPlayer
 import org.litvin.projects.ProjectManifestV1
 import org.litvin.projects.ProjectSummary
@@ -110,7 +109,6 @@ class AppServicesTest {
         private val beforeClose: () -> Unit,
     ) : MediaPlayerFactory {
         override fun create(screen: MediaScreen): SwingMediaPlayer = error("unused")
-        override fun createFrameCapture(): StillFrameCaptureService = error("unused")
         override fun close() {
             beforeClose()
             events += "media"
@@ -129,7 +127,6 @@ class AppServicesTest {
 
     private class FailingMediaPlayerFactory(private val events: MutableList<String>) : MediaPlayerFactory {
         override fun create(screen: MediaScreen): SwingMediaPlayer = error("unused")
-        override fun createFrameCapture(): StillFrameCaptureService = error("unused")
         override fun close() {
             events += "media"
             throw IllegalArgumentException("media close failed")

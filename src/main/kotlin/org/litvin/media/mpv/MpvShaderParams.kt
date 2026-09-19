@@ -26,7 +26,10 @@ internal data class MpvVideoInfo(
 internal object MpvShaderParams {
     private const val EPSILON = 1e-6
 
-    fun build(adjustments: AdjustmentsV1, video: MpvVideoInfo?): String {
+    /**
+     * [cropEditing] true keeps the full rotated frame (no crop), for the Crop/Rotate editor.
+     */
+    fun build(adjustments: AdjustmentsV1, video: MpvVideoInfo?, cropEditing: Boolean = false): String {
         val color = FfmpegColorAdjustmentStrategy.map(adjustments)
         val brightness = if (color.hasEqualizerAdjustments) round4(color.brightness) else 0.0
         val contrast = if (color.hasEqualizerAdjustments) round4(color.contrast) else 1.0
@@ -35,7 +38,7 @@ internal object MpvShaderParams {
         val hue = if (color.hasHueAdjustments) round4(color.hueDegrees) else 0.0
 
         val rotation = CropGeometryMath.normalizeRotation(adjustments.rotationDeg.coerceIn(-180.0f, 180.0f)).toDouble()
-        val crop = video?.let { cropRect(adjustments, rotation, it) } ?: FULL_FRAME
+        val crop = if (cropEditing) FULL_FRAME else video?.let { cropRect(adjustments, rotation, it) } ?: FULL_FRAME
         val geometryActive = abs(rotation) >= 0.001 || crop != FULL_FRAME
         val colorActive = color.hasEqualizerAdjustments || color.hasHueAdjustments
         val (kr, kb) = matrixCoefficients(video?.colorMatrix)

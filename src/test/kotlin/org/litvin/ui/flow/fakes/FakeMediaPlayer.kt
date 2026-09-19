@@ -4,8 +4,6 @@ import org.litvin.adjustments.AdjustmentsV1
 import org.litvin.media.MediaPlayerFactory
 import org.litvin.media.MediaScreen
 import org.litvin.media.PlayerStatus
-import org.litvin.media.StillFrameCaptureService
-import org.litvin.media.StillFrameMediaInfo
 import org.litvin.media.SwingMediaPlayer
 import java.awt.Color
 import java.awt.Component
@@ -144,7 +142,6 @@ class FakeMediaPlayer(
 class FakeMediaPlayerFactory : MediaPlayerFactory {
     private val recordedCalls = CopyOnWriteArrayList<MediaPlayerCall>()
     private val createdPlayers = CopyOnWriteArrayList<FakeMediaPlayer>()
-    private val frameCapture = FakeStillFrameCaptureService()
     private val closed = AtomicBoolean(false)
 
     val players: List<FakeMediaPlayer> get() = createdPlayers.toList()
@@ -176,19 +173,9 @@ class FakeMediaPlayerFactory : MediaPlayerFactory {
         }
     }
 
-    override fun createFrameCapture(): StillFrameCaptureService = frameCapture
-
     override fun close() {
         if (!closed.compareAndSet(false, true)) return
         createdPlayers.forEach(FakeMediaPlayer::close)
-        frameCapture.close()
     }
 }
 
-private class FakeStillFrameCaptureService : StillFrameCaptureService {
-    private val closed = AtomicBoolean(false)
-    override fun load(file: File) = StillFrameMediaInfo(10_000L, Dimension(720, 486))
-    override fun captureAt(ms: Long): BufferedImage = BufferedImage(720, 486, BufferedImage.TYPE_INT_RGB)
-    override fun durationMs(): Long = 10_000L
-    override fun close() { closed.set(true) }
-}

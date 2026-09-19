@@ -13,8 +13,6 @@ import org.litvin.export.RenderService
 import org.litvin.media.MediaPlayerFactory
 import org.litvin.media.MediaScreen
 import org.litvin.media.PlayerStatus
-import org.litvin.media.StillFrameCaptureService
-import org.litvin.media.StillFrameMediaInfo
 import org.litvin.media.SwingMediaPlayer
 import org.litvin.projects.ProjectManifestV1
 import org.litvin.projects.ProjectSummary
@@ -115,7 +113,6 @@ class SwingApplicationFactoryTest {
                     show = true,
                     onWindowClosed = {
                         assertTrue(fixture.mediaPlayers.players.all { it.closeCalls == 1 })
-                        assertEquals(1, fixture.mediaPlayers.frameCapture.closeCalls)
                         assertEquals(1, fixture.renderService.closeCalls)
                         assertEquals(1, fixture.executors.closeCalls)
                         exitRequests++
@@ -183,7 +180,6 @@ class SwingApplicationFactoryTest {
         handle.close()
 
         assertTrue(fixture.mediaPlayers.players.all { it.closeCalls == 1 })
-        assertEquals(1, fixture.mediaPlayers.frameCapture.closeCalls)
         assertEquals(1, fixture.mediaPlayers.closeCalls)
         assertEquals(1, fixture.renderService.subscriptionCloseCalls)
         assertEquals(1, fixture.renderService.closeCalls)
@@ -272,14 +268,11 @@ class SwingApplicationFactoryTest {
 
     private class RecordingMediaPlayerFactory : MediaPlayerFactory {
         val players = mutableListOf<FakeSwingMediaPlayer>()
-        val frameCapture = FakeStillFrameCaptureService()
         var closeCalls = 0
             private set
 
         override fun create(screen: MediaScreen): SwingMediaPlayer =
             FakeSwingMediaPlayer().also(players::add)
-
-        override fun createFrameCapture(): StillFrameCaptureService = frameCapture
 
         override fun close() {
             closeCalls++
@@ -313,15 +306,6 @@ class SwingApplicationFactoryTest {
         override fun setSubtitleFile(file: File) = true
         override fun activatePreview(reason: String) = Unit
         override fun deactivatePreview(reason: String) = Unit
-        override fun close() { closeCalls++ }
-    }
-
-    private class FakeStillFrameCaptureService : StillFrameCaptureService {
-        var closeCalls = 0
-            private set
-        override fun load(file: File) = StillFrameMediaInfo(0, Dimension(16, 9))
-        override fun captureAt(ms: Long): BufferedImage? = null
-        override fun durationMs() = 0L
         override fun close() { closeCalls++ }
     }
 

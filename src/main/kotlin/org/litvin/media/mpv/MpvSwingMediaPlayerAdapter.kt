@@ -11,6 +11,7 @@ import com.sun.jna.win32.W32APIOptions
 import io.github.oshai.kotlinlogging.KotlinLogging
 import org.litvin.ApplicationLayout
 import org.litvin.adjustments.AdjustmentsV1
+import org.litvin.media.OverlayShape
 import org.litvin.media.PlayerStatus
 import org.litvin.media.SwingMediaPlayer
 import java.awt.BorderLayout
@@ -21,6 +22,7 @@ import java.awt.Graphics
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
 import java.awt.event.MouseWheelEvent
+import java.awt.geom.Rectangle2D
 import java.awt.image.BufferedImage
 import java.awt.image.RenderedImage
 import java.io.File
@@ -46,9 +48,16 @@ class MpvSwingMediaPlayerAdapter : SwingMediaPlayer {
     private companion object {
         private val logger = KotlinLogging.logger {}
         private val playerIds = AtomicInteger(0)
+
+        /** Only one player keeps a file loaded (one hardware decoder), as with the VLC engine. */
+        private val activeLock = Any()
+        private var activePlayer: MpvSwingMediaPlayerAdapter? = null
         private const val OVERLAY_ID = "0"
         private const val OVERLAY_MARGIN_PX = 32.0
         private const val OVERLAY_REFERENCE_HEIGHT = 1080.0
+        private const val EDITOR_OVERLAY_ID = "1"
+        private const val EDITOR_MARGIN_VERTICAL = 0.07
+        private const val EDITOR_MARGIN_HORIZONTAL = 0.04
     }
 
     private val playerId = playerIds.incrementAndGet()
@@ -90,6 +99,12 @@ class MpvSwingMediaPlayerAdapter : SwingMediaPlayer {
     @Volatile private var osdMarginTop = 0
     @Volatile private var osdMarginBottom = 0
     @Volatile private var osdMarginLeft = 0
+    @Volatile private var osdMarginRight = 0
+
+    @Volatile private var cropEditing = false
+    @Volatile private var editorShapes: List<OverlayShape>? = null
+    @Volatile private var boundsChangePending = false
+    override var onVideoBoundsChanged: (() -> Unit)? = null
 
     private inner class VideoCanvas : Canvas() {
         init {
@@ -188,6 +203,7 @@ class MpvSwingMediaPlayerAdapter : SwingMediaPlayer {
                 created.observe("osd-dimensions/mt", LibMpv.FORMAT_INT64)
                 created.observe("osd-dimensions/mb", LibMpv.FORMAT_INT64)
                 created.observe("osd-dimensions/ml", LibMpv.FORMAT_INT64)
+                created.observe("osd-dimensions/mr", LibMpv.FORMAT_INT64)
                 core = created
                 logger.info { "Created mpv preview #$playerId (wid=$wid, shader=${shader?.absolutePath})" }
             }
@@ -198,6 +214,7 @@ class MpvSwingMediaPlayerAdapter : SwingMediaPlayer {
     }
 
     private fun destroyCore(reason: String) {
+        releaseActive()
         val old = core ?: return
         core = null
         fileLoaded = false
@@ -213,6 +230,7 @@ class MpvSwingMediaPlayerAdapter : SwingMediaPlayer {
 
     override fun deactivatePreview(reason: String) {
         active = false
+        releaseActive()
         val current = core ?: return
         if (!fileLoaded) return
         lastKnownTimeMs = currentTimeMs()
@@ -240,9 +258,23 @@ class MpvSwingMediaPlayerAdapter : SwingMediaPlayer {
         loadCurrentFile("load")
     }
 
+    private fun claimActive() {
+        val previous = synchronized(activeLock) {
+            activePlayer.also { activePlayer = this }
+        }
+        if (previous != null && previous !== this) previous.deactivatePreview("superseded by mpv preview #$playerId")
+    }
+
+    private fun releaseActive() {
+        synchronized(activeLock) {
+            if (activePlayer === this) activePlayer = null
+        }
+    }
+
     private fun loadCurrentFile(reason: String) {
         val file = mediaFile ?: return
         val mpv = ensureCore() ?: return
+        claimActive()
         val startSeconds = String.format(Locale.US, "%.3f", lastKnownTimeMs / 1000.0)
         logger.info { "Loading into mpv preview #$playerId: ${file.absolutePath} at ${startSeconds}s ($reason)" }
         mpv.setProperty("pause", "yes")
@@ -355,10 +387,75 @@ class MpvSwingMediaPlayerAdapter : SwingMediaPlayer {
         } else {
             null
         }
-        val opts = MpvShaderParams.build(adjustments, video)
+        val opts = MpvShaderParams.build(adjustments, video, cropEditing)
         if (opts == appliedShaderOpts) return
         appliedShaderOpts = opts
         mpv.setProperty("glsl-shader-opts", opts)
+    }
+
+    // ---- Crop editor --------------------------------------------------------------------------------------
+
+    override fun setCropEditing(enabled: Boolean) {
+        cropEditing = enabled
+        applyEditorMargins()
+        applyShaderOptions()
+    }
+
+    /** Keeps a band around the video, so the crop handles stay visible at the frame edges. */
+    private fun applyEditorMargins() {
+        val mpv = core ?: return
+        val vertical = if (cropEditing) EDITOR_MARGIN_VERTICAL else 0.0
+        val horizontal = if (cropEditing) EDITOR_MARGIN_HORIZONTAL else 0.0
+        mpv.setProperty("video-margin-ratio-top", vertical.toString())
+        mpv.setProperty("video-margin-ratio-bottom", vertical.toString())
+        mpv.setProperty("video-margin-ratio-left", horizontal.toString())
+        mpv.setProperty("video-margin-ratio-right", horizontal.toString())
+    }
+
+    override fun videoBounds(): Rectangle2D.Double? {
+        val width = osdWidth
+        val height = osdHeight
+        if (!fileLoaded || width <= 0 || height <= 0 || canvas.width <= 0) return null
+        val scale = canvas.width.toDouble() / width
+        val videoWidth = width - osdMarginLeft - osdMarginRight
+        val videoHeight = height - osdMarginTop - osdMarginBottom
+        if (videoWidth <= 0 || videoHeight <= 0) return null
+        return Rectangle2D.Double(
+            canvas.x + osdMarginLeft * scale,
+            canvas.y + osdMarginTop * scale,
+            videoWidth * scale,
+            videoHeight * scale,
+        )
+    }
+
+    override fun setEditorOverlay(shapes: List<OverlayShape>?) {
+        editorShapes = shapes
+        renderEditorOverlay()
+    }
+
+    private fun renderEditorOverlay() {
+        val mpv = core ?: return
+        val shapes = editorShapes
+        if (shapes.isNullOrEmpty() || osdWidth <= 0 || osdHeight <= 0 || canvas.width <= 0) {
+            mpv.command("osd-overlay", EDITOR_OVERLAY_ID, "none", "")
+            return
+        }
+        val scale = osdWidth.toDouble() / canvas.width
+        mpv.command(
+            "osd-overlay", EDITOR_OVERLAY_ID, "ass-events", MpvAssOverlay.events(shapes, scale),
+            osdWidth.toString(), osdHeight.toString(), "0",
+        )
+    }
+
+    private fun scheduleBoundsChanged() {
+        scheduleOverlay()
+        if (boundsChangePending) return
+        boundsChangePending = true
+        SwingUtilities.invokeLater {
+            boundsChangePending = false
+            onVideoBoundsChanged?.invoke()
+            renderEditorOverlay()
+        }
     }
 
     // ---- Overlay -------------------------------------------------------------------------------------------
@@ -429,8 +526,11 @@ class MpvSwingMediaPlayerAdapter : SwingMediaPlayer {
                 core?.getProperty("duration")?.toDoubleOrNull()?.let { durationMs = (it * 1000.0).roundToLong() }
                 logger.info { "mpv preview #$playerId file loaded: durationMs=$durationMs" }
                 SwingUtilities.invokeLater {
+                    applyEditorMargins()
                     applyShaderOptions()
                     applyOverlay()
+                    onVideoBoundsChanged?.invoke()
+                    renderEditorOverlay()
                 }
                 onReady?.invoke()
                 setStatus(PlayerStatus.READY)
@@ -479,11 +579,12 @@ class MpvSwingMediaPlayerAdapter : SwingMediaPlayer {
             "video-params/h" -> videoHeight = event.int64OrZero(format)
             "video-params/colormatrix" -> colorMatrix = event.stringOrNull(format)
             "video-params/colorlevels" -> colorLevels = event.stringOrNull(format)
-            "osd-dimensions/w" -> osdWidth = event.int64OrZero(format).also { scheduleOverlay() }
-            "osd-dimensions/h" -> osdHeight = event.int64OrZero(format).also { scheduleOverlay() }
-            "osd-dimensions/mt" -> osdMarginTop = event.int64OrZero(format).also { scheduleOverlay() }
-            "osd-dimensions/mb" -> osdMarginBottom = event.int64OrZero(format).also { scheduleOverlay() }
-            "osd-dimensions/ml" -> osdMarginLeft = event.int64OrZero(format).also { scheduleOverlay() }
+            "osd-dimensions/w" -> osdWidth = event.int64OrZero(format).also { scheduleBoundsChanged() }
+            "osd-dimensions/h" -> osdHeight = event.int64OrZero(format).also { scheduleBoundsChanged() }
+            "osd-dimensions/mt" -> osdMarginTop = event.int64OrZero(format).also { scheduleBoundsChanged() }
+            "osd-dimensions/mb" -> osdMarginBottom = event.int64OrZero(format).also { scheduleBoundsChanged() }
+            "osd-dimensions/ml" -> osdMarginLeft = event.int64OrZero(format).also { scheduleBoundsChanged() }
+            "osd-dimensions/mr" -> osdMarginRight = event.int64OrZero(format).also { scheduleBoundsChanged() }
         }
     }
 

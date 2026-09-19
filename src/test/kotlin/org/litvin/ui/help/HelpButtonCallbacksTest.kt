@@ -2,6 +2,8 @@ package org.litvin.ui.help
 
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.litvin.ui.tabs.adjustments.SwingColorAdjustmentsPanel
+import org.litvin.media.MediaScreen
+import org.litvin.ui.flow.fakes.FakeMediaPlayer
 import org.litvin.ui.tabs.crop.SwingCropRotatePanel
 import org.litvin.ui.tabs.crop.presenter.CropRotateIntent
 import org.litvin.ui.tabs.crop.presenter.CropRotatePresenter
@@ -47,7 +49,7 @@ class HelpButtonCallbacksTest {
 
     @Test
     fun cropPanelInvokesHelpCallback() = assertPanelHelp("crop-help") { callback ->
-        SwingCropRotatePanel(NoOpCropPresenter(), callback)
+        SwingCropRotatePanel(FakeMediaPlayer(MediaScreen.CROP), NoOpCropPresenter(), callback)
     }
 
     @Test

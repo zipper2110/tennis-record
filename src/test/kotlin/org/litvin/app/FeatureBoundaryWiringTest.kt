@@ -10,8 +10,6 @@ import org.litvin.export.CompletedRendersRepository
 import org.litvin.export.EncoderCapabilities
 import org.litvin.export.RenderService
 import org.litvin.media.PlayerStatus
-import org.litvin.media.StillFrameCaptureService
-import org.litvin.media.StillFrameMediaInfo
 import org.litvin.media.SwingMediaPlayer
 import org.litvin.projects.ProjectManifestV1
 import org.litvin.projects.ProjectSummary
@@ -19,6 +17,7 @@ import org.litvin.projects.ProjectsRepository
 import org.litvin.ui.commons.FilePicker
 import org.litvin.ui.commons.UserDialogService
 import org.litvin.ui.tabs.adjustments.SwingColorAdjustmentsPanel
+import org.litvin.ui.tabs.crop.SwingCropRotatePanel
 import org.litvin.ui.tabs.crop.presenter.DefaultCropRotatePresenter
 import org.litvin.ui.tabs.export.ExportSettingsPreferences
 import org.litvin.ui.tabs.export.SwingExportPanel
@@ -51,14 +50,13 @@ class FeatureBoundaryWiringTest {
         val render = RecordingRenderService()
         val completed = EmptyCompletedRendersRepository
         val preferences = MemoryPreferences()
-        val players = List(3) { FakeSwingMediaPlayer() }
-        val capture = FakeStillFrameCaptureService()
+        val players = List(4) { FakeSwingMediaPlayer() }
 
         var markup: SwingMarkupPanel? = null
         var colors: SwingColorAdjustmentsPanel? = null
         var scoring: SwingScoringPanel? = null
         var export: SwingExportPanel? = null
-        var crop: DefaultCropRotatePresenter? = null
+        var crop: SwingCropRotatePanel? = null
         SwingUtilities.invokeAndWait {
             val presenter = DefaultProjectsPresenter(
                 repository = EmptyProjectsRepository,
@@ -69,7 +67,7 @@ class FeatureBoundaryWiringTest {
             markup = SwingMarkupPanel(players[0], adjustments, autosaveExecutor, dialogs)
             colors = SwingColorAdjustmentsPanel(players[1], adjustments, preferences)
             scoring = SwingScoringPanel(players[2], adjustments, dialogs)
-            crop = DefaultCropRotatePresenter(capture, adjustments, scheduler)
+            crop = SwingCropRotatePanel(players[3], DefaultCropRotatePresenter(adjustments))
             export = SwingExportPanel(
                 ExportSettingsPreferences(preferences),
                 render,
@@ -98,7 +96,6 @@ class FeatureBoundaryWiringTest {
         }
 
         assertTrue(players.all { it.closeCalls == 1 })
-        assertEquals(1, capture.closeCalls)
         assertEquals(1, render.subscriptionCloseCalls)
         adjustments.close()
         scheduler.shutdownNow()
@@ -172,14 +169,6 @@ class FeatureBoundaryWiringTest {
             return AutoCloseable { subscriptionCloseCalls++ }
         }
         override fun close() = Unit
-    }
-
-    private class FakeStillFrameCaptureService : StillFrameCaptureService {
-        var closeCalls = 0
-        override fun load(file: File) = StillFrameMediaInfo(0, Dimension(16, 9))
-        override fun captureAt(ms: Long): BufferedImage? = null
-        override fun durationMs() = 0L
-        override fun close() { closeCalls++ }
     }
 
     private class FakeSwingMediaPlayer : SwingMediaPlayer {

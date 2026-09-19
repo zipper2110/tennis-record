@@ -113,11 +113,8 @@ object SwingApplicationFactory {
             closeActions += colorsPanel::close
 
             val cropRotatePanel = SwingCropRotatePanel(
-                DefaultCropRotatePresenter(
-                    services.mediaPlayers.createFrameCapture(),
-                    services.adjustments,
-                    services.executors.createScheduledExecutor("crop-frame-capture"),
-                ),
+                services.mediaPlayers.create(MediaScreen.CROP),
+                DefaultCropRotatePresenter(services.adjustments),
             ) { showHelp(HelpPage.CROP) }
             closeActions += cropRotatePanel::dispose
 

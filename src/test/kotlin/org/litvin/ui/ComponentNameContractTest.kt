@@ -18,8 +18,6 @@ import org.litvin.export.RenderService
 import org.litvin.media.MediaPlayerFactory
 import org.litvin.media.MediaScreen
 import org.litvin.media.PlayerStatus
-import org.litvin.media.StillFrameCaptureService
-import org.litvin.media.StillFrameMediaInfo
 import org.litvin.media.SwingMediaPlayer
 import org.litvin.projects.ProjectManifestV1
 import org.litvin.projects.ProjectSummary
@@ -119,7 +117,6 @@ class ComponentNameContractTest {
 
     private object FakeMediaPlayerFactory : MediaPlayerFactory {
         override fun create(screen: MediaScreen): SwingMediaPlayer = FakeMediaPlayer()
-        override fun createFrameCapture(): StillFrameCaptureService = FakeFrameCapture
         override fun close() = Unit
     }
 
@@ -148,13 +145,6 @@ class ComponentNameContractTest {
         override fun setSubtitleFile(file: File) = true
         override fun activatePreview(reason: String) = Unit
         override fun deactivatePreview(reason: String) = Unit
-        override fun close() = Unit
-    }
-
-    private object FakeFrameCapture : StillFrameCaptureService {
-        override fun load(file: File) = StillFrameMediaInfo(0, Dimension(16, 9))
-        override fun captureAt(ms: Long): BufferedImage? = null
-        override fun durationMs() = 0L
         override fun close() = Unit
     }
 
