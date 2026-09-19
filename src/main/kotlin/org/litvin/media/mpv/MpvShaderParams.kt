@@ -2,7 +2,7 @@ package org.litvin.media.mpv
 
 import org.litvin.FfmpegColorAdjustmentStrategy
 import org.litvin.adjustments.AdjustmentsV1
-import org.litvin.adjustments.CropGeometryMath
+import org.litvin.adjustments.GeometryPlan
 import org.litvin.adjustments.CropRect
 import java.util.Locale
 import kotlin.math.abs
@@ -21,7 +21,7 @@ internal data class MpvVideoInfo(
  *
  * The color values come from [FfmpegColorAdjustmentStrategy], which also builds the export filters.
  * The values are rounded to 4 decimals, as FFmpegCommandBuilder writes them into the export command.
- * The crop rectangle uses the same math as the Crop/Rotate canvas.
+ * The geometry comes from [GeometryPlan], which the export also uses.
  */
 internal object MpvShaderParams {
     private const val EPSILON = 1e-6
@@ -37,9 +37,10 @@ internal object MpvShaderParams {
         val gamma = if (color.hasEqualizerAdjustments) round4(color.gamma) else 1.0
         val hue = if (color.hasHueAdjustments) round4(color.hueDegrees) else 0.0
 
-        val rotation = CropGeometryMath.normalizeRotation(adjustments.rotationDeg.coerceIn(-180.0f, 180.0f)).toDouble()
-        val crop = if (cropEditing) FULL_FRAME else video?.let { cropRect(adjustments, rotation, it) } ?: FULL_FRAME
-        val geometryActive = abs(rotation) >= 0.001 || crop != FULL_FRAME
+        val plan = GeometryPlan.of(adjustments, video?.width ?: 0, video?.height ?: 0)
+        val rotation = plan.rotationDeg
+        val crop = if (cropEditing) GeometryPlan.FULL_FRAME else plan.crop
+        val geometryActive = plan.hasRotation || crop != GeometryPlan.FULL_FRAME
         val colorActive = color.hasEqualizerAdjustments || color.hasHueAdjustments
         val (kr, kb) = matrixCoefficients(video?.colorMatrix)
         val fullRange = video?.colorLevels.equals("full", ignoreCase = true)
@@ -64,22 +65,8 @@ internal object MpvShaderParams {
     }
 
     /** Returns the crop rectangle as fractions of the frame, in the space of the rotated frame. */
-    internal fun cropRect(adjustments: AdjustmentsV1, rotationDeg: Double, video: MpvVideoInfo): CropRect {
-        if (video.width <= 0 || video.height <= 0) return FULL_FRAME
-        val width = video.width.toDouble()
-        val height = video.height.toDouble()
-        val aspect = width / height
-        val model = CropGeometryMath.overlayFromModel(width, height, adjustments)
-        val allowed = CropGeometryMath.largestCenteredInscribedRect(width, height, rotationDeg, aspect)
-        val clamped = CropGeometryMath.clampInside(model, allowed, aspect)
-        val normalized = CropRect(
-            x = clamped.x / width,
-            y = clamped.y / height,
-            width = clamped.width / width,
-            height = clamped.height / height,
-        )
-        return if (isFullFrame(normalized)) FULL_FRAME else normalized
-    }
+    internal fun cropRect(adjustments: AdjustmentsV1, rotationDeg: Double, video: MpvVideoInfo): CropRect =
+        GeometryPlan.of(adjustments.copy(rotationDeg = rotationDeg.toFloat()), video.width, video.height).crop
 
     /** Kr and Kb of the Y'CbCr matrix, from the mpv `video-params/colormatrix` names. */
     internal fun matrixCoefficients(colorMatrix: String?): Pair<Double, Double> = when {
@@ -90,11 +77,6 @@ internal object MpvShaderParams {
         colorMatrix == "fcc" -> 0.30 to 0.11
         else -> 0.2126 to 0.0722
     }
-
-    private val FULL_FRAME = CropRect(0.0, 0.0, 1.0, 1.0)
-
-    private fun isFullFrame(rect: CropRect): Boolean =
-        abs(rect.x) < 1e-4 && abs(rect.y) < 1e-4 && abs(rect.width - 1.0) < 1e-4 && abs(rect.height - 1.0) < 1e-4
 
     private fun round4(value: Double): Double = round(value * 10_000.0) / 10_000.0
 

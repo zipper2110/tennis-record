@@ -27,6 +27,9 @@ object FFmpegCommandBuilder {
         val keeps: List<PointV1> = emptyList(),
         val subtitlesAssPath: String? = null, // when non-null, burn-in subtitles (scoreboard)
         val adjustments: org.litvin.adjustments.AdjustmentsV1? = null, // optional color/geometry adjustments
+        // Source frame size for the crop/rotate geometry. When unknown, the output size gives the aspect.
+        val sourceWidth: Int? = null,
+        val sourceHeight: Int? = null,
     )
 
     data class Result(
@@ -82,6 +85,34 @@ object FFmpegCommandBuilder {
             return filters.joinToString(",")
         }
 
+        // Rotate (clockwise, same frame size, black corners) and crop, before the scale filter.
+        // With a known source size, the crop uses the same even pixels as the preview shader.
+        // Without it, the crop uses fractions of the frame (iw/ih) and the output size gives the aspect.
+        fun buildGeometryFilter(adj: org.litvin.adjustments.AdjustmentsV1?): String? {
+            if (adj == null) return null
+            val sourceWidth = p.sourceWidth?.takeIf { it > 0 }
+            val sourceHeight = p.sourceHeight?.takeIf { it > 0 }
+            val knownSize = sourceWidth != null && sourceHeight != null
+            val plan = org.litvin.adjustments.GeometryPlan.of(adj, sourceWidth ?: p.outWidth, sourceHeight ?: p.outHeight)
+            if (plan.isIdentity) return null
+            fun fmt(d: Double): String = java.lang.String.format(java.util.Locale.US, "%.6f", d)
+            val filters = mutableListOf<String>()
+            if (plan.hasRotation) {
+                filters += "rotate=${fmt(Math.toRadians(plan.rotationDeg))}:ow=iw:oh=ih:c=black"
+            }
+            if (plan.hasCrop) {
+                filters += if (knownSize) {
+                    val (w, h, x, y) = plan.cropPixels(sourceWidth!!, sourceHeight!!).toList()
+                    "crop=$w:$h:$x:$y"
+                } else {
+                    val c = plan.crop
+                    "crop=w=iw*${fmt(c.width)}:h=ih*${fmt(c.height)}:x=iw*${fmt(c.x)}:y=ih*${fmt(c.y)}"
+                }
+            }
+            return filters.joinToString(",")
+        }
+        val geometry = buildGeometryFilter(p.adjustments)
+
         if (p.idleTrim && p.keeps.isNotEmpty()) {
             // Build trim/concat graph
             val parts = mutableListOf<String>()
@@ -101,7 +132,7 @@ object FFmpegCommandBuilder {
             parts += vLabels.joinToString(separator = "") + "concat=n=" + p.keeps.size + ":v=1:a=0[vcat]"
             val scaleStr = "scale=${p.outWidth}:-2"
             // Output scaled video into an intermediate label; we may append subtitles next
-            parts += "[vcat]$scaleStr[vsc]"
+            parts += "[vcat]" + listOfNotNull(geometry, scaleStr).joinToString(",") + "[vsc]"
             parts += aLabels.joinToString(separator = "") + "concat=n=${p.keeps.size}:v=0:a=1" + aMap
             // Apply color adjustments after scale to match preview, before subtitles
             val color = buildColorFilter(p.adjustments)
@@ -172,6 +203,7 @@ object FFmpegCommandBuilder {
             val sub = p.subtitlesAssPath
             val color = buildColorFilter(p.adjustments)
             val filters = mutableListOf<String>()
+            if (geometry != null) filters += geometry
             filters += "scale=${p.outWidth}:-2"
             if (color != null) filters += color
             if (sub != null) {

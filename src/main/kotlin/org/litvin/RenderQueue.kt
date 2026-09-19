@@ -266,6 +266,12 @@ object RenderQueueManager {
                 }
                 if (abortIfCanceled(request, partOut, assFile)) continue
 
+                // The crop/rotate geometry needs the source aspect. Probe the size only when the geometry is used.
+                val jobAdjustments = try { request.adjustments.get() } catch (_: Throwable) { null }
+                val sourceSize = jobAdjustments
+                    ?.takeIf { !org.litvin.adjustments.GeometryPlan.of(it, job.outWidth, job.outHeight).isIdentity }
+                    ?.let { org.litvin.export.ExportResolutionProbe.probe(job.sourcePath, ApplicationLayout.current().ffprobeExecutable) }
+
                 // Build command
                 val presets = ExportPresetsIO.load()
                 val defIdx = ExportPresetsIO.defaultBalancedIndex(presets)
@@ -282,7 +288,9 @@ object RenderQueueManager {
                         idleTrim = job.idleTrim,
                         keeps = if (job.idleTrim) job.edlSnapshot else emptyList(),
                         subtitlesAssPath = assFile?.absolutePath,
-                        adjustments = try { request.adjustments.get() } catch (_: Throwable) { null }
+                        adjustments = jobAdjustments,
+                        sourceWidth = sourceSize?.width,
+                        sourceHeight = sourceSize?.height,
                     )
                 )
                 if (abortIfCanceled(request, partOut, assFile)) continue

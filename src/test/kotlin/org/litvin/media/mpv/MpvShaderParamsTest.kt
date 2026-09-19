@@ -66,7 +66,8 @@ class MpvShaderParamsTest {
         // The crop is the largest centered 16:9 rectangle inside the rotated frame (3334 px wide at 5 degrees).
         assertEquals(3334.0 / 3840.0, values.getValue("tr_crop_w").toDouble(), 0.001)
         val x = values.getValue("tr_crop_x").toDouble()
-        assertEquals((1.0 - values.getValue("tr_crop_w").toDouble()) / 2.0, x, 1e-6)
+        // Centered within 2 source pixels (the crop snaps to even pixels).
+        assertEquals((1.0 - values.getValue("tr_crop_w").toDouble()) / 2.0, x, 2.0 / 3840.0)
     }
 
     @Test
