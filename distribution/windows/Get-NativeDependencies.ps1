@@ -49,14 +49,34 @@ function Expand-Dependency {
         Remove-Item -LiteralPath $extractRoot -Recurse -Force
     }
     New-Item -ItemType Directory -Path $extractRoot | Out-Null
-    Expand-Archive -LiteralPath $archive -DestinationPath $extractRoot
+    if ($Dependency.archiveName.EndsWith(".7z", [StringComparison]::OrdinalIgnoreCase)) {
+        & (Get-SevenZip) x -y "-o$extractRoot" $archive | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "7-Zip failed to extract $archive (exit code $LASTEXITCODE)." }
+    } else {
+        Expand-Archive -LiteralPath $archive -DestinationPath $extractRoot
+    }
 
     $source = Join-Path $extractRoot $Dependency.extractedDirectory
     if (-not (Test-Path -LiteralPath $source -PathType Container)) {
         throw "Expected extracted directory is missing: $source"
     }
     New-Item -ItemType Directory -Path $Destination -Force | Out-Null
-    Copy-Item -Path (Join-Path $source "*") -Destination $Destination -Recurse -Force
+    if ($Dependency.files) {
+        foreach ($file in $Dependency.files) {
+            Copy-Item -LiteralPath (Join-Path $source $file) -Destination $Destination -Force
+        }
+    } else {
+        Copy-Item -Path (Join-Path $source "*") -Destination $Destination -Recurse -Force
+    }
+}
+
+function Get-SevenZip {
+    $command = Get-Command "7z.exe" -ErrorAction SilentlyContinue
+    if ($command) { return $command.Source }
+    foreach ($candidate in @("$env:ProgramFiles\7-Zip\7z.exe", "${env:ProgramFiles(x86)}\7-Zip\7z.exe")) {
+        if (Test-Path -LiteralPath $candidate) { return $candidate }
+    }
+    throw "7-Zip (7z.exe) is required to extract .7z archives. Install 7-Zip or add 7z.exe to PATH."
 }
 
 $manifest = Get-Content -LiteralPath $ManifestPath -Raw | ConvertFrom-Json
@@ -74,10 +94,12 @@ New-Item -ItemType Directory -Path $OutputDirectory | Out-Null
 
 Expand-Dependency -Dependency $manifest.vlc -Name "vlc" -Destination (Join-Path $OutputDirectory "vlc")
 Expand-Dependency -Dependency $manifest.ffmpeg -Name "ffmpeg" -Destination (Join-Path $OutputDirectory "ffmpeg")
+Expand-Dependency -Dependency $manifest.mpv -Name "mpv" -Destination (Join-Path $OutputDirectory "mpv")
 
 $required = @(
     (Join-Path $OutputDirectory "vlc\libvlc.dll"),
     (Join-Path $OutputDirectory "vlc\plugins"),
+    (Join-Path $OutputDirectory "mpv\libmpv-2.dll"),
     (Join-Path $OutputDirectory "ffmpeg\bin\ffmpeg.exe"),
     (Join-Path $OutputDirectory "ffmpeg\bin\ffprobe.exe")
 )

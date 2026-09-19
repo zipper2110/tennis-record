@@ -8,6 +8,7 @@ data class RuntimeLayout(
     val nativeRoot: File,
     val vlcDirectory: File?,
     val vlcPluginsDirectory: File?,
+    val mpvDirectory: File? = null,
     val ffmpegExecutable: String,
     val ffprobeExecutable: String,
     val packagedLauncher: File?,
@@ -42,6 +43,7 @@ class ApplicationLayoutResolver(
             nativeRoot = nativeRoot,
             vlcDirectory = vlcDirectory,
             vlcPluginsDirectory = vlcDirectory?.resolve("plugins")?.takeIf { it.isDirectory },
+            mpvDirectory = resolveMpvDirectory(nativeRoot),
             ffmpegExecutable = ffmpegExecutable,
             ffprobeExecutable = ffprobeExecutable,
             packagedLauncher = File(appHome, "Tennis Record.exe").takeIf { it.isFile },
@@ -69,6 +71,15 @@ class ApplicationLayoutResolver(
         }
         return File(nativeRoot, "vlc").takeIf { it.isDirectory }
             ?: File(workingDirectory, "target/native/windows-x64/vlc").takeIf { it.isDirectory }
+    }
+
+    private fun resolveMpvDirectory(nativeRoot: File): File? {
+        value("tr.mpv.path")?.let { return File(it).absoluteFile.normalize() }
+        environment["MPV_PATH"]?.trim()?.takeIf { it.isNotEmpty() }?.let {
+            return File(it).absoluteFile.normalize()
+        }
+        return File(nativeRoot, "mpv").takeIf { it.isDirectory }
+            ?: File(workingDirectory, "target/native/windows-x64/mpv").takeIf { it.isDirectory }
     }
 
     private fun resolveFfprobe(nativeRoot: File, ffmpegExecutable: String): String {

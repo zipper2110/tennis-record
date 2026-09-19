@@ -1,5 +1,8 @@
 package org.litvin.media
 
+import io.github.oshai.kotlinlogging.KotlinLogging
+import org.litvin.media.mpv.LibMpv
+import org.litvin.media.mpv.MpvSwingMediaPlayerAdapter
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -15,6 +18,36 @@ interface MediaPlayerFactory : AutoCloseable {
     fun createFrameCapture(): StillFrameCaptureService
 }
 
+private val logger = KotlinLogging.logger {}
+
+/**
+ * Selects the preview engine. `-Dtennis.record.player=mpv` uses libmpv for the live previews.
+ * The default is VLC. The Crop/Rotate still-frame capture uses VLC with both engines.
+ * If mpv is requested but libmpv cannot load, the factory uses VLC and logs a warning.
+ */
+fun productionMediaPlayerFactory(
+    engine: String? = System.getProperty("tennis.record.player"),
+): MediaPlayerFactory {
+    val requested = engine?.trim()?.lowercase()
+    val shown = engine ?: "<not set>"
+    if (requested == "mpv") {
+        if (LibMpv.instanceOrNull() != null) {
+            logger.info { "Preview engine: MPV (tennis.record.player=$shown). Crop/Rotate still frames use VLC." }
+            return VlcjMediaPlayerFactory(playerCreator = { MpvSwingMediaPlayerAdapter() })
+        }
+        logger.warn { "Preview engine: VLC. tennis.record.player=mpv, but libmpv is not available. See the warning above." }
+        return VlcjMediaPlayerFactory()
+    }
+    logger.info { "Preview engine: VLC (tennis.record.player=$shown). Use -Dtennis.record.player=mpv for mpv." }
+    return VlcjMediaPlayerFactory()
+}
+
+internal fun engineName(resource: Any): String = when (resource) {
+    is MpvSwingMediaPlayerAdapter -> "MPV"
+    is VlcjSwingMediaPlayerAdapter, is VlcjStillFrameCaptureService -> "VLC"
+    else -> resource::class.simpleName ?: "unknown"
+}
+
 class VlcjMediaPlayerFactory internal constructor(
     private val playerCreator: () -> SwingMediaPlayer = { VlcjSwingMediaPlayerAdapter() },
     private val frameCaptureCreator: () -> StillFrameCaptureService = { VlcjStillFrameCaptureService() },
@@ -23,11 +56,17 @@ class VlcjMediaPlayerFactory internal constructor(
     private val resources = CopyOnWriteArrayList<ManagedResource>()
     private val closed = AtomicBoolean(false)
 
-    override fun create(screen: MediaScreen): SwingMediaPlayer =
-        register(ManagedSwingMediaPlayer(playerCreator(), ::unregister))
+    override fun create(screen: MediaScreen): SwingMediaPlayer {
+        val player = playerCreator()
+        logger.info { "Preview player for $screen: ${engineName(player)}" }
+        return register(ManagedSwingMediaPlayer(player, ::unregister))
+    }
 
-    override fun createFrameCapture(): StillFrameCaptureService =
-        register(ManagedStillFrameCaptureService(frameCaptureCreator(), ::unregister))
+    override fun createFrameCapture(): StillFrameCaptureService {
+        val capture = frameCaptureCreator()
+        logger.info { "Crop/Rotate still-frame capture: ${engineName(capture)}" }
+        return register(ManagedStillFrameCaptureService(capture, ::unregister))
+    }
 
     private fun <T : ManagedResource> register(resource: T): T {
         if (closed.get()) {

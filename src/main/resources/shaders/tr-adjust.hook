@@ -1,0 +1,188 @@
+// Tennis Record preview adjustments for mpv (vo=gpu-next, libplacebo).
+//
+// This shader copies the FFmpeg export filters, so the preview matches the export:
+//   geometry: rotate (clockwise, about the frame center) -> crop -> scale to frame
+//   color:    eq (brightness, contrast, gamma, saturation) -> hue (h)
+//
+// The MAIN texture is R'G'B' in the source color space, before linearization.
+// The shader converts each pixel back to the Y'CbCr code values of the source.
+// It then applies the vf_eq.c and vf_hue.c math to the code values, and converts
+// the result back to R'G'B'. The math does not depend on the plane layout
+// (NV12 from hardware decoding or planar YUV from software decoding).
+//
+// The application sets the parameters at runtime with the glsl-shader-opts property.
+
+//!PARAM tr_active
+//!DESC 1 enables this pass. 0 skips it.
+//!TYPE DYNAMIC int
+//!MINIMUM 0
+//!MAXIMUM 1
+0
+
+//!PARAM tr_brightness
+//!DESC FFmpeg eq brightness.
+//!TYPE DYNAMIC float
+//!MINIMUM -1.0
+//!MAXIMUM 1.0
+0.0
+
+//!PARAM tr_contrast
+//!DESC FFmpeg eq contrast.
+//!TYPE DYNAMIC float
+//!MINIMUM -1000.0
+//!MAXIMUM 1000.0
+1.0
+
+//!PARAM tr_saturation
+//!DESC FFmpeg eq saturation.
+//!TYPE DYNAMIC float
+//!MINIMUM 0.0
+//!MAXIMUM 3.0
+1.0
+
+//!PARAM tr_gamma
+//!DESC FFmpeg eq gamma.
+//!TYPE DYNAMIC float
+//!MINIMUM 0.1
+//!MAXIMUM 10.0
+1.0
+
+//!PARAM tr_hue_deg
+//!DESC FFmpeg hue h, in degrees.
+//!TYPE DYNAMIC float
+0.0
+
+//!PARAM tr_rotation_deg
+//!DESC Clockwise rotation of the frame about its center, in degrees.
+//!TYPE DYNAMIC float
+0.0
+
+//!PARAM tr_crop_x
+//!DESC Crop left edge, as a fraction of the frame width.
+//!TYPE DYNAMIC float
+0.0
+
+//!PARAM tr_crop_y
+//!DESC Crop top edge, as a fraction of the frame height.
+//!TYPE DYNAMIC float
+0.0
+
+//!PARAM tr_crop_w
+//!DESC Crop width, as a fraction of the frame width.
+//!TYPE DYNAMIC float
+1.0
+
+//!PARAM tr_crop_h
+//!DESC Crop height, as a fraction of the frame height.
+//!TYPE DYNAMIC float
+1.0
+
+//!PARAM tr_kr
+//!DESC Kr of the source Y'CbCr matrix. BT.709 is 0.2126.
+//!TYPE DYNAMIC float
+0.2126
+
+//!PARAM tr_kb
+//!DESC Kb of the source Y'CbCr matrix. BT.709 is 0.0722.
+//!TYPE DYNAMIC float
+0.0722
+
+//!PARAM tr_full_range
+//!DESC 1 for full-range (pc) sources. 0 for limited-range (tv) sources.
+//!TYPE DYNAMIC int
+//!MINIMUM 0
+//!MAXIMUM 1
+0
+
+//!HOOK MAIN
+//!BIND HOOKED
+//!WHEN tr_active
+//!DESC tennis-record adjust (ffmpeg rotate/crop/eq/hue parity)
+
+vec3 rgb_to_codes(vec3 rgb, float kr, float kb) {
+    float kg = 1.0 - kr - kb;
+    float y = kr * rgb.r + kg * rgb.g + kb * rgb.b;
+    float pb = (rgb.b - y) / (2.0 * (1.0 - kb));
+    float pr = (rgb.r - y) / (2.0 * (1.0 - kr));
+    if (tr_full_range == 1)
+        return vec3(y, pb + 128.0 / 255.0, pr + 128.0 / 255.0);
+    return vec3((16.0 + 219.0 * y) / 255.0,
+                (128.0 + 224.0 * pb) / 255.0,
+                (128.0 + 224.0 * pr) / 255.0);
+}
+
+vec3 codes_to_rgb(vec3 c, float kr, float kb) {
+    float kg = 1.0 - kr - kb;
+    float y, pb, pr;
+    if (tr_full_range == 1) {
+        y = c.x;
+        pb = c.y - 128.0 / 255.0;
+        pr = c.z - 128.0 / 255.0;
+    } else {
+        y = (255.0 * c.x - 16.0) / 219.0;
+        pb = (255.0 * c.y - 128.0) / 224.0;
+        pr = (255.0 * c.z - 128.0) / 224.0;
+    }
+    float r = y + 2.0 * (1.0 - kr) * pr;
+    float b = y + 2.0 * (1.0 - kb) * pb;
+    float g = (y - kr * r - kb * b) / kg;
+    return vec3(r, g, b);
+}
+
+// One plane of vf_eq.c. The input and the output are 8-bit code values (0..255).
+float eq_plane(float src, float contrast, float brightness, float gamma) {
+    // check_values(): an identity plane is not processed.
+    if (contrast == 1.0 && brightness == 0.0 && gamma == 1.0)
+        return src;
+    if (gamma == 1.0 && abs(contrast) < 7.9) {
+        // process_c(): fixed-point path.
+        float cfix = trunc(contrast * 4096.0);
+        float bfix = trunc(trunc(100.0 * brightness + 100.0) * 511.0 / 200.0) - 128.0 - trunc(cfix / 32.0);
+        return clamp(floor(src * cfix / 4096.0) + bfix, 0.0, 255.0);
+    }
+    // create_lut(): lookup-table path.
+    float v = contrast * (src / 255.0 - 0.5) + 0.5 + brightness;
+    if (v <= 0.0)
+        return 0.0;
+    v = pow(v, 1.0 / gamma);
+    return v >= 1.0 ? 255.0 : floor(256.0 * v);
+}
+
+vec4 hook() {
+    // Geometry. The output pixel is a point in the crop rectangle of the rotated frame.
+    // Rotate that point back into the source frame, in pixel units about the center.
+    vec2 size = HOOKED_size;
+    vec2 q = vec2(tr_crop_x, tr_crop_y) + HOOKED_pos * vec2(tr_crop_w, tr_crop_h);
+    vec2 d = (q - 0.5) * size;
+    float a = radians(tr_rotation_deg);
+    float ca = cos(a);
+    float sa = sin(a);
+    vec2 src = vec2(ca * d.x + sa * d.y, -sa * d.x + ca * d.y);
+    vec2 uv = src / size + 0.5;
+
+    vec3 black = codes_to_rgb(tr_full_range == 1 ? vec3(0.0, 128.0, 128.0) / 255.0
+                                                  : vec3(16.0, 128.0, 128.0) / 255.0,
+                              tr_kr, tr_kb);
+    vec4 color = HOOKED_tex(uv);
+    if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0))))
+        color = vec4(black, 1.0);
+
+    // Color. Same integer math as vf_eq.c and vf_hue.c, on 8-bit code values.
+    vec3 codes = clamp(floor(rgb_to_codes(color.rgb, tr_kr, tr_kb) * 255.0 + 0.5), 0.0, 255.0);
+
+    codes.x = eq_plane(codes.x, tr_contrast, tr_brightness, tr_gamma);
+    codes.y = eq_plane(codes.y, tr_saturation, 0.0, 1.0);
+    codes.z = eq_plane(codes.z, tr_saturation, 0.0, 1.0);
+
+    if (tr_hue_deg != 0.0) {
+        // vf_hue.c: lrint(sin/cos * 2^16), then (c*u - s*v + 2^15 + (128 << 16)) >> 16.
+        float h = radians(tr_hue_deg);
+        float hc = round(cos(h) * 65536.0) / 65536.0;
+        float hs = round(sin(h) * 65536.0) / 65536.0;
+        vec2 uv0 = codes.yz - 128.0;
+        codes.yz = clamp(floor(vec2(hc * uv0.x - hs * uv0.y, hs * uv0.x + hc * uv0.y) + 128.5), 0.0, 255.0);
+    }
+
+    color.rgb = codes_to_rgb(codes / 255.0, tr_kr, tr_kb);
+    return color;
+}

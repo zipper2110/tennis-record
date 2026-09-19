@@ -7,7 +7,7 @@ import org.litvin.export.FileCompletedRendersRepository
 import org.litvin.export.ProductionRenderService
 import org.litvin.export.RenderService
 import org.litvin.media.MediaPlayerFactory
-import org.litvin.media.VlcjMediaPlayerFactory
+import org.litvin.media.productionMediaPlayerFactory
 import org.litvin.projects.FileProjectsRepository
 import org.litvin.projects.ProjectsRepository
 import org.litvin.ui.commons.FilePicker
@@ -23,7 +23,7 @@ internal data class AppServicesProductionFactory(
     val paths: () -> AppDataPaths = AppDataPaths::production,
     val preferences: () -> PreferencesProvider = PreferencesProvider::production,
     val executors: () -> ExecutorProvider = { TrackedExecutorProvider() },
-    val mediaPlayers: () -> MediaPlayerFactory = { VlcjMediaPlayerFactory() },
+    val mediaPlayers: () -> MediaPlayerFactory = { productionMediaPlayerFactory() },
     val filePicker: () -> FilePicker = { SwingFilePicker() },
     val dialogs: () -> UserDialogService = { SwingUserDialogService() },
     val projectsRepository: (AppDataPaths) -> ProjectsRepository = { FileProjectsRepository(it.projects) },
