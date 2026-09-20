@@ -51,7 +51,7 @@ if (-not $SkipBuild) {
     & mvn -B -Pdistribution -DskipTests "-Drevision=$packageVersion" package
     if ($LASTEXITCODE -ne 0) { throw "Maven distribution build failed." }
 }
-if (-not (Test-Path -LiteralPath (Join-Path $nativeDirectory "vlc\libvlc.dll"))) {
+if (-not (Test-Path -LiteralPath (Join-Path $nativeDirectory "mpv\libmpv-2.dll"))) {
     throw "Native dependencies are missing. Run distribution/windows/Get-NativeDependencies.ps1."
 }
 if (-not (Test-Path -LiteralPath $icon)) {

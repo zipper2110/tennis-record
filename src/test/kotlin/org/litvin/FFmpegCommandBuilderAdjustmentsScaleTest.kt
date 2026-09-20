@@ -92,7 +92,7 @@ class FFmpegCommandBuilderAdjustmentsScaleTest {
 
     @Test
     fun brightness_extremes_are_damped_for_ffmpeg_preview_parity() {
-        // Low end: model 0.0 -> eq about -0.39, not -1.0, because ffmpeg eq is much stronger than VLC preview.
+        // Low end: model 0.0 -> eq about -0.39, not -1.0; the slider range is wider than the eq range.
         var vf = buildVf(AdjustmentsV1(brightness = 0.0f, contrast = 1.0f, saturation = 1.0f, whiteBalance = WhiteBalanceV1(0f, 0f)))
         var eq = parseEqMap(vf)!!
         val bLow = eq["brightness"]!!.toDouble()

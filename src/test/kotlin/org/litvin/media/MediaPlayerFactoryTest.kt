@@ -19,7 +19,7 @@ class MediaPlayerFactoryTest {
         val player = CountingSwingMediaPlayer()
         val factoryOwned = CountingSwingMediaPlayer()
         val created = ArrayDeque(listOf(player, factoryOwned))
-        val factory = VlcjMediaPlayerFactory(playerCreator = { created.removeFirst() })
+        val factory = PreviewMediaPlayerFactory(playerCreator = { created.removeFirst() })
 
         val managedPlayer = factory.create(MediaScreen.MARKUP)
         factory.create(MediaScreen.CROP)
@@ -38,7 +38,7 @@ class MediaPlayerFactoryTest {
         val allowCreation = CountDownLatch(1)
         val finished = CountDownLatch(1)
         val player = CountingSwingMediaPlayer()
-        val factory = VlcjMediaPlayerFactory(
+        val factory = PreviewMediaPlayerFactory(
             playerCreator = {
                 creationStarted.countDown()
                 allowCreation.await()
@@ -68,7 +68,7 @@ class MediaPlayerFactoryTest {
         val allowClosedCheck = CountDownLatch(1)
         val finished = CountDownLatch(1)
         val player = CountingSwingMediaPlayer()
-        val factory = VlcjMediaPlayerFactory(
+        val factory = PreviewMediaPlayerFactory(
             playerCreator = { player },
             afterRegistration = {
                 registered.countDown()

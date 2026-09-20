@@ -1,7 +1,6 @@
 package org.litvin
 
-import com.sun.jna.NativeLibrary
-import uk.co.caprica.vlcj.binding.support.runtime.RuntimeUtil
+import org.litvin.media.mpv.LibMpv
 import java.io.File
 import java.util.concurrent.TimeUnit
 
@@ -30,9 +29,8 @@ object DistributionDiagnostics {
                 Runtime.version().feature() >= 17,
                 System.getProperty("java.runtime.version").orEmpty(),
             ),
-            fileCheck("libVLC", layout.vlcDirectory?.resolve("libvlc.dll")),
-            nativeVlcCheck(),
-            directoryCheck("VLC plugins", layout.vlcPluginsDirectory),
+            fileCheck("libmpv", layout.mpvDirectory?.resolve("libmpv-2.dll")),
+            nativeMpvCheck(),
             executableCheck("FFmpeg", layout.ffmpegExecutable),
             executableCheck("FFprobe", layout.ffprobeExecutable),
             writableDirectoryCheck(layout.appDataDirectory),
@@ -45,21 +43,12 @@ object DistributionDiagnostics {
         file?.absolutePath ?: "not configured",
     )
 
-    private fun directoryCheck(name: String, directory: File?): DiagnosticCheck = DiagnosticCheck(
-        name,
-        directory?.isDirectory == true && !directory.list().isNullOrEmpty(),
-        directory?.absolutePath ?: "not configured",
-    )
-
-    private fun nativeVlcCheck(): DiagnosticCheck {
+    private fun nativeMpvCheck(): DiagnosticCheck {
         return try {
-            VlcBootstrap.ensureConfigured()
-            val library = NativeLibrary.getInstance(RuntimeUtil.getLibVlcLibraryName())
-            val detail = library.file?.absolutePath ?: library.toString()
-            library.close()
-            DiagnosticCheck("libVLC load", true, detail)
+            val version = LibMpv.instance().mpv_client_api_version().toLong()
+            DiagnosticCheck("libmpv load", true, "client API ${version shr 16}.${version and 0xffff}")
         } catch (t: Throwable) {
-            DiagnosticCheck("libVLC load", false, "${t.javaClass.simpleName}: ${t.message}")
+            DiagnosticCheck("libmpv load", false, "${t.javaClass.simpleName}: ${t.message}")
         }
     }
 

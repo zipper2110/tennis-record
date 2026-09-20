@@ -7,7 +7,7 @@ import kotlin.test.assertTrue
 
 class AssPreviewScoreboardWriterTest {
     @Test
-    fun writes_one_dialogue_event_per_span_for_vlc_preview() {
+    fun writes_one_dialogue_event_per_span_for_the_preview() {
         val tmp = File.createTempFile("preview-score", ".ass")
         tmp.deleteOnExit()
         val spans = listOf(

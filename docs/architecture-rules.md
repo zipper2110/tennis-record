@@ -5,7 +5,7 @@ These rules define packaging and dependency conventions to keep the codebase con
 ## Package topology (feature‑centric)
 Top‑level feature and shared packages:
 - `org.litvin.app` — application entry/wiring/bootstrap only (no business logic).
-- `org.litvin.media` — media adapters (e.g., VLCJ) and low‑level media services.
+- `org.litvin.media` — media adapters (e.g., libmpv) and low‑level media services.
 - `org.litvin.projects` — project/session metadata and manifest handling.
 - `org.litvin.adjustments` — color/geometry adjustments domain and persistence.
 - `org.litvin.markup` — markup/EDL domain and services.
@@ -57,7 +57,7 @@ These rules define packaging and dependency conventions to keep the codebase con
 ## Package topology (feature‑centric)
 Top‑level feature and shared packages:
 - `org.litvin.app` — application entry/wiring/bootstrap only (no business logic).
-- `org.litvin.media` — media adapters (e.g., VLCJ) and low‑level media services.
+- `org.litvin.media` — media adapters (e.g., libmpv) and low‑level media services.
 - `org.litvin.projects` — project/session metadata and manifest handling.
 - `org.litvin.adjustments` — color/geometry adjustments domain and persistence.
 - `org.litvin.markup` — markup/EDL domain and services.

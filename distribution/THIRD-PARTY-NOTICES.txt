@@ -3,12 +3,14 @@ TENNIS RECORD THIRD-PARTY NOTICES
 This distribution contains third-party software. The authoritative license
 texts shipped inside dependency archives and JAR files remain controlling.
 
-VLC media player / libVLC 3.0.23
-Copyright VideoLAN and VLC contributors.
-License: GNU Lesser General Public License v2.1 or later, with individual VLC
-modules potentially under compatible licenses.
-Source and license information: https://www.videolan.org/vlc/
-The bundled libVLC files are unmodified and remain replaceable in the
+mpv / libmpv v0.41.0-1023-g69e63f425
+(shinchiro mpv-winbuild-cmake build 20260903-git-69e63f425a)
+Copyright mpv developers and dependency authors.
+License: GNU General Public License v2 or later for this build variant, with
+individual components under compatible licenses.
+Source and build information: https://mpv.io/
+https://github.com/shinchiro/mpv-winbuild-cmake
+The bundled libmpv-2.dll is unmodified and remains replaceable in the
 installation directory.
 
 FFmpeg n7.1.4-6-g181cfa1008, BtbN win64-lgpl-shared-7.1 build
@@ -19,12 +21,6 @@ https://github.com/BtbN/FFmpeg-Builds
 https://ffmpeg.org/
 The shared libraries and executables are unmodified and remain replaceable in
 the installation directory.
-
-vlcj 4.12.1 and vlcj-natives 4.12.0
-Copyright Caprica Software Limited and contributors.
-License: GNU General Public License v3 or later.
-https://github.com/caprica/vlcj
-Exact source JARs are published alongside each Tennis Record binary release.
 
 Eclipse Temurin OpenJDK 17 runtime
 Copyright Eclipse Foundation and OpenJDK contributors.

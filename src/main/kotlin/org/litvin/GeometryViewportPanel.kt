@@ -8,12 +8,12 @@ import javax.swing.JPanel
 import kotlin.math.roundToInt
 
 /**
- * UI-layer geometry preview for VLC canvas.
+ * UI-layer geometry preview for the heavyweight video canvas.
  *
- * Applies zoom/pan by resizing and offsetting the child component (VLC Canvas)
- * within a clipping container. Rotation is not applied here due to heavyweight
- * component limitations; rotation may be attempted via VLC filters by the player
- * adapter. This class focuses on smooth pan/zoom at 30–60 FPS.
+ * Applies zoom/pan by resizing and offsetting the child component within a
+ * clipping container. Rotation is not applied here due to heavyweight component
+ * limitations; the player applies rotation and crop in its preview shader.
+ * This class focuses on smooth pan/zoom at 30–60 FPS.
  */
 class GeometryViewportPanel(private val content: Component) : JPanel(null /* absolute layout */) {
     @Volatile private var zoom: Float = 1.0f

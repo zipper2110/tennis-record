@@ -6,9 +6,7 @@ import java.net.URI
 data class RuntimeLayout(
     val appHome: File,
     val nativeRoot: File,
-    val vlcDirectory: File?,
-    val vlcPluginsDirectory: File?,
-    val mpvDirectory: File? = null,
+    val mpvDirectory: File?,
     val ffmpegExecutable: String,
     val ffprobeExecutable: String,
     val packagedLauncher: File?,
@@ -29,7 +27,6 @@ class ApplicationLayoutResolver(
     fun resolve(): RuntimeLayout {
         val appHome = resolveAppHome()
         val nativeRoot = File(appHome, "natives/windows-x64")
-        val vlcDirectory = resolveVlcDirectory(nativeRoot)
         val ffmpegExecutable = resolveExecutable(
             propertyName = "tr.ffmpeg.path",
             environmentName = "FFMPEG_PATH",
@@ -41,8 +38,6 @@ class ApplicationLayoutResolver(
         return RuntimeLayout(
             appHome = appHome,
             nativeRoot = nativeRoot,
-            vlcDirectory = vlcDirectory,
-            vlcPluginsDirectory = vlcDirectory?.resolve("plugins")?.takeIf { it.isDirectory },
             mpvDirectory = resolveMpvDirectory(nativeRoot),
             ffmpegExecutable = ffmpegExecutable,
             ffprobeExecutable = ffprobeExecutable,
@@ -62,15 +57,6 @@ class ApplicationLayoutResolver(
             }
         }
         return workingDirectory.absoluteFile.normalize()
-    }
-
-    private fun resolveVlcDirectory(nativeRoot: File): File? {
-        value("tr.vlc.path")?.let { return File(it).absoluteFile.normalize() }
-        environment["VLC_PATH"]?.trim()?.takeIf { it.isNotEmpty() }?.let {
-            return File(it).absoluteFile.normalize()
-        }
-        return File(nativeRoot, "vlc").takeIf { it.isDirectory }
-            ?: File(workingDirectory, "target/native/windows-x64/vlc").takeIf { it.isDirectory }
     }
 
     private fun resolveMpvDirectory(nativeRoot: File): File? {

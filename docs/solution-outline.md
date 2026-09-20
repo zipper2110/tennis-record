@@ -13,22 +13,22 @@ This document details the architecture, components, data model, and workflows fo
 - Smooth preview and responsive scrubbing for 1080p30 (target), acceptable for 4K where possible.
 - Non‑destructive editing: all actions are represented by an Edit Decision List (EDL) and scoring timeline; originals are read‑only.
 - Deterministic exports: same EDL yields bit‑exact outputs given same toolchain and flags.
-- Packaged installers with bundled native deps (libVLC, optional FFmpeg binaries).
+- Packaged installers with bundled native deps (libmpv, FFmpeg binaries).
 
 ## 3. Tech stack
 - UI framework: Compose Multiplatform Desktop (Kotlin/JVM).
-- Preview engine: libVLC via VLCJ (binding). Alternative: mpv via bindings (future option).
+- Preview engine: libmpv via a JNA binding, with a custom GLSL shader that matches the FFmpeg export.
 - Export/render: FFmpeg (initially via CLI process). Future: JavaCPP‑presets FFmpeg for in‑process control.
 - JSON processing: Jackson (jackson-databind + jackson-module-kotlin).
 - DI/State management: Kotlin coroutines + flows; simple service locator at first.
-- Packaging: jpackage (MSIX/EXE, DMG, AppImage). Bundle libVLC (LGPL).
+- Packaging: jpackage (MSIX/EXE, DMG, AppImage). Bundle libmpv (GPLv2+).
 - Logging: Kotlin Logging + slf4j simple/logback.
 - Tests: JUnit 5.
 
 ## 4. High‑level architecture
 - app (desktop): Compose UI, windowing, actions, shortcuts
 - domain: EDL and scoring models, rules (best‑of‑3/5, tiebreaks)
-- media‑preview: VLCJ player wrapper, timeline thumbs (later via FFmpeg), overlay sync
+- media‑preview: libmpv player wrapper, timeline thumbs (later via FFmpeg), overlay sync
 - export: FFmpeg pipeline builder, concat/trim stages, overlay rendering
 - persistence: project files (EDL JSON), autosave, recent projects
 
@@ -41,7 +41,7 @@ Data flow:
 ## 5. Modules (proposed Gradle/Maven modules later)
 - :app-desktop — Compose app entrypoint, DI wiring, resources.
 - :domain — EDL, scoring rules, validation, serialization.
-- :media-preview — VLCJ integration, player controls, seek/step, video surface provider.
+- :media-preview — libmpv integration, player controls, seek/step, video surface provider.
 - :export — FFmpeg command builder, temp file mgmt, progress parsing.
 - :ui-widgets — reusable Compose components (timeline, scoreboard widget, transport controls).
 
@@ -49,7 +49,7 @@ Note: The repository currently uses Maven; we may migrate to Gradle for better C
 
 ## 6. Core components
 - TimelineView: scroll/zoomable timeline, draggable playhead, in/out markers, segment list.
-- PlayerController: play/pause, rate, step forward/back by frame (approx via VLC), seek to time.
+- PlayerController: play/pause, rate, step forward/back by frame, seek to time.
 - ScoreboardWidget: visual overlay reflecting current score from domain at time t.
 - EDLManager: stores `keeps` segments, ripple logic, conflict resolution.
 - ExportOrchestrator: creates temp trims as needed and performs concat + overlay.
@@ -82,7 +82,7 @@ Note: The repository currently uses Maven; we may migrate to Gradle for better C
 
 ## 8. Preview overlay strategy
 - Primary: draw scoreboard as a Compose layer above the video canvas, synchronized to playhead time.
-- Alternative: use VLC OSD/Marquee for simple text (limited styling).
+- Alternative: use the mpv OSD for simple text (limited styling).
 - For final export: render via FFmpeg filtergraph (`drawtext` or pre‑rendered RGBA overlay piped to `overlay`).
 
 ## 9. Export pipeline design
@@ -144,12 +144,12 @@ Example:
 - Optionally generate proxy media for 4K sources to improve responsiveness.
 
 ## 14. Packaging & distribution
-- Bundle libVLC per platform.
+- Bundle libmpv per platform.
 - Use `jpackage` for installers and include necessary run flags and JVM.
 - Codesign where needed (Windows/macOS).
 
 ## 15. Licensing & third‑party components
-- libVLC (LGPL) — ship unmodified, allow replacement.
+- libmpv (GPLv2+) — ship unmodified, allow replacement.
 - FFmpeg — prefer LGPL build to avoid GPL obligations unless GPL codecs/filters are used.
 - Fonts — ensure redistribution rights (e.g., OFL fonts like Roboto).
 

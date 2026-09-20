@@ -3,7 +3,7 @@ package org.litvin.ui.tabs.adjustments
 import org.litvin.GeometryViewportPanel
 import org.litvin.projects.ManifestIO
 import org.litvin.media.PlayerStatus
-import org.litvin.media.VlcjSwingMediaPlayerAdapter
+import org.litvin.media.mpv.MpvSwingMediaPlayerAdapter
 import org.litvin.media.SwingMediaPlayer
 import org.litvin.adjustments.AdjustmentsV1
 import org.litvin.adjustments.AdjustmentsStore
@@ -26,7 +26,7 @@ import org.litvin.ui.commons.applyDarkScrollbar
 /**
  * Adjustments: Color Tab — T3 (Player integration and transport wiring)
  *
- * Implements split layout per spec v0.3.0 T1/T2 and wires VLCJ player per T3:
+ * Implements split layout per spec v0.3.0 T1/T2 and wires the preview player per T3:
  * - Left: player stack container (min 640x360)
  * - Right: controls container (min 280px width)
  * - Play/Pause button, seek slider, time labels, and SPACE key toggle
@@ -39,7 +39,7 @@ class SwingColorAdjustmentsPanel(
     private val onHelp: () -> Unit = {},
 ) : JPanel(BorderLayout()), AutoCloseable {
     constructor(onHelp: () -> Unit = {}) : this(
-        VlcjSwingMediaPlayerAdapter(),
+        MpvSwingMediaPlayerAdapter(),
         AdjustmentsStore.legacySession(),
         PreferencesProvider.production().node(PreferencesProvider.COLOR_ADJUSTMENTS),
         onHelp,
@@ -114,7 +114,7 @@ class SwingColorAdjustmentsPanel(
     }
 
     init {
-        // Embed VLCJ video component through the shared geometry viewport.
+        // Embed the video component through the shared geometry viewport.
         viewportPanel.add(geometryViewport, BorderLayout.CENTER)
 
         // Populate transport: play/pause, time labels, seek slider
@@ -355,7 +355,7 @@ class SwingColorAdjustmentsPanel(
         player.load(videoFile)
         player.pause()
         isMediaLoaded = true
-        // Re-apply current adjustments after media is loaded to ensure VLC picks them up
+        // Re-apply current adjustments after media is loaded so the player picks them up
         try {
             applyPreview(adjustments.get())
         } catch (_: Throwable) { /* ignore */ }

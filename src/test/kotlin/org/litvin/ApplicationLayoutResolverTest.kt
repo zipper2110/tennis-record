@@ -20,7 +20,7 @@ class ApplicationLayoutResolverTest {
             writeText("")
         }
         val ffprobe = tempDir.resolve("Custom Tools/ffprobe.exe").toFile().apply { writeText("") }
-        val vlc = tempDir.resolve("Custom VLC").toFile().apply { mkdirs() }
+        val mpv = tempDir.resolve("Custom mpv").toFile().apply { mkdirs() }
 
         val layout = resolver(
             appHome = appHome,
@@ -29,13 +29,13 @@ class ApplicationLayoutResolverTest {
                 "user.home" to tempDir.toString(),
                 "tr.ffmpeg.path" to ffmpeg.absolutePath,
                 "tr.ffprobe.path" to ffprobe.absolutePath,
-                "tr.vlc.path" to vlc.absolutePath,
+                "tr.mpv.path" to mpv.absolutePath,
             ),
         ).resolve()
 
         assertEquals(ffmpeg.absolutePath, layout.ffmpegExecutable)
         assertEquals(ffprobe.absolutePath, layout.ffprobeExecutable)
-        assertEquals(vlc.absoluteFile, layout.vlcDirectory)
+        assertEquals(mpv.absoluteFile, layout.mpvDirectory)
     }
 
     @Test
@@ -44,9 +44,9 @@ class ApplicationLayoutResolverTest {
         val appDirectory = File(appHome, "app").apply { mkdirs() }
         val mainJar = File(appDirectory, "tennisrecord.jar").apply { writeText("") }
         val nativeRoot = File(appHome, "natives/windows-x64")
-        val vlc = File(nativeRoot, "vlc").apply {
-            resolve("plugins").mkdirs()
-            resolve("libvlc.dll").writeText("")
+        val mpv = File(nativeRoot, "mpv").apply {
+            mkdirs()
+            resolve("libmpv-2.dll").writeText("")
         }
         val ffmpeg = File(nativeRoot, "ffmpeg/bin/ffmpeg.exe").apply {
             parentFile.mkdirs()
@@ -63,7 +63,7 @@ class ApplicationLayoutResolverTest {
         ).resolve()
 
         assertEquals(appHome.absoluteFile, layout.appHome)
-        assertEquals(vlc.absoluteFile, layout.vlcDirectory)
+        assertEquals(mpv.absoluteFile, layout.mpvDirectory)
         assertEquals(ffmpeg.absolutePath, layout.ffmpegExecutable)
         assertEquals(ffprobe.absolutePath, layout.ffprobeExecutable)
         assertEquals(launcher.absoluteFile, layout.packagedLauncher)
@@ -79,16 +79,16 @@ class ApplicationLayoutResolverTest {
 
         assertEquals("ffmpeg.exe", layout.ffmpegExecutable)
         assertEquals("ffprobe.exe", layout.ffprobeExecutable)
-        assertNull(layout.vlcDirectory)
+        assertNull(layout.mpvDirectory)
     }
 
     @Test
-    fun uses_pinned_development_vlc_when_the_packaged_bundle_is_absent() {
+    fun uses_pinned_development_mpv_when_the_packaged_bundle_is_absent() {
         val workspace = tempDir.resolve("workspace").toFile().apply { mkdirs() }
         val appHome = workspace.resolve("target/classes").apply { mkdirs() }
-        val developmentVlc = workspace.resolve("target/native/windows-x64/vlc").apply {
-            resolve("plugins").mkdirs()
-            resolve("libvlc.dll").writeText("")
+        val developmentMpv = workspace.resolve("target/native/windows-x64/mpv").apply {
+            mkdirs()
+            resolve("libmpv-2.dll").writeText("")
         }
 
         val layout = ApplicationLayoutResolver(
@@ -102,7 +102,7 @@ class ApplicationLayoutResolverTest {
             workingDirectory = workspace,
         ).resolve()
 
-        assertEquals(developmentVlc.absoluteFile, layout.vlcDirectory)
+        assertEquals(developmentMpv.absoluteFile, layout.mpvDirectory)
     }
 
     @Test

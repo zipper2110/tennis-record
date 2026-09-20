@@ -11,7 +11,7 @@ import org.litvin.markup.EdlIO
 import org.litvin.markup.EdlV1
 import org.litvin.markup.PointV1
 import org.litvin.media.PlayerStatus
-import org.litvin.media.VlcjSwingMediaPlayerAdapter
+import org.litvin.media.mpv.MpvSwingMediaPlayerAdapter
 import org.litvin.media.SwingMediaPlayer
 import org.litvin.scoring.Outcome
 import org.litvin.scoring.ScoreIO
@@ -69,7 +69,7 @@ class SwingScoringPanel(
     private val onHelp: () -> Unit = {},
 ) : JPanel(BorderLayout()), AutoCloseable {
     constructor(onHelp: () -> Unit = {}) : this(
-        VlcjSwingMediaPlayerAdapter(),
+        MpvSwingMediaPlayerAdapter(),
         AdjustmentsStore.legacySession(),
         SwingUserDialogService(),
         onHelp,
@@ -185,7 +185,7 @@ class SwingScoringPanel(
             player.pause()
             isMediaLoaded = true
             refreshVideoScoreboardOverlay()
-            // Re-apply current adjustments after media is loaded to ensure VLC picks them up
+            // Re-apply current adjustments after media is loaded so the player picks them up
             try {
                 val current = adjustments.get()
                 player.applyPreviewAdjustments(current)
@@ -372,7 +372,7 @@ class SwingScoringPanel(
                 player.setRate(SessionSettings.toRate(SessionSettings.playbackSpeedIndex))
                 if (selectedPointIndex in points.indices) {
                     // Jump to start of current segment and ensure a preview frame is rendered immediately
-                    // Some VLC builds keep the canvas black until the first decoded frame is shown.
+                    // The canvas stays black until the first decoded frame is shown.
                     // Nudge by seeking a millisecond forward and back while paused to force a frame render.
                     uiSafe {
                         player.pause()

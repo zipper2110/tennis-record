@@ -21,7 +21,7 @@ class SwingScoringPanelHotkeysTest {
         } catch (t: Throwable) { error = t }
 
         if (panel == null) {
-            assumeTrue(false, "Cannot construct SwingScoringPanel (likely VLC/libvlc missing): ${error?.javaClass?.simpleName}: ${error?.message}")
+            assumeTrue(false, "Cannot construct SwingScoringPanel (likely libmpv missing): ${error?.javaClass?.simpleName}: ${error?.message}")
             return
         }
 
@@ -32,14 +32,14 @@ class SwingScoringPanelHotkeysTest {
             assertNotNull(action, "togglePlayPause action should be installed in ActionMap")
             assertNotNull(p.actionMap.get("toggleFavorite"), "toggleFavorite action should be installed in ActionMap")
 
-            // Try invoking the action; if underlying VLC causes issues, skip rather than fail
+            // Try invoking the action; if the native player causes issues, skip rather than fail
             try {
                 // Fire on EDT to mimic real key handling
                 SwingUtilities.invokeAndWait {
                     action.actionPerformed(ActionEvent(p, ActionEvent.ACTION_PERFORMED, "test"))
                 }
             } catch (t: Throwable) {
-                assumeTrue(false, "Invoking togglePlayPause failed (likely VLC not present): ${t.javaClass.simpleName}: ${t.message}")
+                assumeTrue(false, "Invoking togglePlayPause failed (likely libmpv not present): ${t.javaClass.simpleName}: ${t.message}")
             }
         } finally {
             SwingUtilities.invokeAndWait { p.dispose() }

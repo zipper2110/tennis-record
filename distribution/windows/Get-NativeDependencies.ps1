@@ -92,13 +92,10 @@ if (Test-Path -LiteralPath $OutputDirectory) {
 }
 New-Item -ItemType Directory -Path $OutputDirectory | Out-Null
 
-Expand-Dependency -Dependency $manifest.vlc -Name "vlc" -Destination (Join-Path $OutputDirectory "vlc")
 Expand-Dependency -Dependency $manifest.ffmpeg -Name "ffmpeg" -Destination (Join-Path $OutputDirectory "ffmpeg")
 Expand-Dependency -Dependency $manifest.mpv -Name "mpv" -Destination (Join-Path $OutputDirectory "mpv")
 
 $required = @(
-    (Join-Path $OutputDirectory "vlc\libvlc.dll"),
-    (Join-Path $OutputDirectory "vlc\plugins"),
     (Join-Path $OutputDirectory "mpv\libmpv-2.dll"),
     (Join-Path $OutputDirectory "ffmpeg\bin\ffmpeg.exe"),
     (Join-Path $OutputDirectory "ffmpeg\bin\ffprobe.exe")

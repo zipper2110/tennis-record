@@ -1,7 +1,7 @@
 # Windows distribution
 
 The Windows x64 package is a self-contained `jpackage` application image and
-per-user EXE installer. It includes Java 17, VLC 3.0.23, and the pinned
+per-user EXE installer. It includes Java 17, the pinned libmpv build, and the pinned
 BtbN FFmpeg LGPL shared build listed in `native-dependencies.json`.
 
 ## Local app-image build
@@ -27,6 +27,6 @@ must be replaced with final brand artwork before public launch.
 - Build on Windows x64 with Eclipse Temurin JDK 17 and WiX Toolset 3.
 - Configure Azure Artifact Signing and GitHub OIDC variables/secrets.
 - Keep Tennis Record and distributed derivatives under GPLv3-or-later while
-  the application links to the public GPL build of vlcj.
+  the application bundles the GPL build of libmpv.
 - Publish corresponding source beside every binary release.
 - Review the generated Maven dependency license/SBOM output before release.

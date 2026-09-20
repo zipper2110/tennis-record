@@ -9,7 +9,6 @@
     </appender>
 
     <logger name="org.litvin" level="${APP_LOG_LEVEL}" />
-    <logger name="uk.co.caprica.vlcj" level="WARN" />
     <logger name="com.formdev.flatlaf" level="WARN" />
 
     <root level="WARN">

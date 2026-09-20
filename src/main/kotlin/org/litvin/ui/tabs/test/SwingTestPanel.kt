@@ -3,7 +3,7 @@ package org.litvin.ui.tabs.test
 import org.litvin.AssOverlayWriter
 import org.litvin.OverlaySpan
 import org.litvin.media.PlayerStatus
-import org.litvin.media.VlcjSwingMediaPlayerAdapter
+import org.litvin.media.mpv.MpvSwingMediaPlayerAdapter
 import org.litvin.ui.UiStyles
 import org.litvin.ui.commons.ScrubBar
 import java.awt.BorderLayout
@@ -24,7 +24,7 @@ import javax.swing.Timer
 import javax.swing.filechooser.FileNameExtensionFilter
 
 class SwingTestPanel : JPanel(BorderLayout()) {
-    private val player = VlcjSwingMediaPlayerAdapter()
+    private val player = MpvSwingMediaPlayerAdapter()
     private var pendingVideoFile: File? = null
     private var projectManifestPath: String? = null
     private var testP1Pts: Int = 0

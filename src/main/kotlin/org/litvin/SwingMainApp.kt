@@ -19,8 +19,6 @@ object SwingMainApp {
         if (args.contains("--diagnostics")) {
             kotlin.system.exitProcess(DistributionDiagnostics.run())
         }
-        VlcBootstrap.ensureConfigured()
-
         try {
             UIManager.setLookAndFeel(FlatDarkLaf())
             UIManager.put("defaultFont", Font("Segoe UI", Font.PLAIN, 14))

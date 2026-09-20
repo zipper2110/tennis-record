@@ -49,7 +49,7 @@ class MpvSwingMediaPlayerAdapter : SwingMediaPlayer {
         private val logger = KotlinLogging.logger {}
         private val playerIds = AtomicInteger(0)
 
-        /** Only one player keeps a file loaded (one hardware decoder), as with the VLC engine. */
+        /** Only one player keeps a file loaded, so only one hardware decoder runs. */
         private val activeLock = Any()
         private var activePlayer: MpvSwingMediaPlayerAdapter? = null
         private const val OVERLAY_ID = "0"
@@ -591,7 +591,6 @@ class MpvSwingMediaPlayerAdapter : SwingMediaPlayer {
     /**
      * Disables the child windows that mpv creates in the canvas. A disabled child window gets no mouse
      * or keyboard input, so Windows sends the mouse input to the canvas and the keyboard focus stays in Java.
-     * VLC uses the same method for its embedded video window.
      */
     private fun disableNativeInput() {
         if (!System.getProperty("os.name").orEmpty().startsWith("Windows")) return

@@ -12,7 +12,7 @@ import org.litvin.markup.components.CommentPatch as DispatcherCommentPatch
 import org.litvin.markup.components.CommentState
 import org.litvin.markup.components.MarkupDispatcher
 import org.litvin.media.PlayerStatus
-import org.litvin.media.VlcjSwingMediaPlayerAdapter
+import org.litvin.media.mpv.MpvSwingMediaPlayerAdapter
 import org.litvin.media.SwingMediaPlayer
 import org.litvin.shared.util.Timecode
 import org.litvin.ui.UiStyles
@@ -37,7 +37,7 @@ import kotlin.math.max
  *
  * Features implemented to meet Phase 3 acceptance:
  * - Custom timeline component drawing VIDEO and MARKS tracks, with playhead bound to media time
- * - Bind timeline to media time via VLCJ Swing adapter callbacks; smooth playhead updates
+ * - Bind timeline to media time via the Swing player adapter callbacks; smooth playhead updates
  * - EDL interactions via MarkupDispatcher: Start(C)/End(V) auto-create, delete, inline edit via table
  * - Keyboard mappings: Space, C, V, Delete, Left/Right and Shift+Arrows; context menu on table rows
  * - Basic autosave of EDL (edl.json) with 300 ms debounce
@@ -52,14 +52,14 @@ class SwingMarkupPanel(
 ) : JPanel(BorderLayout()), AutoCloseable {
 
     constructor(onHelp: () -> Unit = {}) : this(
-        VlcjSwingMediaPlayerAdapter(),
+        MpvSwingMediaPlayerAdapter(),
         AdjustmentsStore.legacySession(),
         Executors.newSingleThreadExecutor { runnable -> Thread(runnable, "markup-autosave") },
         SwingUserDialogService(),
         onHelp,
     )
 
-    // Geometry viewport wrapper for VLC component
+    // Geometry viewport wrapper for the video component
     private var geometryViewport: GeometryViewportPanel
 
     // Media
@@ -131,7 +131,7 @@ class SwingMarkupPanel(
             player.load(f)
             player.pause()
             isMediaLoaded = true
-            // Re-apply current adjustments after media is loaded to ensure VLC picks them up
+            // Re-apply current adjustments after media is loaded so the player picks them up
             try {
                 val current = adjustments.get()
                 player.applyPreviewAdjustments(current)
@@ -330,7 +330,7 @@ class SwingMarkupPanel(
         center.resizeWeight = 1.0
         val leftColumn = JPanel(BorderLayout())
         leftColumn.isOpaque = false
-        // Wrap VLC component with geometry viewport for live zoom/pan (Task 5.4)
+        // Wrap the video component with the geometry viewport for live zoom/pan (Task 5.4)
         geometryViewport = GeometryViewportPanel(player.component)
         geometryViewport.name = "rallies-video"
         leftColumn.add(geometryViewport, BorderLayout.CENTER)
@@ -526,7 +526,7 @@ class SwingMarkupPanel(
             }
             // Load EDL if present
             loadEdl(EdlIO.readForProjectDir(projectDir!!))
-            // Defer VLCJ media load until component becomes displayable
+            // Defer the media load until the component becomes displayable
             pendingMediaFile = File(src)
             isMediaLoaded = false
             loadErrorShown = false

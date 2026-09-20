@@ -15,7 +15,7 @@ A desktop application that helps tennis players turn full‑match recordings int
 
 ## Tech stack (selected)
 - UI: Compose Multiplatform Desktop (Kotlin/JVM)
-- Preview: libVLC via VLCJ (binding)
+- Preview: libmpv (JNA binding), GPU rendering with a custom FFmpeg-parity shader
 - Export/render: FFmpeg (CLI initially), optional hardware encoding (NVENC/Quick Sync/Videotoolbox)
 - Models & storage: Kotlin + kotlinx.serialization (EDL JSON)
 - Packaging: jpackage (Windows/macOS/Linux)
@@ -31,7 +31,7 @@ Rationale, trade‑offs, and module plan are explained in the [solution outline]
 - JDK 17+
 - Maven 3.9+
 - FFmpeg (ffmpeg/ffprobe) available in PATH (for export stage)
-- VLC installed or bundled libVLC (for preview at runtime)
+- Bundled libmpv (for preview at runtime)
 
 On Windows, provision the pinned native runtime before launching from IntelliJ
 or another source-run configuration:
@@ -40,9 +40,9 @@ or another source-run configuration:
 .\distribution\windows\Get-NativeDependencies.ps1
 ```
 
-This places VLC under `target/native/windows-x64/vlc`, which source runs prefer
-over a machine-wide VLC installation. Packaged Windows builds already include
-the same pinned runtime.
+This places libmpv under `target/native/windows-x64/mpv` and FFmpeg under
+`target/native/windows-x64/ffmpeg`, which source runs prefer over machine-wide
+installations. Packaged Windows builds already include the same pinned runtime.
 
 ### Build
 ```bash
@@ -68,7 +68,7 @@ these commands from the repository root with JDK 17 selected.
 | --- | --- | --- |
 | Fast checks | `mvn -B test` | General development and non-UI regressions. |
 | Deterministic Swing flows | `mvn -B -Pui-flow verify` | Every UI-affecting change: import/restart, editing across tabs, scoring, export configuration, and recovery flows. It uses fake media/export services so it is repeatable and fast. |
-| Packaged Windows smoke | `pwsh -File qa/windows/Run-UiSmoke.ps1 -KeepArtifacts` | Before a release or after changing VLC, FFmpeg, packaging, or native UI integration. It drives the real packaged application against the checked-in sample clip. |
+| Packaged Windows smoke | `pwsh -File qa/windows/Run-UiSmoke.ps1 -KeepArtifacts` | Before a release or after changing mpv, FFmpeg, packaging, or native UI integration. It drives the real packaged application against the checked-in sample clip. |
 
 The UI-flow suite creates isolated app data and retains diagnostics under
 `target/ui-test-artifacts` only when a test fails. The packaged smoke runner
@@ -77,7 +77,7 @@ prints its isolated app-data directory, report, and artifacts paths under
 
 For the exact packaged-smoke checklist and report requirements, see
 [qa/windows/ui-smoke.md](qa/windows/ui-smoke.md). The first native run has
-validated import, real VLC playback, marking, scoring, and recents. Real
+validated import, real video playback, marking, scoring, and recents. Real
 FFmpeg export and adjustment controls remain a manual/package-smoke follow-up
 while the desktop-control helper's high-DPI targeting issue is resolved.
 
@@ -103,11 +103,12 @@ See: [docs/solution-outline.md](docs/solution-outline.md)
 ## Licensing & third‑party components
 - Tennis Record is free software licensed under the GNU General Public License
   version 3 or later. See [LICENSE](LICENSE).
-- Binary releases include the application source, vlcj source JARs, an SBOM,
-  native dependency provenance, and third-party notices.
-- libVLC (LGPL) — shipped unmodified and replaceable by users.
+- Binary releases include the application source, an SBOM, native dependency
+  provenance, and third-party notices.
+- libmpv (GPLv2+ in the bundled build) — shipped unmodified and replaceable by
+  users.
 - FFmpeg — prefer LGPL builds unless GPL filters/codecs are explicitly required.
 - Fonts — ensure redistribution rights (e.g., OFL fonts like Roboto).
 
 ## Acknowledgements
-- FFmpeg, VLC, Kotlin, and JetBrains Compose teams for awesome tooling.
+- FFmpeg, mpv, Kotlin, and JetBrains Compose teams for awesome tooling.

@@ -151,7 +151,7 @@ Started: $(Get-Date -Format o)
 | --- | --- | --- | --- | --- |
 | Projects launch | Pending |  |  |  |
 | Import fixture | Pending |  |  |  |
-| VLC playback | Pending |  |  |  |
+| Video playback | Pending |  |  |  |
 | Editing and scoring | Pending |  |  |  |
 | FFmpeg export | Pending |  |  |  |
 | Relaunch and recents | Pending |  |  |  |
