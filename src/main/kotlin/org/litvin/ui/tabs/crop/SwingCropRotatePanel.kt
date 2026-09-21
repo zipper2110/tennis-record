@@ -277,10 +277,6 @@ class SwingCropRotatePanel(
                 foreground = Color.WHITE
                 font = font.deriveFont(font.style, font.size2D + 2.0f)
             }
-            val resetBtn = JButton("Reset All").apply {
-                toolTipText = "Reset all adjustments"
-                addActionListener { presenter.onIntent(CropRotateIntent.ResetAll) }
-            }
             val actions = JPanel(FlowLayout(FlowLayout.RIGHT, 8, 0)).apply {
                 isOpaque = false
                 add(JButton("Help [F1]").apply {
@@ -289,7 +285,6 @@ class SwingCropRotatePanel(
                     UiStyles.styleSecondary(this)
                     addActionListener { onHelp() }
                 })
-                add(resetBtn)
             }
             add(title, BorderLayout.WEST)
             add(actions, BorderLayout.EAST)

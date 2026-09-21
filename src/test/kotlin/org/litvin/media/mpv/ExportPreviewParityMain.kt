@@ -9,7 +9,15 @@ import org.litvin.adjustments.AdjustmentsV1
  * for the same adjustments, so both can be rendered and compared.
  */
 fun main() {
-    val adjustments = AdjustmentsV1(rotationDeg = 7.5f, zoom = 1.4f, panX = -0.3f, panY = 0.6f, contrast = 1.3f)
+    val adjustments = AdjustmentsV1(
+        rotationDeg = 7.5f,
+        zoom = 1.4f,
+        panX = -0.3f,
+        panY = 0.6f,
+        contrast = 1.3f,
+        shadows = 0.5f,
+        highlights = -0.5f,
+    )
     val presets = ExportPresetsIO.load()
     val args = FFmpegCommandBuilder.build(
         FFmpegCommandBuilder.BuildParams(

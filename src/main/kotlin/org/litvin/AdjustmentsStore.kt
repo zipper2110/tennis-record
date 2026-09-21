@@ -107,10 +107,9 @@ class AdjustmentsSession(
             brightness = m.brightness.coerceIn(0.0f, 2.0f),
             contrast = m.contrast.coerceIn(0.0f, 2.0f),
             saturation = m.saturation.coerceIn(0.0f, 3.0f),
-            whiteBalance = WhiteBalanceV1(
-                temperature = wb.temperature.coerceIn(-1.0f, 1.0f),
-                tint = wb.tint.coerceIn(-1.0f, 1.0f)
-            ),
+            shadows = m.shadows.coerceIn(-1.0f, 1.0f),
+            highlights = m.highlights.coerceIn(-1.0f, 1.0f),
+            whiteBalance = WhiteBalanceV1(temperature = wb.temperature.coerceIn(-1.0f, 1.0f)),
             zoom = m.zoom.coerceIn(0.1f, 4.0f),
             panX = m.panX.coerceIn(-1.0f, 1.0f),
             panY = m.panY.coerceIn(-1.0f, 1.0f),

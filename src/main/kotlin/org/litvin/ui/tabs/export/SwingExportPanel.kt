@@ -14,6 +14,7 @@ import org.litvin.export.ProductionRenderService
 import org.litvin.export.RenderService
 import org.litvin.RenderStatus
 import org.litvin.export.ExportPlanner
+import org.litvin.export.ExportReadiness
 import org.litvin.export.ExportFrameRateOption
 import org.litvin.export.ExportFrameRateProbe
 import org.litvin.export.ExportFrameRates
@@ -77,6 +78,7 @@ class SwingExportPanel(
         updatePointsSummary()
         updateInitButtonState()
         updateScoreboardDefault()
+        updateCommentsDefault()
     }
     // Project context (manifest path) — optional; user can still pick output file.
     private var manifestPath: String? = null
@@ -391,6 +393,10 @@ class SwingExportPanel(
             }
             updatePointsSummary()
         }
+        commentsCheck.addActionListener {
+            // Keep the choice of the user for this project. It replaces the default.
+            currentProjectDir()?.let { settingsPreferences.saveIncludeComments(it, commentsCheck.isSelected) }
+        }
 
         // Observe queue updates to refresh UI
         queueSubscription = renderService.observe { snap ->
@@ -472,9 +478,22 @@ class SwingExportPanel(
         updateFavoriteOnlyAvailability()
         updateInitButtonState()
         updateScoreboardDefault()
+        updateCommentsDefault()
     }
 
     private fun onInitializeRender() {
+        val readiness = initializationReadiness()
+        if (!readiness.enabled) {
+            dialogs.showInfo(
+                this,
+                readiness.disabledReason ?: "Render cannot start right now.",
+                INIT_BLOCKED_TITLE,
+            )
+            updateFavoriteOnlyAvailability()
+            updateInitButtonState()
+            return
+        }
+
         // Resolve manifest and source video
         val manifestPath = this.manifestPath
         val manifest = try {
@@ -691,14 +710,32 @@ class SwingExportPanel(
         scoreboardCheck.isSelected = hasAnyScoredPoints()
     }
 
+    /** Selects the checkbox if the project has comments. A saved choice of the user has priority. */
+    private fun updateCommentsDefault() {
+        val saved = currentProjectDir()?.let(settingsPreferences::loadIncludeComments)
+        commentsCheck.isSelected = saved ?: hasAnyComments()
+    }
+
+    private fun hasAnyComments(): Boolean =
+        readCurrentProjectEdl()?.comments.orEmpty().any { it.text.isNotBlank() }
+
+    private fun currentProjectDir(): String? {
+        val mp = manifestPath
+        if (mp.isNullOrBlank()) return null
+        return try {
+            EdlIO.projectDirFromManifest(mp)
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
     private fun loadExportSummary() = ExportPlanner.summarize(
         readCurrentProjectEdl(),
         readCurrentProjectScore(),
     )
 
     private fun readCurrentProjectEdl(): EdlV1? {
-        val mp = manifestPath
-        val projectDir = if (!mp.isNullOrBlank()) EdlIO.projectDirFromManifest(mp) else null
+        val projectDir = currentProjectDir()
         return try {
             if (projectDir != null) EdlIO.readForProjectDir(projectDir) else null
         } catch (_: Throwable) {
@@ -707,8 +744,7 @@ class SwingExportPanel(
     }
 
     private fun readCurrentProjectScore(): ScoreV1 {
-        val mp = manifestPath
-        val projectDir = if (!mp.isNullOrBlank()) EdlIO.projectDirFromManifest(mp) else null
+        val projectDir = currentProjectDir()
         return try {
             if (projectDir != null) ScoreIO.readForProjectDir(projectDir) else ScoreV1()
         } catch (_: Throwable) {
@@ -742,31 +778,37 @@ class SwingExportPanel(
         return RenderFormatting.formatDuration(ms)
     }
 
-    // Task 3.15 — Gate Initialize button based on project context and prerequisites
-    private fun updateInitButtonState() {
-        try {
-            val mp = manifestPath
-            val manifest = try { mp?.let(ManifestIO::read) } catch (_: Throwable) { null }
-            val validPoints = if (mp.isNullOrBlank()) {
-                emptyList()
-            } else {
-                val projectDir = EdlIO.projectDirFromManifest(mp)
-                ExportPlanner.validateEdl(try { EdlIO.readForProjectDir(projectDir) } catch (_: Throwable) { null })
-            }
-            val readiness = ExportPlanner.initializationReadiness(
-                hasProject = !mp.isNullOrBlank(),
-                sourceVideoExists = manifest?.sourceVideo?.let { File(it).isFile } == true,
-                idleTrim = idleTrimCheck.isSelected,
-                favoriteOnly = favoriteOnlyCheck.isSelected,
-                validPoints = validPoints,
-            )
-            initButton.isEnabled = readiness.enabled
-            initButton.toolTipText = readiness.disabledReason
-            initButton.accessibleContext.accessibleDescription = readiness.disabledReason
-        } catch (_: Throwable) {
-            initButton.isEnabled = false
-            initButton.toolTipText = "Initialization unavailable due to an unexpected error."
-            initButton.accessibleContext.accessibleDescription = initButton.toolTipText
+    // Task 3.15 — Read project context and prerequisites for the Initialize button
+    private fun initializationReadiness(): ExportReadiness = try {
+        val mp = manifestPath
+        val manifest = try { mp?.let(ManifestIO::read) } catch (_: Throwable) { null }
+        val validPoints = if (mp.isNullOrBlank()) {
+            emptyList()
+        } else {
+            val projectDir = EdlIO.projectDirFromManifest(mp)
+            ExportPlanner.validateEdl(try { EdlIO.readForProjectDir(projectDir) } catch (_: Throwable) { null })
         }
+        ExportPlanner.initializationReadiness(
+            hasProject = !mp.isNullOrBlank(),
+            sourceVideoExists = manifest?.sourceVideo?.let { File(it).isFile } == true,
+            idleTrim = idleTrimCheck.isSelected,
+            favoriteOnly = favoriteOnlyCheck.isSelected,
+            validPoints = validPoints,
+        )
+    } catch (_: Throwable) {
+        ExportReadiness(false, "Initialization unavailable due to an unexpected error.")
+    }
+
+    // The button stays clickable even when a render cannot start; clicking it explains why.
+    private fun updateInitButtonState() {
+        val readiness = initializationReadiness()
+        initButton.isEnabled = true
+        initButton.toolTipText = readiness.disabledReason ?: INIT_BUTTON_TOOLTIP
+        initButton.accessibleContext.accessibleDescription = readiness.disabledReason
+    }
+
+    private companion object {
+        const val INIT_BUTTON_TOOLTIP = "Choose an output file and queue the render."
+        const val INIT_BLOCKED_TITLE = "Cannot start render"
     }
 }

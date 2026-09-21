@@ -72,15 +72,27 @@ object FFmpegCommandBuilder {
         fun buildColorFilter(adj: org.litvin.adjustments.AdjustmentsV1?): String? {
             if (adj == null) return null
             val values = FfmpegColorAdjustmentStrategy.map(adj)
-            if (!values.hasEqualizerAdjustments && !values.hasHueAdjustments) return null
+            if (!values.hasEqualizerAdjustments && !values.hasHueAdjustments && !values.hasToneAdjustments) return null
             // Use Locale.US formatting to ensure dot decimal
             fun fmt(d: Double): String = java.lang.String.format(java.util.Locale.US, "%.4f", d)
             val filters = mutableListOf<String>()
             if (values.hasEqualizerAdjustments) {
-                filters += "eq=brightness=${fmt(values.brightness)}:contrast=${fmt(values.contrast)}:saturation=${fmt(values.saturation)}:gamma=${fmt(values.gamma)}"
+                filters += "eq=brightness=${fmt(values.brightness)}:contrast=${fmt(values.contrast)}:saturation=${fmt(values.saturation)}"
             }
             if (values.hasHueAdjustments) {
                 filters += "hue=h=${fmt(values.hueDegrees)}"
+            }
+            if (values.hasToneAdjustments) {
+                // Shadows/highlights as a luma lookup table. The cubes are written out as products
+                // because a comma inside pow() would end the filter in the filtergraph syntax, and
+                // u/v are passed through because lutyuv otherwise clips chroma to the legal range.
+                val range = FfmpegColorAdjustmentStrategy.TONE_CODE_RANGE.toInt()
+                val dark = "(($range-val)/$range)"
+                val light = "(val/$range)"
+                filters += "lutyuv=y=val" +
+                    "+${fmt(values.shadowsLift)}*$dark*$dark*$dark" +
+                    "+${fmt(values.highlightsLift)}*$light*$light*$light" +
+                    ":u=val:v=val"
             }
             return filters.joinToString(",")
         }

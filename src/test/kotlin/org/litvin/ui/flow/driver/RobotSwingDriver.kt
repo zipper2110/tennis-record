@@ -113,6 +113,13 @@ class RobotSwingDriver : SwingUiDriver {
         }
     }
 
+    override fun requireSelected(name: String, selected: Boolean) {
+        val button = requireComponent(name, AbstractButton::class.java)
+        waitUntil("component '$name' selected state to be $selected") {
+            onEdt { button.isSelected } == selected
+        }
+    }
+
     override fun requireAccessibleDescription(name: String, expectedSubstring: String) {
         waitUntil("component '$name' accessible description to contain '$expectedSubstring'") {
             onEdt {

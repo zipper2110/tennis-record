@@ -21,6 +21,8 @@ import javax.swing.Scrollable
 import javax.swing.SwingConstants
 import javax.swing.event.DocumentEvent
 import javax.swing.event.DocumentListener
+import kotlin.math.abs
+import kotlin.math.roundToInt
 
 class CropTransformControls(
     private val onChanged: (AdjustmentsV1) -> Unit,
@@ -42,9 +44,14 @@ class CropTransformControls(
         name = "crop-rotation"
         toolTipText = "Rotation"
     }
+    private val fineRotationSlider = JSlider(-50, 50, 0).apply {
+        name = "crop-rotation-fine"
+        toolTipText = "Fine Rotation"
+    }
 
     private var updating = false
     private var current = AdjustmentsV1()
+    private var lastEmittedRotation: Float? = null
 
     init {
         isOpaque = true
@@ -85,6 +92,7 @@ class CropTransformControls(
         content.add(sliderRow("Pan X", panXSlider, "", { it / 100.0f }, { (it.panX * 100.0f).toInt() }))
         content.add(sliderRow("Pan Y", panYSlider, "", { it / 100.0f }, { (it.panY * 100.0f).toInt() }))
         content.add(sliderRow("Rotation", rotationSlider, "deg", { it / 2.0f }, { (it.rotationDeg * 2.0f).toInt() }))
+        content.add(sliderRow("Fine Rotation", fineRotationSlider, "deg", { it / 10.0f }, { fineRotationSlider.value }))
         content.add(Box.createVerticalGlue())
 
         val scroll = JScrollPane(content).apply {
@@ -102,7 +110,7 @@ class CropTransformControls(
             zoomSlider.value = modelZoomToSlider(adjustments).coerceIn(zoomSlider.minimum, zoomSlider.maximum)
             panXSlider.value = (adjustments.panX * 100.0f).toInt().coerceIn(-100, 100)
             panYSlider.value = (adjustments.panY * 100.0f).toInt().coerceIn(-100, 100)
-            rotationSlider.value = (adjustments.rotationDeg * 2.0f).toInt().coerceIn(-360, 360)
+            renderRotation(adjustments.rotationDeg)
         } finally {
             updating = false
         }
@@ -130,7 +138,7 @@ class CropTransformControls(
         fun displayValue(): String {
             val value = sliderToValue(slider.value)
             return when (slider) {
-                rotationSlider -> String.format(java.util.Locale.US, "%.1f", value)
+                rotationSlider, fineRotationSlider -> String.format(java.util.Locale.US, "%.1f", value)
                 zoomSlider -> slider.value.toString()
                 else -> slider.value.toString()
             }
@@ -149,7 +157,7 @@ class CropTransformControls(
                 zoomSlider -> current.copy(zoom = zoomSliderToModel(slider.value))
                 panXSlider -> current.copy(panX = sliderToValue(slider.value).coerceIn(-1.0f, 1.0f))
                 panYSlider -> current.copy(panY = sliderToValue(slider.value).coerceIn(-1.0f, 1.0f))
-                rotationSlider -> current.copy(rotationDeg = CropGeometryMath.normalizeRotation(sliderToValue(slider.value)))
+                rotationSlider, fineRotationSlider -> current.copy(rotationDeg = emitRotation())
                 else -> current
             }
             onChanged(current)
@@ -178,6 +186,7 @@ class CropTransformControls(
                 val sliderValue = when (slider) {
                     zoomSlider -> parsed.toInt()
                     rotationSlider -> (parsed * 2.0f).toInt()
+                    fineRotationSlider -> (parsed * 10.0f).toInt()
                     panXSlider, panYSlider -> parsed.toInt()
                     else -> modelToSlider(current)
                 }.coerceIn(slider.minimum, slider.maximum)
@@ -204,11 +213,40 @@ class CropTransformControls(
         }
     }
 
+    /**
+     * Rotation is split across a coarse slider and a fine one that nudges it by tenths of a degree.
+     * Their sum is the angle the rest of the app sees.
+     */
+    private fun rotationFromSliders(): Float =
+        (rotationSlider.value / 2.0f + fineRotationSlider.value / 10.0f)
+            .coerceIn(-ROTATION_LIMIT_DEG, ROTATION_LIMIT_DEG)
+
+    private fun emitRotation(): Float =
+        CropGeometryMath.normalizeRotation(rotationFromSliders()).also { lastEmittedRotation = it }
+
+    /** Splits an angle that came from elsewhere back into the two sliders, leaving our own edits alone. */
+    private fun renderRotation(rotationDeg: Float) {
+        val emitted = lastEmittedRotation
+        if (emitted != null && abs(rotationDeg - emitted) <= ROTATION_EPSILON_DEG) return
+        lastEmittedRotation = rotationDeg
+        val clamped = rotationDeg.coerceIn(-ROTATION_LIMIT_DEG, ROTATION_LIMIT_DEG)
+        val coarse = (clamped * 2.0f).roundToInt().coerceIn(rotationSlider.minimum, rotationSlider.maximum)
+        val fine = ((clamped - coarse / 2.0f) * 10.0f).roundToInt()
+            .coerceIn(fineRotationSlider.minimum, fineRotationSlider.maximum)
+        rotationSlider.value = coarse
+        fineRotationSlider.value = fine
+    }
+
     private fun zoomSliderToModel(value: Int): Float {
         return (value / 100.0f).coerceIn(0.1f, 4.0f)
     }
 
     private fun modelZoomToSlider(adjustments: AdjustmentsV1): Int {
         return (adjustments.zoom.coerceIn(0.1f, 4.0f) * 100.0f).toInt()
+    }
+
+    private companion object {
+        const val ROTATION_LIMIT_DEG = 180.0f
+        const val ROTATION_EPSILON_DEG = 0.0001f
     }
 }

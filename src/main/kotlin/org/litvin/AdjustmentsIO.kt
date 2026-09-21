@@ -22,8 +22,7 @@ import java.io.File
 
 /** Optional white balance group (v1). */
 data class WhiteBalanceV1(
-    val temperature: Float = 0.0f, // normalized [-1.0, +1.0]
-    val tint: Float = 0.0f         // normalized [-1.0, +1.0]
+    val temperature: Float = 0.0f // normalized [-1.0, +1.0]
 )
 
 /**
@@ -34,6 +33,8 @@ data class AdjustmentsV1(
     val brightness: Float = 1.0f,  // [0.0, 2.0] multiplier; identity is 1.0
     val contrast: Float = 1.0f,    // [0.0, 2.0]
     val saturation: Float = 1.0f,  // [0.0, 3.0]
+    val shadows: Float = 0.0f,     // normalized [-1.0, +1.0]; + lifts dark areas
+    val highlights: Float = 0.0f,  // normalized [-1.0, +1.0]; - pulls bright areas down
     val whiteBalance: WhiteBalanceV1? = null, // optional; default identity
 
     // Geometry
@@ -52,7 +53,7 @@ data class AdjustmentsV1(
     fun setUnknown(key: String, value: Any?) {
         // Avoid clobbering known fields if Jackson routes them here for any reason
         when (key) {
-            "brightness", "contrast", "saturation", "whiteBalance",
+            "brightness", "contrast", "saturation", "shadows", "highlights", "whiteBalance",
             "zoom", "panX", "panY", "rotationDeg", "version" -> return
             else -> unknowns[key] = value
         }

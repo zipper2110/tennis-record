@@ -6,7 +6,9 @@ import java.util.UUID
 import java.util.prefs.Preferences
 import kotlin.io.path.createDirectory
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class ExportSettingsPreferencesTest {
     @Test
@@ -50,6 +52,25 @@ class ExportSettingsPreferencesTest {
             settings.saveOutputDirectory(missingDirectory.resolve("match.mp4"))
 
             assertNull(settings.loadOutputDirectory())
+        }
+    }
+
+    @Test
+    fun remembersIncludeCommentsPerProject() {
+        withSettings { settings ->
+            settings.saveIncludeComments("C:/projects/match-a", false)
+            settings.saveIncludeComments("C:/projects/match-b", true)
+
+            assertFalse(settings.loadIncludeComments("C:/projects/match-a")!!)
+            assertTrue(settings.loadIncludeComments("C:/projects/match-b")!!)
+        }
+    }
+
+    @Test
+    fun hasNoIncludeCommentsChoiceUntilItIsSaved() {
+        withSettings { settings ->
+            assertNull(settings.loadIncludeComments("C:/projects/untouched"))
+            assertNull(settings.loadIncludeComments("  "))
         }
     }
 

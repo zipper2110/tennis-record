@@ -29,9 +29,11 @@ internal class RalliesScreen(application: ApplicationScreen) : UserFlowScreen(ap
         context.driver.press(KeyStroke.getKeyStroke(AppShortcuts.POINT_END.keyStroke))
     }
 
-    fun assertPointCount(marked: Int, favorites: Int = 0) {
-        application.eventually("rallies point count to become $marked marked / $favorites favorite") {
-            context.driver.requireText("rallies-point-count", "$marked MARKED / $favorites FAV")
+    fun assertPointCount(marked: Int, favorites: Int = 0, comments: Int = 0) {
+        application.eventually("rallies point count to become $marked marked / $favorites favorite / $comments comments") {
+            context.driver.requireText("rallies-point-count", "$marked Marked")
+            context.driver.requireText("rallies-favorite-count", "$favorites Fav")
+            context.driver.requireText("rallies-comment-count", "$comments Comments")
         }
     }
 

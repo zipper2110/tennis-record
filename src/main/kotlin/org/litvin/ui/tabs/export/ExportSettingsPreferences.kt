@@ -1,6 +1,7 @@
 package org.litvin.ui.tabs.export
 
 import java.io.File
+import java.security.MessageDigest
 import java.util.prefs.Preferences
 
 data class ExportVideoSettings(
@@ -46,11 +47,38 @@ class ExportSettingsPreferences(
         preferences.put(KEY_OUTPUT_DIRECTORY, directory.absolutePath)
     }
 
+    /**
+     * Reads the "Include comments" choice of one project.
+     * Returns null if the user did not set the checkbox for that project.
+     */
+    fun loadIncludeComments(projectDir: String): Boolean? {
+        val key = includeCommentsKey(projectDir) ?: return null
+        if (preferences.get(key, null) == null) return null
+        return preferences.getBoolean(key, false)
+    }
+
+    fun saveIncludeComments(projectDir: String, includeComments: Boolean) {
+        val key = includeCommentsKey(projectDir) ?: return
+        preferences.putBoolean(key, includeComments)
+    }
+
+    /** A preferences key has a maximum length of 80 characters. Use a digest of the project path. */
+    private fun includeCommentsKey(projectDir: String): String? {
+        val normalized = projectDir.trim().takeIf { it.isNotEmpty() }
+            ?.let { File(it).absolutePath.lowercase() }
+            ?: return null
+        val digest = MessageDigest.getInstance("SHA-1")
+            .digest(normalized.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
+        return KEY_COMMENTS_PREFIX + digest
+    }
+
     private companion object {
         const val KEY_PRESET = "export.video.preset"
         const val KEY_RESOLUTION = "export.video.resolution"
         const val KEY_ENCODER = "export.video.encoder"
         const val KEY_OUTPUT_FRAME_RATE = "export.video.frameRate"
         const val KEY_OUTPUT_DIRECTORY = "export.output.directory"
+        const val KEY_COMMENTS_PREFIX = "export.comments."
     }
 }

@@ -30,7 +30,9 @@ class MpvShaderParamsTest {
             brightness = 1.3f,
             contrast = 1.45f,
             saturation = 1.2f,
-            whiteBalance = WhiteBalanceV1(temperature = 0.1f, tint = -0.2f),
+            shadows = 0.4f,
+            highlights = -0.6f,
+            whiteBalance = WhiteBalanceV1(temperature = 0.1f),
         )
         val values = parse(MpvShaderParams.build(adjustments, video))
         val export = FFmpegCommandBuilder.build(
@@ -45,16 +47,18 @@ class MpvShaderParamsTest {
             )
         ).args
         val vf = export[export.indexOf("-vf") + 1]
-        val eq = Regex("eq=brightness=([-0-9.]+):contrast=([-0-9.]+):saturation=([-0-9.]+):gamma=([-0-9.]+)")
+        val eq = Regex("eq=brightness=([-0-9.]+):contrast=([-0-9.]+):saturation=([-0-9.]+)")
             .find(vf)!!.groupValues
         val hue = Regex("hue=h=([-0-9.]+)").find(vf)!!.groupValues[1]
+        val lut = Regex("""lutyuv=y=val\+([-0-9.]+)\*.*\+([-0-9.]+)\*""").find(vf)!!.groupValues
 
         assertEquals("1", values["tr_active"])
         assertEquals(eq[1].toDouble(), values.getValue("tr_brightness").toDouble(), 1e-9)
         assertEquals(eq[2].toDouble(), values.getValue("tr_contrast").toDouble(), 1e-9)
         assertEquals(eq[3].toDouble(), values.getValue("tr_saturation").toDouble(), 1e-9)
-        assertEquals(eq[4].toDouble(), values.getValue("tr_gamma").toDouble(), 1e-9)
         assertEquals(hue.toDouble(), values.getValue("tr_hue_deg").toDouble(), 1e-9)
+        assertEquals(lut[1].toDouble(), values.getValue("tr_shadows_lift").toDouble(), 1e-9)
+        assertEquals(lut[2].toDouble(), values.getValue("tr_highlights_lift").toDouble(), 1e-9)
     }
 
     @Test

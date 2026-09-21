@@ -3,18 +3,23 @@ package org.litvin.ui.tabs.markup.ui
 import org.litvin.markup.CommentV1
 import org.litvin.markup.PointV1
 import org.litvin.shared.util.Timecode
+import org.litvin.ui.commons.Html
 import java.awt.Color
+import java.awt.Cursor
 import java.awt.Dimension
 import java.awt.Font
 import java.awt.Graphics
 import java.awt.Graphics2D
+import java.awt.Point
 import java.awt.Rectangle
 import java.awt.RenderingHints
 import java.awt.event.ComponentAdapter
 import java.awt.event.ComponentEvent
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
+import java.awt.event.MouseMotionAdapter
 import javax.swing.JComponent
+import javax.swing.ToolTipManager
 import kotlin.math.max
 import kotlin.math.min
 
@@ -52,8 +57,13 @@ class SwingTimelineComponent(
     init {
         isOpaque = true
         background = bg
+        ToolTipManager.sharedInstance().registerComponent(this)
         addMouseListener(object : MouseAdapter() {
             override fun mousePressed(event: MouseEvent) = handleClick(event)
+            override fun mouseExited(event: MouseEvent) = updateCursor(null)
+        })
+        addMouseMotionListener(object : MouseMotionAdapter() {
+            override fun mouseMoved(event: MouseEvent) = updateCursor(event.point)
         })
         addComponentListener(object : ComponentAdapter() {
             override fun componentResized(event: ComponentEvent) {
@@ -66,30 +76,57 @@ class SwingTimelineComponent(
         })
     }
 
+    /** Shows the comment time and text when the pointer is over a comment marker. */
+    override fun getToolTipText(event: MouseEvent): String? {
+        val layouts = commentMarkerLayouts(max(1L, durationProvider()), width.coerceAtLeast(1))
+        val layout = layouts.firstOrNull { it.boxBounds.contains(event.point) } ?: return null
+        val comment = commentsProvider().firstOrNull { it.id == layout.id } ?: return null
+        val header = "#${comment.id} · ${Timecode.format(comment.startMs.toLong())}"
+        return Html.wrappedTooltip(header + "\n" + comment.text)
+    }
+
     private fun handleClick(event: MouseEvent) {
         val total = max(1L, durationProvider())
-        val comment = commentMarkerLayouts(total, width.coerceAtLeast(1)).firstOrNull { it.boxBounds.contains(event.point) }
+        val comment = commentMarkerAt(event.point)
         if (comment != null) {
             onCommentSelected(comment.id)
             onSeekRequested(comment.startMs)
             return
         }
 
-        val t = ((event.x.toDouble() / width.coerceAtLeast(1).toDouble()) * total).toLong().coerceIn(0L, total)
-        val markTop = marksTrackTop()
-        val markRect = Rectangle(0, markTop, width, trackHeight())
-        if (markRect.contains(event.point)) {
-            val pxPerMs = pxPerMs(total, width)
-            pointsProvider().firstOrNull { point ->
-                val x1 = (point.startMs * pxPerMs).toInt()
-                val x2 = (point.endMs * pxPerMs).toInt()
-                event.x in x1..max(x1 + 1, x2)
-            }?.let {
-                onSeekRequested(it.startMs.toLong())
-                return
-            }
+        val mark = markAt(event.point)
+        if (mark != null) {
+            onSeekRequested(mark.startMs.toLong())
+            return
         }
-        onSeekRequested(t)
+        onSeekRequested(((event.x.toDouble() / width.coerceAtLeast(1).toDouble()) * total).toLong().coerceIn(0L, total))
+    }
+
+    private fun commentMarkerAt(point: Point): CommentMarkerLayout? =
+        commentMarkerLayouts(max(1L, durationProvider()), width.coerceAtLeast(1))
+            .firstOrNull { it.boxBounds.contains(point) }
+
+    private fun markAt(point: Point): PointV1? {
+        val markRect = Rectangle(0, marksTrackTop(), width, trackHeight())
+        if (!markRect.contains(point)) return null
+        val pxPerMs = pxPerMs(max(1L, durationProvider()), width)
+        return pointsProvider().firstOrNull { mark ->
+            val x1 = (mark.startMs * pxPerMs).toInt()
+            val x2 = (mark.endMs * pxPerMs).toInt()
+            point.x in x1..max(x1 + 1, x2)
+        }
+    }
+
+    /** Hand over the discrete targets (comment labels, marks), crosshair over the scrubbable rest. */
+    private fun cursorFor(point: Point?): Cursor = when {
+        point == null -> Cursor.getDefaultCursor()
+        commentMarkerAt(point) != null || markAt(point) != null -> Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
+        else -> Cursor.getPredefinedCursor(Cursor.CROSSHAIR_CURSOR)
+    }
+
+    private fun updateCursor(point: Point?) {
+        val next = cursorFor(point)
+        if (cursor != next) cursor = next
     }
 
     private fun rulerHeight(): Int = 16
@@ -244,8 +281,10 @@ class SwingTimelineComponent(
 
     internal fun commentLaneCountForTest(): Int = commentLaneCountFor(width.coerceAtLeast(1))
     internal fun videoTrackTopForTest(): Int = videoTrackTop()
+    internal fun marksTrackCenterYForTest(): Int = marksTrackTop() + trackHeight() / 2
     internal fun commentTrackBottomForTest(): Int = commentsTrackTop() + commentTrackHeight(commentLaneCountForTest())
     internal fun commentTrackCenterY(): Int = (commentsTrackTop() + commentTrackBottomForTest()) / 2
+    internal fun cursorAtForTest(x: Int, y: Int): Cursor = cursorFor(Point(x, y))
 
     override fun getPreferredSize(): Dimension {
         val laneCount = commentLaneCountFor(width.takeIf { it > 0 } ?: 400)

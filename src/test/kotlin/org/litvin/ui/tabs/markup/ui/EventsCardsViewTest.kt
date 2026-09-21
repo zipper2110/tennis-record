@@ -7,9 +7,12 @@ import org.litvin.ui.tabs.markup.MarkupViewState
 import org.litvin.ui.tabs.markup.PointDto
 import org.litvin.ui.tabs.markup.PointPatch
 import org.litvin.ui.tabs.markup.RallyEventDto
+import java.awt.Component
+import java.awt.Container
 import javax.swing.SwingUtilities
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class EventsCardsViewTest {
@@ -37,25 +40,32 @@ class EventsCardsViewTest {
     }
 
     @Test
-    fun commentColorSwatchForwardsNormalizedColor() {
+    fun favoriteStarIsVisibleWithoutHoveringTheCard() {
         SwingUtilities.invokeAndWait {
-            val actions = RecordingActions()
-            val view = PointsCardsView(actions) { _, _ -> "#12ab34" }
+            val view = PointsCardsView(NoOpActions)
             view.setState(
                 MarkupViewState(
                     isPlaying = false,
                     currentTimeMs = 0,
                     selectedVisualIndex = null,
                     pendingDraftStartMs = null,
-                    events = listOf(CommentDto(4, 500, 2_000, "Call was in", "#FFFFFF")),
+                    events = listOf(
+                        RallyEventDto(PointDto("rally-fav", 1_000, 2_000, null, favorite = true)),
+                        RallyEventDto(PointDto("rally-plain", 3_000, 4_000, null)),
+                    ),
                     autosave = AutosaveState(false, null),
                 ),
             )
 
-            view.chooseCommentColorForTest(4)
-
-            assertEquals(listOf(4 to "#12AB34"), actions.changedColors)
+            assertTrue(findByName(view, "favorite-point-rally-fav")!!.isVisible, "favorite star should show at rest")
+            assertFalse(findByName(view, "favorite-point-rally-plain")!!.isVisible, "plain rally shows its star on hover only")
         }
+    }
+
+    private fun findByName(root: Component, name: String): Component? {
+        if (root.name == name) return root
+        if (root !is Container) return null
+        return root.components.firstNotNullOfOrNull { findByName(it, name) }
     }
 
     private object NoOpActions : MarkupActions {
@@ -70,13 +80,5 @@ class EventsCardsViewTest {
         override fun toggleFavorite(id: String) = Unit
         override fun selectByVisualIndex(index: Int) = Unit
         override fun saveNow() = Unit
-    }
-
-    private class RecordingActions : MarkupActions by NoOpActions {
-        val changedColors = mutableListOf<Pair<Int, String>>()
-
-        override fun updateCommentColor(id: Int, colorHex: String) {
-            changedColors += id to colorHex
-        }
     }
 }

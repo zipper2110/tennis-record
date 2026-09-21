@@ -117,6 +117,10 @@ class SwingScoringPanel(
             this@SwingScoringPanel.advanceToNextPoint()
         }
 
+        override fun goToPreviousPoint() {
+            this@SwingScoringPanel.goToPreviousPoint()
+        }
+
         override fun toggleFavorite(index: Int) {
             this@SwingScoringPanel.toggleFavorite(index)
         }
@@ -393,6 +397,7 @@ class SwingScoringPanel(
     private fun rebuildPointsList() = uiSafe {
         leftListPanel.setList(points, outcomesByPointId, player1ColorHex, player2ColorHex)
         leftListPanel.setNextEnabled(points.isNotEmpty())
+        leftListPanel.setPreviousEnabled(selectedPointIndex > 0)
         updateCurrentPointHeader()
     }
 
@@ -428,8 +433,11 @@ class SwingScoringPanel(
             updateCurrentPointHeader()
             if (::segmentScrub.isInitialized) segmentScrub.reset()
             updateActionButtonsState(enable = false, selectedOutcome = null)
-            // Disable Next on no selection or empty list
-            if (::leftListPanel.isInitialized) leftListPanel.setNextEnabled(false)
+            // Disable Next/Previous on no selection or empty list
+            if (::leftListPanel.isInitialized) {
+                leftListPanel.setNextEnabled(false)
+                leftListPanel.setPreviousEnabled(false)
+            }
             player.setPreviewOverlayImage(null)
             // Clear bottom panels and overlay
             val zero = MatchState(0, 0, 0, 0, 0, 0, null, null, false)
@@ -456,8 +464,11 @@ class SwingScoringPanel(
         val valid = segmentEndMs > segmentStartMs
         val existing = outcomesByPointId[p.id]
         updateActionButtonsState(enable = valid, selectedOutcome = existing)
-        // Enable/disable Next based on whether a subsequent point exists
-        if (::leftListPanel.isInitialized) leftListPanel.setNextEnabled((selectedPointIndex + 1) in points.indices)
+        // Enable/disable Next/Previous based on whether an adjacent point exists
+        if (::leftListPanel.isInitialized) {
+            leftListPanel.setNextEnabled((selectedPointIndex + 1) in points.indices)
+            leftListPanel.setPreviousEnabled((selectedPointIndex - 1) in points.indices)
+        }
         // Recompute panels for current selection
         updateScore(selectedPointIndex)
         updateVideoControls()
@@ -476,6 +487,19 @@ class SwingScoringPanel(
             return@uiSafe
         }
         setSelectedIndex(next, userInitiated = false, autoPlay = true)
+        // Focus should remain in the player area for Space/arrows to work
+        EventQueue.invokeLater { uiSafe { player.component.requestFocusInWindow() } }
+    }
+
+    // Mirror of advanceToNextPoint for stepping back through the list
+    private fun goToPreviousPoint() = uiSafe {
+        if (selectedPointIndex !in points.indices) return@uiSafe
+        val previous = selectedPointIndex - 1
+        if (previous !in points.indices) {
+            if (::leftListPanel.isInitialized) leftListPanel.setPreviousEnabled(false)
+            return@uiSafe
+        }
+        setSelectedIndex(previous, userInitiated = false, autoPlay = true)
         // Focus should remain in the player area for Space/arrows to work
         EventQueue.invokeLater { uiSafe { player.component.requestFocusInWindow() } }
     }
@@ -729,6 +753,8 @@ class SwingScoringPanel(
         bind(AppShortcuts.SCORE_PLAYER_2.keyStroke, "scoreP2") { setOutcomeForSelectedPoint(Outcome.P2) }
         // Next Point navigation (Task 4.10): R advances to next index and starts playback
         bind(AppShortcuts.NEXT_POINT.keyStroke, "nextPoint") { advanceToNextPoint() }
+        // Shift+R steps back to the previous point
+        bind(AppShortcuts.PREVIOUS_POINT.keyStroke, "previousPoint") { goToPreviousPoint() }
         bind(AppShortcuts.TOGGLE_FAVORITE.keyStroke, "toggleFavorite") { toggleFavoriteSelectedPoint() }
         // Frame-by-frame toggle: F
         bind(AppShortcuts.TOGGLE_FRAME_STEP.keyStroke, "toggleFrameStep") {

@@ -2,6 +2,7 @@ package org.litvin.ui.tabs.scoring.ui
 
 import org.litvin.markup.PointV1
 import org.litvin.scoring.Outcome
+import org.litvin.scoring.ScoringEngine
 import org.litvin.shared.util.Timecode
 import org.litvin.ui.UiStyles
 import org.litvin.ui.commons.scrollIntoView
@@ -23,6 +24,10 @@ import org.litvin.ui.commons.applyDarkScrollbar
  */
 class PointsListPanel : JPanel(BorderLayout()) {
 
+    private companion object {
+        const val BADGE_HEIGHT = 16
+    }
+
     private val rowComponents = mutableListOf<JComponent>()
     private var listContainer: JPanel
     private var listScroll: JScrollPane
@@ -34,7 +39,14 @@ class PointsListPanel : JPanel(BorderLayout()) {
     private var outcomesByPointId: Map<String, Outcome> = emptyMap()
     private var p1Color: Color = Color(0x4D, 0xA3, 0xFF)
     private var p2Color: Color = Color(0xFF, 0x6B, 0x6B)
+    private var p1Name: String = "Player 1"
+    private var p2Name: String = "Player 2"
     private var selectedIndex: Int = -1
+
+    /** Milestone markers whose tooltips name a player, so a rename can refresh them in place. */
+    private data class MilestoneBadge(val label: JLabel, val kind: String, val player: Int)
+
+    private val milestoneBadges = mutableListOf<MilestoneBadge>()
 
     /** Called when user clicks a row inside the list. Arguments: index, userInitiated=true */
     var onSelect: ((Int, Boolean) -> Unit)? = null
@@ -49,7 +61,7 @@ class PointsListPanel : JPanel(BorderLayout()) {
         header.background = Color(0x20, 0x20, 0x1f)
         header.border = EmptyBorder(8, 8, 8, 8)
 
-        val title = JLabel("Point Markers")
+        val title = JLabel("Played Points")
         title.foreground = Color(0xAD, 0xAA, 0xAA)
         title.font = title.font.deriveFont(Font.BOLD, 12f)
         header.add(title, BorderLayout.WEST)
@@ -98,6 +110,13 @@ class PointsListPanel : JPanel(BorderLayout()) {
         rebuild()
     }
 
+    /** Names used by milestone tooltips; applied in place, without rebuilding the rows. */
+    fun setPlayerNames(p1: String, p2: String) {
+        p1Name = p1.ifBlank { "Player 1" }
+        p2Name = p2.ifBlank { "Player 2" }
+        applyMilestoneTooltips()
+    }
+
     fun getSelectedIndex(): Int = selectedIndex
 
     fun setSelectedIndex(index: Int, userInitiated: Boolean) {
@@ -131,6 +150,7 @@ class PointsListPanel : JPanel(BorderLayout()) {
         try {
             listContainer.removeAll()
             rowComponents.clear()
+            milestoneBadges.clear()
             headerTotalBadge.text = "${points.size} Total"
             val scoredCount = points.count { outcomesByPointId.containsKey(it.id) }
             headerScoredBadge.text = "$scoredCount Scored"
@@ -146,6 +166,7 @@ class PointsListPanel : JPanel(BorderLayout()) {
                 empty.add(msg, BorderLayout.NORTH)
                 listContainer.add(empty)
             } else {
+                val states = ScoringEngine.computeTimeline(points, outcomesByPointId).first
                 points.forEachIndexed { i, p ->
                     val label = buildString {
                         append("#${i + 1}")
@@ -154,7 +175,17 @@ class PointsListPanel : JPanel(BorderLayout()) {
                     val startTc = Timecode.format(p.startMs.toLong()).substring(0, 8)
                     val durSec = max(0, (p.endMs - p.startMs)) / 1000
                     val outcome = outcomesByPointId[p.id]
-                    val row = pointRow(label, startTc, durSec, outcome, p.favorite) {
+                    val state = states.getOrNull(i)
+                    val row = pointRow(
+                        pointName = label,
+                        startTc = startTc,
+                        durationSec = durSec,
+                        outcome = outcome,
+                        favorite = p.favorite,
+                        gameWonBy = state?.lastGameWonBy,
+                        setWonBy = state?.lastSetWonBy,
+                        onSelectRow = { setSelectedIndex(i, userInitiated = true) },
+                    ) {
                         onToggleFavorite?.invoke(i)
                     }
                     decorateRowSelection(row, selected = (i == selectedIndex), outcome = outcome)
@@ -169,6 +200,7 @@ class PointsListPanel : JPanel(BorderLayout()) {
                     listContainer.add(Box.createVerticalStrut(4))
                 }
             }
+            applyMilestoneTooltips()
             listContainer.revalidate()
             listContainer.repaint()
         } catch (_: Throwable) { }
@@ -191,6 +223,9 @@ class PointsListPanel : JPanel(BorderLayout()) {
         durationSec: Int,
         outcome: Outcome?,
         favorite: Boolean,
+        gameWonBy: Int?,
+        setWonBy: Int?,
+        onSelectRow: () -> Unit,
         onFavorite: () -> Unit,
     ): JComponent {
         val scored = outcome != null
@@ -213,6 +248,11 @@ class PointsListPanel : JPanel(BorderLayout()) {
         val right = JPanel(FlowLayout(FlowLayout.RIGHT, 4, 0)).apply {
             isOpaque = false
         }
+        // A set-clinching point also wins a game; the set marker alone says the more interesting thing.
+        if (setWonBy == null) {
+            gameWonBy?.let { right.add(gameBadge(it, onSelectRow)) }
+        }
+        setWonBy?.let { right.add(setBadge(it, onSelectRow)) }
         if (scored) {
             val check = JLabel()
             check.icon = UiStyles.scoredIcon(18)
@@ -234,6 +274,58 @@ class PointsListPanel : JPanel(BorderLayout()) {
         row.maximumSize = Dimension(Int.MAX_VALUE, fixedH)
         row.alignmentX = 0f
         return row
+    }
+
+    private fun playerColor(player: Int): Color = if (player == 1) p1Color else p2Color
+
+    private fun playerName(player: Int): String = if (player == 1) p1Name else p2Name
+
+    /** Solid marker in the winner's color: this point closed out a game. */
+    private fun gameBadge(player: Int, onSelectRow: () -> Unit): JLabel = milestoneBadge(
+        icon = UiStyles.textBadgeIcon("GAME", BADGE_HEIGHT, playerColor(player)),
+        componentName = "game-won",
+        kind = "Game",
+        player = player,
+        onSelectRow = onSelectRow,
+    )
+
+    /** Outlined marker: the winner's color moves to the text and a hairline border. */
+    private fun setBadge(player: Int, onSelectRow: () -> Unit): JLabel {
+        val color = playerColor(player)
+        return milestoneBadge(
+            icon = UiStyles.textBadgeIcon(
+                text = "SET",
+                height = BADGE_HEIGHT,
+                bg = UiStyles.contrastingTextColor(color),
+                fg = color,
+                borderColor = color,
+            ),
+            componentName = "set-won",
+            kind = "Set",
+            player = player,
+            onSelectRow = onSelectRow,
+        )
+    }
+
+    private fun milestoneBadge(
+        icon: Icon,
+        componentName: String,
+        kind: String,
+        player: Int,
+        onSelectRow: () -> Unit,
+    ): JLabel = JLabel(icon).apply {
+        name = componentName
+        addMouseListener(object : MouseAdapter() {
+            override fun mouseClicked(e: MouseEvent) = onSelectRow()
+        })
+        milestoneBadges.add(MilestoneBadge(this, kind, player))
+    }
+
+    /** Setting a tooltip also makes the label consume clicks, which its listener re-publishes as a selection. */
+    private fun applyMilestoneTooltips() {
+        milestoneBadges.forEach { badge ->
+            badge.label.toolTipText = "${badge.kind} won by ${playerName(badge.player)}"
+        }
     }
 
     private fun buildRowBorder(selected: Boolean, indicatorColor: Color): javax.swing.border.Border {

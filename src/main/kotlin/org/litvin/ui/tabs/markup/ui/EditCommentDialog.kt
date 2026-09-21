@@ -1,6 +1,7 @@
 package org.litvin.ui.tabs.markup.ui
 
 import org.litvin.shared.util.Timecode
+import org.litvin.ui.UiStyles
 import org.litvin.ui.tabs.markup.CommentDto
 import org.litvin.ui.tabs.markup.CommentPatch
 import org.litvin.ui.tabs.markup.MarkupActions
@@ -13,24 +14,32 @@ import java.awt.GridBagConstraints
 import java.awt.GridBagLayout
 import java.awt.Insets
 import java.awt.Window
+import java.awt.event.ActionEvent
+import java.awt.event.WindowAdapter
+import java.awt.event.WindowEvent
 import java.math.BigDecimal
 import java.math.RoundingMode
+import javax.swing.AbstractAction
 import javax.swing.BorderFactory
 import javax.swing.JButton
 import javax.swing.JColorChooser
+import javax.swing.JComponent
 import javax.swing.JDialog
 import javax.swing.JLabel
-import javax.swing.JOptionPane
 import javax.swing.JPanel
 import javax.swing.JScrollPane
 import javax.swing.JTextArea
 import javax.swing.JTextField
+import javax.swing.KeyStroke
 import javax.swing.SwingUtilities
 
 /** Modal editor for creating or changing a source-time-pinned rally comment. */
 object EditCommentDialog {
+    /** How long a new comment stays on screen until the user changes it. */
+    private const val DEFAULT_DURATION_MS = 5_000L
+
     fun showCreate(parent: Component, initialStartMs: Long, defaultColor: String, actions: MarkupActions) {
-        show(parent, "Add comment", initialStartMs, 2_000L, "", defaultColor) { startMs, durationMs, text, color ->
+        show(parent, "Add comment", initialStartMs, DEFAULT_DURATION_MS, "", defaultColor) { startMs, durationMs, text, color ->
             actions.createComment(startMs, durationMs, text, color)
         }
     }
@@ -63,9 +72,9 @@ object EditCommentDialog {
         val start = JTextField(formatTimestamp(initialStartMs), 14).apply { name = "rallies-comment-start" }
         val duration = JTextField(formatSeconds(initialDurationMs), 8).apply { name = "rallies-comment-duration" }
         var colorHex = initialColor
-        val color = JButton("Color").apply {
+        val color = JButton("Change…").apply {
             name = "rallies-comment-color"
-            foreground = colorFor(colorHex)
+            icon = UiStyles.colorSwatchIcon(colorFor(colorHex))
             toolTipText = colorHex
         }
         val error = JLabel(" ").apply { foreground = Color(0xFF, 0x6B, 0x6B) }
@@ -75,7 +84,7 @@ object EditCommentDialog {
         color.addActionListener {
             JColorChooser.showDialog(dialog, "Choose comment color", colorFor(colorHex))?.let { chosen ->
                 colorHex = "#%06X".format(chosen.rgb and 0xFFFFFF)
-                color.foreground = chosen
+                color.icon = UiStyles.colorSwatchIcon(chosen)
                 color.toolTipText = colorHex
             }
         }
@@ -91,21 +100,30 @@ object EditCommentDialog {
             constraints.gridx = 1; constraints.weightx = 1.0; constraints.fill = fill
             form.add(component, constraints)
         }
+        start.toolTipText = "hh:mm:ss.mmm, mm:ss.mmm, or seconds"
+        duration.toolTipText = "How long the comment stays on screen, in seconds"
+
         addRow(0, "Text:", JScrollPane(text), GridBagConstraints.BOTH)
         addRow(1, "Start:", start)
         addRow(2, "Duration (seconds):", duration)
         addRow(3, "Text color:", color)
         addRow(4, "", error, GridBagConstraints.HORIZONTAL)
 
-        saveButton.addActionListener {
-            val parsed = parseFields(start.text, duration.text, text.text, colorHex)
-            if (parsed == null) {
-                error.text = "Enter non-negative start, positive duration, and comment text."
-                return@addActionListener
+        val doSave = {
+            val problem = firstProblem(start.text, duration.text, text.text)
+            if (problem != null) {
+                error.text = problem
+            } else {
+                val parsed = parseFields(start.text, duration.text, text.text, colorHex)
+                if (parsed == null) {
+                    error.text = "Text color must use the #RRGGBB format."
+                } else {
+                    save(parsed.startMs, parsed.durationMs, parsed.text, parsed.colorHex)
+                    dialog.dispose()
+                }
             }
-            save(parsed.startMs, parsed.durationMs, parsed.text, parsed.colorHex)
-            dialog.dispose()
         }
+        saveButton.addActionListener { doSave() }
         cancelButton.addActionListener { dialog.dispose() }
 
         dialog.contentPane = JPanel(BorderLayout(10, 10)).apply {
@@ -117,9 +135,35 @@ object EditCommentDialog {
             }, BorderLayout.SOUTH)
         }
         dialog.defaultCloseOperation = JDialog.DISPOSE_ON_CLOSE
+        // Enter saves from the single-line fields; the text area keeps Enter for new lines.
+        dialog.rootPane.defaultButton = saveButton
+        dialog.rootPane.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW)
+            .put(KeyStroke.getKeyStroke("ESCAPE"), "rallies-comment-cancel")
+        dialog.rootPane.actionMap.put("rallies-comment-cancel", object : AbstractAction() {
+            override fun actionPerformed(event: ActionEvent?) = dialog.dispose()
+        })
+        dialog.addWindowListener(object : WindowAdapter() {
+            override fun windowOpened(event: WindowEvent?) {
+                text.requestFocusInWindow()
+                text.caretPosition = text.document.length
+            }
+        })
         dialog.pack()
         dialog.setLocationRelativeTo(parent)
         dialog.isVisible = true
+    }
+
+    /** Returns a message for the first invalid field, or null when every field is usable. */
+    private fun firstProblem(start: String, durationSeconds: String, text: String): String? {
+        if (text.isBlank()) return "Enter the comment text."
+        val startMs = runCatching { Timecode.parse(start) }.getOrNull()
+            ?: return "Start must use the hh:mm:ss.mmm format."
+        if (startMs < 0) return "Start cannot be negative."
+        val durationMs = runCatching {
+            BigDecimal(durationSeconds.trim()).movePointRight(3).setScale(0, RoundingMode.HALF_UP).longValueExact()
+        }.getOrNull() ?: return "Duration must be a number of seconds."
+        if (durationMs <= 0) return "Duration must be greater than zero."
+        return null
     }
 
     private data class ParsedComment(val startMs: Long, val durationMs: Long, val text: String, val colorHex: String)

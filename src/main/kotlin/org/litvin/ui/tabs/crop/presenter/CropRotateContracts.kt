@@ -25,7 +25,6 @@ sealed class CropRotateIntent {
     data class LoadProject(val manifestPath: String) : CropRotateIntent()
     data class ChangeTransform(val adjustments: AdjustmentsV1) : CropRotateIntent()
     data object ResetTransform : CropRotateIntent()
-    data object ResetAll : CropRotateIntent()
 }
 
 sealed class CropRotateViewEffect {

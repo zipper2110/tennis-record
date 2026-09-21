@@ -89,8 +89,9 @@ class SwingColorAdjustmentsPanel(
     private var brightnessSlider: JSlider
     private var contrastSlider: JSlider
     private var saturationSlider: JSlider
+    private var shadowsSlider: JSlider
+    private var highlightsSlider: JSlider
     private var tempSlider: JSlider
-    private var tintSlider: JSlider
     private var colorResetBtn: JButton
 
     private val RIGHT_PANEL_WIDTH = 400
@@ -195,8 +196,9 @@ class SwingColorAdjustmentsPanel(
         brightnessSlider = JSlider()
         contrastSlider = JSlider()
         saturationSlider = JSlider()
+        shadowsSlider = JSlider()
+        highlightsSlider = JSlider()
         tempSlider = JSlider()
-        tintSlider = JSlider()
         content.add(
             labeledSliderRow(
                 "Brightness",
@@ -205,7 +207,7 @@ class SwingColorAdjustmentsPanel(
                 "Brightness [-100..+100], default 0"
             )
         )
-        content.add(labeledSliderRow("Contrast", contrastSlider, "colors-contrast", "Contrast [-50..+50], default 0"))
+        content.add(labeledSliderRow("Contrast", contrastSlider, "colors-contrast", "Contrast [-100..+100], default 0"))
         content.add(
             labeledSliderRow(
                 "Saturation",
@@ -214,8 +216,23 @@ class SwingColorAdjustmentsPanel(
                 "Saturation [-100..+100], default 0"
             )
         )
+        content.add(
+            labeledSliderRow(
+                "Shadows",
+                shadowsSlider,
+                "colors-shadows",
+                "Shadows [-100..+100], default 0. Positive lifts dark areas, negative deepens them."
+            )
+        )
+        content.add(
+            labeledSliderRow(
+                "Highlights",
+                highlightsSlider,
+                "colors-highlights",
+                "Highlights [-100..+100], default 0. Negative pulls bright areas down, positive brightens them."
+            )
+        )
         content.add(labeledSliderRow("WB Temp", tempSlider, "colors-temperature", "Temperature [-100..+100], default 0"))
-        content.add(labeledSliderRow("WB Tint", tintSlider, "colors-tint", "Tint [-100..+100], default 0"))
         val scroll = JScrollPane(content).apply {
             background = UiStyles.DARK_BG
             viewport.background = UiStyles.DARK_BG
@@ -231,11 +248,11 @@ class SwingColorAdjustmentsPanel(
         }
         val unsupportedTip =
             "Live preview for this control may not be available on this system; values will still be saved for export."
-        val sliders = arrayOf(brightnessSlider, contrastSlider, saturationSlider, tempSlider, tintSlider)
+        val sliders =
+            arrayOf(brightnessSlider, contrastSlider, saturationSlider, shadowsSlider, highlightsSlider, tempSlider)
         if (!adjustSupported) {
             sliders.forEach { sld -> sld.toolTipText = (sld.toolTipText?.let { it + "\n" } ?: "") + unsupportedTip }
         }
-        configureColorSliderRanges()
         sliders.forEach { slider ->
             slider.addChangeListener {
                 if (!updatingFromModel) {
@@ -274,8 +291,9 @@ class SwingColorAdjustmentsPanel(
             brightnessSlider.value,
             contrastSlider.value,
             saturationSlider.value,
-            tempSlider.value,
-            tintSlider.value
+            shadowsSlider.value,
+            highlightsSlider.value,
+            tempSlider.value
         )
     }
 
@@ -319,25 +337,17 @@ class SwingColorAdjustmentsPanel(
         updatingFromModel = true
         try {
             val sliderValues = AdjustmentsUiConverter.modelToSliderValues(adjustments)
-            brightnessSlider.value = sliderValues.brightness.coerceIn(brightnessSlider.minimum, brightnessSlider.maximum)
-            contrastSlider.value = sliderValues.contrast.coerceIn(contrastSlider.minimum, contrastSlider.maximum)
-            saturationSlider.value = sliderValues.saturation.coerceIn(saturationSlider.minimum, saturationSlider.maximum)
+            brightnessSlider.value = sliderValues.brightness
+            contrastSlider.value = sliderValues.contrast
+            saturationSlider.value = sliderValues.saturation
+            shadowsSlider.value = sliderValues.shadows
+            highlightsSlider.value = sliderValues.highlights
             tempSlider.value = sliderValues.temperature
-            tintSlider.value = sliderValues.tint
             // Also update live preview, preserving geometry from the shared model.
             applyPreview(adjustments)
         } finally {
             updatingFromModel = false
         }
-    }
-
-    private fun configureColorSliderRanges() {
-        brightnessSlider.minimum = -80
-        brightnessSlider.maximum = 74
-        contrastSlider.minimum = -50
-        contrastSlider.maximum = 50
-        saturationSlider.minimum = -85
-        saturationSlider.maximum = 100
     }
 
     override fun addNotify() {
@@ -489,6 +499,8 @@ class SwingColorAdjustmentsPanel(
             brightness = color.brightness,
             contrast = color.contrast,
             saturation = color.saturation,
+            shadows = color.shadows,
+            highlights = color.highlights,
             whiteBalance = color.whiteBalance,
         )
     }

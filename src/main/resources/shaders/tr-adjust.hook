@@ -2,11 +2,11 @@
 //
 // This shader copies the FFmpeg export filters, so the preview matches the export:
 //   geometry: rotate (clockwise, about the frame center) -> crop -> scale to frame
-//   color:    eq (brightness, contrast, gamma, saturation) -> hue (h)
+//   color:    eq (brightness, contrast, saturation) -> hue (h) -> lutyuv (shadows/highlights)
 //
 // The MAIN texture is R'G'B' in the source color space, before linearization.
 // The shader converts each pixel back to the Y'CbCr code values of the source.
-// It then applies the vf_eq.c and vf_hue.c math to the code values, and converts
+// It then applies the vf_eq.c, vf_hue.c and vf_lut.c math to the code values, and converts
 // the result back to R'G'B'. The math does not depend on the plane layout
 // (NV12 from hardware decoding or planar YUV from software decoding).
 //
@@ -40,12 +40,19 @@
 //!MAXIMUM 3.0
 1.0
 
-//!PARAM tr_gamma
-//!DESC FFmpeg eq gamma.
+//!PARAM tr_shadows_lift
+//!DESC Luma lift at code value 0, in 8-bit code values.
 //!TYPE DYNAMIC float
-//!MINIMUM 0.1
-//!MAXIMUM 10.0
-1.0
+//!MINIMUM -255.0
+//!MAXIMUM 255.0
+0.0
+
+//!PARAM tr_highlights_lift
+//!DESC Luma lift at code value 255, in 8-bit code values.
+//!TYPE DYNAMIC float
+//!MINIMUM -255.0
+//!MAXIMUM 255.0
+0.0
 
 //!PARAM tr_hue_deg
 //!DESC FFmpeg hue h, in degrees.
@@ -97,7 +104,7 @@
 //!HOOK MAIN
 //!BIND HOOKED
 //!WHEN tr_active
-//!DESC tennis-record adjust (ffmpeg rotate/crop/eq/hue parity)
+//!DESC tennis-record adjust (ffmpeg rotate/crop/eq/hue/lutyuv parity)
 
 vec3 rgb_to_codes(vec3 rgb, float kr, float kb) {
     float kg = 1.0 - kr - kb;
@@ -130,22 +137,26 @@ vec3 codes_to_rgb(vec3 c, float kr, float kb) {
 }
 
 // One plane of vf_eq.c. The input and the output are 8-bit code values (0..255).
-float eq_plane(float src, float contrast, float brightness, float gamma) {
+// Gamma is always 1 here and contrast/saturation are clamped to 3 upstream, so vf_eq.c always takes
+// its fixed-point path (process_c) and the create_lut path never runs.
+float eq_plane(float src, float contrast, float brightness) {
     // check_values(): an identity plane is not processed.
-    if (contrast == 1.0 && brightness == 0.0 && gamma == 1.0)
+    if (contrast == 1.0 && brightness == 0.0)
         return src;
-    if (gamma == 1.0 && abs(contrast) < 7.9) {
-        // process_c(): fixed-point path.
-        float cfix = trunc(contrast * 4096.0);
-        float bfix = trunc(trunc(100.0 * brightness + 100.0) * 511.0 / 200.0) - 128.0 - trunc(cfix / 32.0);
-        return clamp(floor(src * cfix / 4096.0) + bfix, 0.0, 255.0);
-    }
-    // create_lut(): lookup-table path.
-    float v = contrast * (src / 255.0 - 0.5) + 0.5 + brightness;
-    if (v <= 0.0)
-        return 0.0;
-    v = pow(v, 1.0 / gamma);
-    return v >= 1.0 ? 255.0 : floor(256.0 * v);
+    float cfix = trunc(contrast * 4096.0);
+    float bfix = trunc(trunc(100.0 * brightness + 100.0) * 511.0 / 200.0) - 128.0 - trunc(cfix / 32.0);
+    return clamp(floor(src * cfix / 4096.0) + bfix, 0.0, 255.0);
+}
+
+// Shadows/highlights, as the luma lookup table that vf_lut.c builds for the export `lutyuv` filter.
+// vf_lut.c truncates the expression to an int and clips it to the 8-bit range.
+float tone_curve(float src) {
+    if (tr_shadows_lift == 0.0 && tr_highlights_lift == 0.0)
+        return src;
+    float dark = (255.0 - src) / 255.0;
+    float light = src / 255.0;
+    float v = src + tr_shadows_lift * dark * dark * dark + tr_highlights_lift * light * light * light;
+    return clamp(trunc(v), 0.0, 255.0);
 }
 
 vec4 hook() {
@@ -167,12 +178,12 @@ vec4 hook() {
     if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0))))
         color = vec4(black, 1.0);
 
-    // Color. Same integer math as vf_eq.c and vf_hue.c, on 8-bit code values.
+    // Color. Same integer math as vf_eq.c, vf_hue.c and vf_lut.c, on 8-bit code values.
     vec3 codes = clamp(floor(rgb_to_codes(color.rgb, tr_kr, tr_kb) * 255.0 + 0.5), 0.0, 255.0);
 
-    codes.x = eq_plane(codes.x, tr_contrast, tr_brightness, tr_gamma);
-    codes.y = eq_plane(codes.y, tr_saturation, 0.0, 1.0);
-    codes.z = eq_plane(codes.z, tr_saturation, 0.0, 1.0);
+    codes.x = eq_plane(codes.x, tr_contrast, tr_brightness);
+    codes.y = eq_plane(codes.y, tr_saturation, 0.0);
+    codes.z = eq_plane(codes.z, tr_saturation, 0.0);
 
     if (tr_hue_deg != 0.0) {
         // vf_hue.c: lrint(sin/cos * 2^16), then (c*u - s*v + 2^15 + (128 << 16)) >> 16.
@@ -182,6 +193,8 @@ vec4 hook() {
         vec2 uv0 = codes.yz - 128.0;
         codes.yz = clamp(floor(vec2(hc * uv0.x - hs * uv0.y, hs * uv0.x + hc * uv0.y) + 128.5), 0.0, 255.0);
     }
+
+    codes.x = tone_curve(codes.x);
 
     color.rgb = codes_to_rgb(codes / 255.0, tr_kr, tr_kb);
     return color;

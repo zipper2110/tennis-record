@@ -70,7 +70,7 @@ object HelpCatalog {
             summary = "Preview and save color corrections that will be applied during export.",
             workflow = listOf(
                 "Scrub to a representative frame and play or pause the preview.",
-                "Adjust brightness, contrast, saturation, white-balance temperature, and tint.",
+                "Adjust brightness, contrast, saturation, shadows, highlights, and white-balance temperature.",
                 "Use Reset to restore all color controls to their defaults.",
             ),
             actions = listOf(
@@ -92,7 +92,7 @@ object HelpCatalog {
                 "Use the Zoom, Pan X, Pan Y, and Rotation sliders or type exact values.",
             ),
             actions = listOf(
-                "Reset restores the transform controls; Reset All restores all video adjustments.",
+                "Reset restores the transform controls.",
                 "Hold Shift while rotating to snap the angle.",
             ),
             shortcuts = listOf(
@@ -111,15 +111,20 @@ object HelpCatalog {
         ),
         HelpContent(
             page = HelpPage.RALLIES,
-            summary = "Mark the video interval for every rally that should be kept.",
+            summary = "Mark the video interval for every rally that should be kept, and add comments to the video.",
             workflow = listOf(
                 "Move the playhead to the beginning of a point and set Point Start.",
                 "Move to the end and set Point End to create a marked point.",
                 "Select point cards to seek, then edit, delete, or mark favorites as needed.",
+                "Move the playhead to the moment you want to explain and click Add comment.",
+                "Give the comment its text, start time, duration, and color, then save it.",
             ),
             actions = listOf(
                 "The timeline shows marked intervals and supports seeking.",
                 "Point cards expose Favorite, Edit, and Delete actions on hover.",
+                "The COMMENTS track shows each comment. Point at a marker to read it, or click it to seek.",
+                "Comment cards expose Edit and Delete actions on hover. Edit also changes the color.",
+                "The export shows each comment on the video for its duration.",
                 "Changes autosave to the current project.",
             ),
             shortcuts = listOf(
@@ -127,7 +132,7 @@ object HelpCatalog {
                 HelpShortcut(AppShortcuts.POINT_START, "Set point start at the playhead"),
                 HelpShortcut(AppShortcuts.POINT_END, "Set point end at the playhead"),
                 HelpShortcut(AppShortcuts.TOGGLE_FAVORITE, "Toggle favorite on the selected point"),
-                HelpShortcut(AppShortcuts.DELETE, "Delete the selected point"),
+                HelpShortcut(AppShortcuts.DELETE, "Delete the selected point or comment"),
                 HelpShortcut(AppShortcuts.LEFT, "Seek back 1 second"),
                 HelpShortcut(AppShortcuts.RIGHT, "Seek forward 1 second"),
                 HelpShortcut(AppShortcuts.SHIFT_LEFT, "Seek back 5 seconds"),
@@ -154,6 +159,7 @@ object HelpCatalog {
                 HelpShortcut(AppShortcuts.SCORE_NO_POINT, "No point"),
                 HelpShortcut(AppShortcuts.SCORE_PLAYER_2, "Point for Player 2"),
                 HelpShortcut(AppShortcuts.NEXT_POINT, "Advance to the next point"),
+                HelpShortcut(AppShortcuts.PREVIOUS_POINT, "Go back to the previous point"),
                 HelpShortcut(AppShortcuts.TOGGLE_FAVORITE, "Toggle favorite on the selected point"),
                 HelpShortcut(AppShortcuts.TOGGLE_FRAME_STEP, "Toggle frame-by-frame stepping"),
                 HelpShortcut(AppShortcuts.PLAY_PAUSE, "Play or pause"),

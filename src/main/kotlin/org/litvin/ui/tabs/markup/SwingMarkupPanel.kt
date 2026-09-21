@@ -82,7 +82,12 @@ class SwingMarkupPanel(
     // UI controls
     private var transport: TransportControls
 
-    private val countBadge = JLabel("0 MARKED / 0 FAV").apply { name = "rallies-point-count" }
+    private val markedBadge = UiStyles.smallBadge("0 Marked", UiStyles.CARD_BORDER, UiStyles.LIME)
+        .apply { name = "rallies-point-count" }
+    private val favoriteBadge = UiStyles.smallBadge("0 Fav", UiStyles.CARD_BORDER, UiStyles.YELLOW)
+        .apply { name = "rallies-favorite-count" }
+    private val commentBadge = UiStyles.smallBadge("0 Comments", UiStyles.CARD_BORDER, UiStyles.FG_SECONDARY)
+        .apply { name = "rallies-comment-count" }
 
     // Cards view (replaces legacy inline cards list)
     private var cardsView: PointsCardsView
@@ -213,7 +218,7 @@ class SwingMarkupPanel(
             }
         },
         commentsProvider = { commentDispatcher.state().comments },
-        onCommentSelected = { id -> EventQueue.invokeLater { selectEventAndScroll("comment:$id") } },
+        onCommentSelected = { id -> EventQueue.invokeLater { scrollToEvent("comment:$id") } },
     ).apply { name = "rallies-seek" }
 
     // Autosave controller (debounced, off-EDT persistence)
@@ -300,7 +305,6 @@ class SwingMarkupPanel(
                 this@SwingMarkupPanel.createComment(startMs, durationMs, text, colorHex)
             override fun editComment(id: Int, patch: CommentPatch) = this@SwingMarkupPanel.editComment(id, patch)
             override fun deleteComment(id: Int) = this@SwingMarkupPanel.deleteComment(id)
-            override fun updateCommentColor(id: Int, colorHex: String) = this@SwingMarkupPanel.updateCommentColor(id, colorHex)
 
             override fun selectByVisualIndex(index: Int) {
                 this@SwingMarkupPanel.setSelectedVisualAndScroll(index)
@@ -353,33 +357,47 @@ class SwingMarkupPanel(
         rightPanel.maximumSize = Dimension(RIGHT_PANEL_WIDTH, Int.MAX_VALUE)
         rightPanel.isOpaque = true
         rightPanel.background = UiStyles.DARK_BG
-        // Header with count badge on the right
+        // Header: title + help on the first line, count badge on the second
+        val headerTitleRow = JPanel(BorderLayout())
+        headerTitleRow.isOpaque = false
+        headerTitleRow.add(JLabel("Rallies & events").apply {
+            foreground = UiStyles.FG_PRIMARY
+            font = font.deriveFont(font.style, font.size2D + 3.0f)
+        }, BorderLayout.WEST)
+        headerTitleRow.add(JButton("Help [F1]").apply {
+            name = "rallies-help"
+            toolTipText = "F1 - Help"
+            UiStyles.styleSecondary(this)
+            addActionListener { onHelp() }
+        }, BorderLayout.EAST)
+
+        val headerBadgeRow = JPanel()
+        headerBadgeRow.layout = BoxLayout(headerBadgeRow, BoxLayout.X_AXIS)
+        headerBadgeRow.isOpaque = false
+        headerBadgeRow.border = BorderFactory.createEmptyBorder(6, 0, 0, 0)
+        listOf(markedBadge, favoriteBadge, commentBadge).forEachIndexed { index, badge ->
+            if (index > 0) headerBadgeRow.add(Box.createHorizontalStrut(6))
+            badge.alignmentY = Component.CENTER_ALIGNMENT
+            headerBadgeRow.add(badge)
+        }
+        headerBadgeRow.add(Box.createHorizontalGlue())
+
         val header = JPanel(BorderLayout())
         header.isOpaque = false
-        header.border = BorderFactory.createEmptyBorder(0, 0, 4, 0)
-        header.add(JLabel("Rallies & events"), BorderLayout.WEST)
-        countBadge.horizontalAlignment = SwingConstants.CENTER
-        countBadge.border = BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(Color(0x44, 0x88, 0x00)), BorderFactory.createEmptyBorder(2, 6, 2, 6)
+        header.border = BorderFactory.createEmptyBorder(
+            PointsCardsView.CARD_H_MARGIN,
+            PointsCardsView.CARD_H_MARGIN,
+            PointsCardsView.CARD_H_MARGIN,
+            PointsCardsView.CARD_H_MARGIN,
         )
-        countBadge.foreground = UiStyles.LIME
-        val headerActions = JPanel(FlowLayout(FlowLayout.RIGHT, 8, 0)).apply {
-            isOpaque = false
-            add(countBadge)
-            add(JButton("Help [F1]").apply {
-                name = "rallies-help"
-                toolTipText = "F1 - Help"
-                UiStyles.styleSecondary(this)
-                addActionListener { onHelp() }
-            })
-        }
-        header.add(headerActions, BorderLayout.EAST)
+        header.add(headerTitleRow, BorderLayout.NORTH)
+        header.add(headerBadgeRow, BorderLayout.CENTER)
         rightPanel.add(header, BorderLayout.NORTH)
 
         // Compose right panel content using extracted components
         val cardsActions = object : MarkupActions {
             override fun togglePlayPause() {
-                togglePlayPause()
+                this@SwingMarkupPanel.togglePlayPause()
             }
 
             override fun seekTo(ms: Long) {
@@ -419,7 +437,6 @@ class SwingMarkupPanel(
                 this@SwingMarkupPanel.createComment(startMs, durationMs, text, colorHex)
             override fun editComment(id: Int, patch: CommentPatch) = this@SwingMarkupPanel.editComment(id, patch)
             override fun deleteComment(id: Int) = this@SwingMarkupPanel.deleteComment(id)
-            override fun updateCommentColor(id: Int, colorHex: String) = this@SwingMarkupPanel.updateCommentColor(id, colorHex)
 
             override fun selectByVisualIndex(index: Int) {
                 setSelectedVisualAndScroll(index)
@@ -488,7 +505,7 @@ class SwingMarkupPanel(
             }
 
             override fun deleteSelected() {
-                deleteSelected()
+                this@SwingMarkupPanel.deleteSelected()
             }
 
             override fun nudge(deltaMs: Long) {
@@ -545,7 +562,10 @@ class SwingMarkupPanel(
     }
 
     private fun updateCountBadge(points: List<PointV1>) {
-        countBadge.text = "${points.size} MARKED / ${points.count { it.favorite }} FAV"
+        val comments = commentDispatcher.state().comments.size
+        markedBadge.text = "${points.size} Marked"
+        favoriteBadge.text = "${points.count { it.favorite }} Fav"
+        commentBadge.text = "$comments Comments"
     }
 
     private fun refreshPointsFromProject() {
@@ -602,6 +622,12 @@ class SwingMarkupPanel(
         if (index >= 0) setSelectedVisualAndScroll(index)
     }
 
+    /** Brings an event card into view without giving it an active state. */
+    private fun scrollToEvent(stableKey: String) {
+        val index = buildEvents().indexOfFirst { it.stableKey == stableKey }
+        if (index >= 0) scrollCardIntoView(index)
+    }
+
     private fun loadEdl(edl: EdlV1) {
         reloadingProjectFromDisk = true
         try {
@@ -649,7 +675,6 @@ class SwingMarkupPanel(
             this@SwingMarkupPanel.createComment(startMs, durationMs, text, colorHex)
         override fun editComment(id: Int, patch: CommentPatch) = this@SwingMarkupPanel.editComment(id, patch)
         override fun deleteComment(id: Int) = this@SwingMarkupPanel.deleteComment(id)
-        override fun updateCommentColor(id: Int, colorHex: String) = this@SwingMarkupPanel.updateCommentColor(id, colorHex)
     }
 
     private fun createComment(startMs: Long, durationMs: Long, text: String, colorHex: String) {
@@ -660,7 +685,7 @@ class SwingMarkupPanel(
             colorHex = colorHex,
         )
         maybeShowCommentHint()
-        comment?.let { EventQueue.invokeLater { selectEventAndScroll("comment:${it.id}") } }
+        comment?.let { EventQueue.invokeLater { scrollToEvent("comment:${it.id}") } }
     }
 
     private fun editComment(id: Int, patch: CommentPatch) {
@@ -674,18 +699,11 @@ class SwingMarkupPanel(
             ),
         )
         maybeShowCommentHint()
-        if (updated) EventQueue.invokeLater { selectEventAndScroll("comment:$id") }
+        if (updated) EventQueue.invokeLater { scrollToEvent("comment:$id") }
     }
 
     private fun deleteComment(id: Int) {
-        if (commentDispatcher.delete(id)) setSelectedVisual(-1)
-        maybeShowCommentHint()
-    }
-
-    private fun updateCommentColor(id: Int, colorHex: String) {
-        if (commentDispatcher.update(id, DispatcherCommentPatch(colorHex = colorHex))) {
-            EventQueue.invokeLater { selectEventAndScroll("comment:$id") }
-        }
+        commentDispatcher.delete(id)
         maybeShowCommentHint()
     }
 
@@ -703,6 +721,11 @@ class SwingMarkupPanel(
 
     private fun deletePoint(id: String) {
         if (dispatcher.deletePoint(id)) setSelectedVisual(-1)
+    }
+
+    /** Deletes the selected rally. Comments have no active state, so they are deleted from their card. */
+    private fun deleteSelected() {
+        (selectedEvent() as? RallyEventDto)?.let { deletePoint(it.point.id) }
     }
 
     private fun Long.toCommentIntOrNull(): Int? = takeIf { it in 0..Int.MAX_VALUE.toLong() }?.toInt()
@@ -731,20 +754,25 @@ class SwingMarkupPanel(
     }
 
     private fun autoActivatePoint(t: Long) {
-        val p = dispatcher.getCompletedPoints()
+        // Keep the selected rally while the playhead stays inside it, to avoid a scroll on every tick.
+        (selectedEvent() as? RallyEventDto)?.let { selected ->
+            val end = selected.point.endMs
+            if (end != null && selected.point.startMs <= t && t < end) return
+        }
+
         val hasPending = dispatcher.getPendingStart() != null
         // half-open interval [start, end)
-        val idx = p.indexOfFirst { it.startMs <= t && t < it.endMs }
-        if (idx >= 0) {
-            selectEventAndScroll("rally:${p[idx].id}")
+        val rally = dispatcher.getCompletedPoints().firstOrNull { it.startMs <= t && t < it.endMs }
+        if (rally != null) {
+            selectEventAndScroll("rally:${rally.id}")
+            return
+        }
+        // Keep pending selected if present; otherwise clear selection
+        if (hasPending) {
+            val pendingIndex = buildEvents().size // pending is visually last
+            setSelectedVisual(pendingIndex)
         } else {
-            // Keep pending selected if present; otherwise clear selection
-            if (hasPending) {
-                val pendingIndex = buildEvents().size // pending is visually last
-                setSelectedVisual(pendingIndex)
-            } else {
-                setSelectedVisual(-1)
-            }
+            setSelectedVisual(-1)
         }
     }
 

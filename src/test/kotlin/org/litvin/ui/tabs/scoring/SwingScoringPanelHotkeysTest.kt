@@ -31,6 +31,8 @@ class SwingScoringPanelHotkeysTest {
             val action = p.actionMap.get("togglePlayPause")
             assertNotNull(action, "togglePlayPause action should be installed in ActionMap")
             assertNotNull(p.actionMap.get("toggleFavorite"), "toggleFavorite action should be installed in ActionMap")
+            assertNotNull(p.actionMap.get("nextPoint"), "nextPoint action should be installed in ActionMap")
+            assertNotNull(p.actionMap.get("previousPoint"), "previousPoint action should be installed in ActionMap")
 
             // Try invoking the action; if the native player causes issues, skip rather than fail
             try {

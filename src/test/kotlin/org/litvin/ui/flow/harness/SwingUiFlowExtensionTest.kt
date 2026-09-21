@@ -124,6 +124,7 @@ class SwingUiFlowExtensionTest {
         override fun press(keyStroke: KeyStroke) = Unit
         override fun requireShowing(name: String, showing: Boolean) = Unit
         override fun requireEnabled(name: String, enabled: Boolean) = Unit
+        override fun requireSelected(name: String, selected: Boolean) = Unit
         override fun requireAccessibleDescription(name: String, expectedSubstring: String) = Unit
         override fun requireText(name: String, expected: String) = Unit
         override fun dismissDialog(title: String, buttonText: String) = Unit

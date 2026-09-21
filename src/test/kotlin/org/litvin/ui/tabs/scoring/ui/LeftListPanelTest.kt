@@ -9,8 +9,10 @@ import javax.swing.JButton
 import javax.swing.JPanel
 import javax.swing.SwingUtilities
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
 
 class LeftListPanelTest {
     @Test
@@ -20,6 +22,7 @@ class LeftListPanelTest {
                 actions = object : NavigationActions {
                     override fun navigateToPoint(index: Int) = Unit
                     override fun advanceToNextPoint() = Unit
+                    override fun goToPreviousPoint() = Unit
                     override fun toggleFavorite(index: Int) = Unit
                 },
                 onNamesChanged = { _, _ -> },
@@ -43,6 +46,42 @@ class LeftListPanelTest {
             assertEquals(Color(0x11, 0x22, 0x33), p1Swatch.background)
             assertEquals(Color(0xF0, 0xE0, 0xD0), p2Swatch.background)
             assertNotEquals(p1Swatch.background, p1Button.background)
+        }
+    }
+
+    @Test
+    fun previousPointButtonSitsUnderNextPointAndTriggersNavigation() {
+        SwingUtilities.invokeAndWait {
+            var previousRequests = 0
+            val panel = LeftListPanel(
+                actions = object : NavigationActions {
+                    override fun navigateToPoint(index: Int) = Unit
+                    override fun advanceToNextPoint() = Unit
+                    override fun goToPreviousPoint() {
+                        previousRequests++
+                    }
+                    override fun toggleFavorite(index: Int) = Unit
+                },
+                onNamesChanged = { _, _ -> },
+                onColorsChanged = { _, _ -> },
+            )
+
+            val next = panel.findNamed("next-point", JButton::class.java)
+            val previous = panel.findNamed("previous-point", JButton::class.java)
+            assertNotNull(next)
+            assertNotNull(previous)
+            assertEquals("Previous Point  [Shift+R]", previous.text)
+
+            val footer = previous.parent
+            assertEquals(next.parent, footer)
+            assertTrue(footer.components.indexOf(previous) > footer.components.indexOf(next))
+
+            assertFalse(previous.isEnabled)
+            panel.setPreviousEnabled(true)
+            assertTrue(previous.isEnabled)
+
+            previous.doClick()
+            assertEquals(1, previousRequests)
         }
     }
 

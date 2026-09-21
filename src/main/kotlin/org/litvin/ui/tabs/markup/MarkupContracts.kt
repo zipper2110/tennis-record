@@ -22,7 +22,6 @@ interface MarkupActions {
     fun createComment(startMs: Long, durationMs: Long, text: String, colorHex: String) {}
     fun editComment(id: Int, patch: CommentPatch) {}
     fun deleteComment(id: Int) {}
-    fun updateCommentColor(id: Int, colorHex: String) {}
 
     /**
      * Selects an item by its visual index (index within the composed view list).

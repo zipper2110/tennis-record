@@ -11,15 +11,17 @@ class AdjustmentsUiConverterTest {
             brightness = 0,
             contrast = 0,
             saturation = 0,
-            temperature = 0,
-            tint = 0
+            shadows = 0,
+            highlights = 0,
+            temperature = 0
         )
 
         assertEquals(1.0f, model.brightness)
         assertEquals(1.0f, model.contrast)
         assertEquals(1.0f, model.saturation)
+        assertEquals(0.0f, model.shadows)
+        assertEquals(0.0f, model.highlights)
         assertEquals(0.0f, model.whiteBalance?.temperature)
-        assertEquals(0.0f, model.whiteBalance?.tint)
     }
 
     @Test
@@ -29,8 +31,9 @@ class AdjustmentsUiConverterTest {
         assertEquals(0, sliders.brightness)
         assertEquals(0, sliders.contrast)
         assertEquals(0, sliders.saturation)
+        assertEquals(0, sliders.shadows)
+        assertEquals(0, sliders.highlights)
         assertEquals(0, sliders.temperature)
-        assertEquals(0, sliders.tint)
     }
 
     @Test
@@ -39,8 +42,9 @@ class AdjustmentsUiConverterTest {
             brightness = 0,
             contrast = 100,
             saturation = 0,
-            temperature = 0,
-            tint = 0
+            shadows = 0,
+            highlights = 0,
+            temperature = 0
         )
 
         assertEquals(1.0f, model.brightness)
@@ -54,8 +58,9 @@ class AdjustmentsUiConverterTest {
                 brightness = value,
                 contrast = value,
                 saturation = value,
+                shadows = value,
+                highlights = value,
                 temperature = value,
-                tint = value,
             )
 
             val sliders = AdjustmentsUiConverter.modelToSliderValues(model)
@@ -63,8 +68,9 @@ class AdjustmentsUiConverterTest {
             assertEquals(value, sliders.brightness, "brightness at $value")
             assertEquals(value, sliders.contrast, "contrast at $value")
             assertEquals(value, sliders.saturation, "saturation at $value")
+            assertEquals(value, sliders.shadows, "shadows at $value")
+            assertEquals(value, sliders.highlights, "highlights at $value")
             assertEquals(value, sliders.temperature, "temperature at $value")
-            assertEquals(value, sliders.tint, "tint at $value")
         }
     }
 }

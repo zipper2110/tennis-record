@@ -65,7 +65,6 @@ class DefaultCropRotatePresenter(
                     previous.copy(zoom = 1.0f, panX = 0.0f, panY = 0.0f, rotationDeg = 0.0f)
                 }
             }
-            CropRotateIntent.ResetAll -> adjustments.reset()
         }
     }
 

@@ -39,14 +39,14 @@ class ValidationRecoveryUiFlowIT {
     }
 
     @Test
-    fun `empty EDL explains disabled idle-trim export and full render recovers`(context: UiFlowContext) {
+    fun `empty EDL explains blocked idle-trim export and full render recovers`(context: UiFlowContext) {
         val project = context.fixtures.emptyProject()
         val application = ApplicationScreen(context)
 
         application.projects.open().openRecent(project.manifest.id)
         application.export.open()
             .setIdleTrim(true)
-            .assertInitializeDisabledBecause("EDL is empty/invalid")
+            .assertInitializeExplainsBlockedRender("EDL is empty/invalid")
             .setIdleTrim(false)
             .assertInitializeEnabled(true)
     }

@@ -12,6 +12,7 @@ interface SwingUiDriver : AutoCloseable {
     fun press(keyStroke: KeyStroke)
     fun requireShowing(name: String, showing: Boolean = true)
     fun requireEnabled(name: String, enabled: Boolean)
+    fun requireSelected(name: String, selected: Boolean)
     fun requireAccessibleDescription(name: String, expectedSubstring: String)
     fun requireText(name: String, expected: String)
     fun dismissDialog(title: String, buttonText: String)

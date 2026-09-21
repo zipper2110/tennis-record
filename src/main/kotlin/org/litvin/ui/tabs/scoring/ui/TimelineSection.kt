@@ -45,6 +45,11 @@ class TimelineSection(
         list.setData(points, outcomesByPointId, p1ColorHex, p2ColorHex)
     }
 
+    /** Player names used by the milestone tooltips. */
+    fun setPlayerNames(p1: String, p2: String) {
+        list.setPlayerNames(p1, p2)
+    }
+
     /** Programmatically update selection (userInitiated controls behavior like scroll-focus). */
     fun setSelectedIndex(index: Int, userInitiated: Boolean) {
         list.setSelectedIndex(index, userInitiated)

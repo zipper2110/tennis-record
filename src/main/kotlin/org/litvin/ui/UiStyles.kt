@@ -12,6 +12,7 @@ import java.awt.Graphics
 import java.awt.Graphics2D
 import java.awt.RenderingHints
 import java.awt.geom.Path2D
+import java.awt.image.BufferedImage
 import javax.swing.AbstractButton
 import javax.swing.BorderFactory
 import javax.swing.BoxLayout
@@ -51,6 +52,27 @@ object UiStyles {
     fun pencilIcon(size: Int = 18): Icon = ikon(Material2AL.EDIT, size, LIME)
 
     fun crossIcon(size: Int = 18): Icon = ikon(Material2AL.BACKSPACE, size, Color(0xCC, 0x46, 0x46))
+
+    /** Filled rounded square that shows a comment color next to its action button. */
+    fun colorSwatchIcon(color: Color, size: Int = 18): Icon = object : Icon {
+        override fun getIconWidth(): Int = size
+        override fun getIconHeight(): Int = size
+        override fun paintIcon(c: Component?, g: Graphics?, x: Int, y: Int) {
+            val g2 = (g as? Graphics2D)?.create() as? Graphics2D ?: return
+            try {
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+                val inset = (size * 0.12).toInt()
+                val side = size - inset * 2
+                g2.color = color
+                g2.fillRoundRect(x + inset, y + inset, side, side, 4, 4)
+                g2.color = FG_SECONDARY
+                g2.stroke = BasicStroke(1f)
+                g2.drawRoundRect(x + inset, y + inset, side, side, 4, 4)
+            } finally {
+                g2.dispose()
+            }
+        }
+    }
 
     fun favoriteIcon(size: Int = 18, selected: Boolean = true): Icon = object : Icon {
         override fun getIconWidth(): Int = size
@@ -109,6 +131,7 @@ object UiStyles {
     val FG_SECONDARY: Color = Color(0xAD, 0xAA, 0xAA)       // on-surface-variant
     val GREEN: Color = Color(0xAF, 0xF6, 0x25)              // primary-fixed
     val YELLOW: Color = Color(0xFF, 0xD5, 0x4A)            // warning/emphasis
+    val BLUE: Color = Color(0x3B, 0x82, 0xF6)              // informational accent
 
     // Sidebar specific palette (from mock)
     val SIDEBAR_BG: Color = Color(0x12, 0x12, 0x12)
@@ -587,6 +610,70 @@ object UiStyles {
             g2.color = Color.WHITE
             g2.stroke = BasicStroke((d * 0.12f), BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
             g2.draw(p)
+        }
+    }
+
+    /**
+     * Black or white, whichever has the higher WCAG contrast ratio against [bg].
+     * Keeps a letter legible on a player color the user is free to pick.
+     */
+    fun contrastingTextColor(bg: Color): Color {
+        fun channel(v: Int): Double {
+            val c = v / 255.0
+            return if (c <= 0.03928) c / 12.92 else Math.pow((c + 0.055) / 1.055, 2.4)
+        }
+        val luminance = 0.2126 * channel(bg.red) + 0.7152 * channel(bg.green) + 0.0722 * channel(bg.blue)
+        val againstWhite = 1.05 / (luminance + 0.05)
+        val againstBlack = (luminance + 0.05) / 0.05
+        return if (againstBlack >= againstWhite) Color.BLACK else Color.WHITE
+    }
+
+    /** Off-screen surface used only to measure badge text before an icon is painted. */
+    private val textMeasureGraphics: Graphics2D by lazy {
+        BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB).createGraphics()
+    }
+
+    /**
+     * Rounded badge holding a short centered word, used for point milestones.
+     * The icon sizes itself to the text, so callers can vary the wording freely.
+     * Passing [borderColor] outlines the badge, for a lighter-weight variant.
+     */
+    fun textBadgeIcon(
+        text: String,
+        height: Int = 16,
+        bg: Color = BLUE,
+        fg: Color = contrastingTextColor(bg),
+        borderColor: Color? = null,
+    ): Icon {
+        val font = Font(Font.SANS_SERIF, Font.BOLD, (height * 0.62f).toInt().coerceAtLeast(8))
+        val padding = (height * 0.34f).toInt().coerceAtLeast(3)
+        val width = textMeasureGraphics.getFontMetrics(font).stringWidth(text) + padding * 2
+        return object : Icon {
+            override fun getIconWidth(): Int = width
+            override fun getIconHeight(): Int = height
+            override fun paintIcon(c: Component?, g: Graphics?, x: Int, y: Int) {
+                val g2 = (g as? Graphics2D)?.create() as? Graphics2D ?: return
+                try {
+                    g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+                    g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
+                    val arc = (height * 0.45f).toInt().coerceAtLeast(3)
+                    g2.color = bg
+                    g2.fillRoundRect(x, y, width, height, arc, arc)
+                    if (borderColor != null) {
+                        g2.color = borderColor
+                        g2.stroke = BasicStroke(1f)
+                        g2.drawRoundRect(x, y, width - 1, height - 1, arc, arc)
+                    }
+                    g2.font = font
+                    val fm = g2.fontMetrics
+                    val tx = x + (width - fm.stringWidth(text)) / 2f
+                    val ty = y + (height - fm.height) / 2f + fm.ascent
+                    g2.color = fg
+                    g2.drawString(text, tx, ty)
+                } finally {
+                    g2.dispose()
+                }
+            }
         }
     }
 }

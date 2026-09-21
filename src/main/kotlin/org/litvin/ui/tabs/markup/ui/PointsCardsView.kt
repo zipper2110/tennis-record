@@ -1,8 +1,8 @@
 package org.litvin.ui.tabs.markup.ui
 
-import org.litvin.markup.EdlIO
 import org.litvin.shared.util.Timecode
 import org.litvin.ui.UiStyles
+import org.litvin.ui.commons.Html
 import org.litvin.ui.commons.applyDarkScrollbar
 import org.litvin.ui.commons.scrollIntoView
 import org.litvin.ui.tabs.markup.CommentDto
@@ -14,6 +14,7 @@ import org.litvin.ui.tabs.markup.RallyEventDto
 import java.awt.BorderLayout
 import java.awt.Color
 import java.awt.Component
+import java.awt.Container
 import java.awt.Dimension
 import java.awt.FlowLayout
 import java.awt.Font
@@ -24,7 +25,6 @@ import javax.swing.BorderFactory
 import javax.swing.Box
 import javax.swing.BoxLayout
 import javax.swing.JButton
-import javax.swing.JColorChooser
 import javax.swing.JComponent
 import javax.swing.JLabel
 import javax.swing.JPanel
@@ -36,12 +36,6 @@ import javax.swing.SwingUtilities
 /** Chronological Rallies & events card list for marked rallies and source-pinned comments. */
 class PointsCardsView(
     private val actions: MarkupActions,
-    private val chooseCommentColor: (Component, String) -> String? = { parent, hex ->
-        val initial = runCatching { Color.decode(hex) }.getOrDefault(Color.WHITE)
-        JColorChooser.showDialog(parent, "Choose comment color", initial)?.let { color ->
-            "#%06X".format(color.rgb and 0xFFFFFF)
-        }
-    },
 ) : JPanel(BorderLayout()) {
 
     private val listPanel = JPanel().apply {
@@ -112,7 +106,9 @@ class PointsCardsView(
         }
     }
 
-    internal fun chooseCommentColorForTest(id: Int) = chooseCommentColorFor(id)
+    /** Title of the selected card, or null when nothing is selected. */
+    internal fun selectedTitle(): String? =
+        lastState?.selectedVisualIndex?.let { visibleTitles().getOrNull(it) }
 
     private fun rebuild(state: MarkupViewState, ordered: List<MarkupEventDto>) {
         listPanel.removeAll()
@@ -149,7 +145,7 @@ class PointsCardsView(
     private fun rallyOrdinal(rally: RallyEventDto): Int =
         renderedEvents.filterIsInstance<RallyEventDto>().indexOfFirst { it.point.id == rally.point.id } + 1
 
-    private fun buildPendingCard(visualIndex: Int, startMs: Long): JComponent = JPanel(BorderLayout()).apply {
+    private fun buildPendingCard(visualIndex: Int, startMs: Long): JComponent = JPanel(BorderLayout(CARD_GAP, 0)).apply {
         isOpaque = true
         background = UiStyles.SURFACE_HIGH
         border = cardBorder()
@@ -167,7 +163,7 @@ class PointsCardsView(
         applyCardSelectionStyle(this, visualIndex == lastState?.selectedVisualIndex)
     }
 
-    private fun buildRallyCard(visualIndex: Int, point: PointDto): JComponent = JPanel(BorderLayout()).apply {
+    private fun buildRallyCard(visualIndex: Int, point: PointDto): JComponent = JPanel(BorderLayout(CARD_GAP, 0)).apply {
         isOpaque = true
         background = UiStyles.CARD_BG
         border = cardBorder()
@@ -212,76 +208,110 @@ class PointsCardsView(
         applyCardSelectionStyle(this, visualIndex == lastState?.selectedVisualIndex)
     }
 
-    private fun buildCommentCard(visualIndex: Int, comment: CommentDto): JComponent = JPanel(BorderLayout()).apply {
+    private fun buildCommentCard(visualIndex: Int, comment: CommentDto): JComponent = JPanel(BorderLayout(CARD_GAP, 0)).apply {
         isOpaque = true
         background = UiStyles.CARD_BG
         border = cardBorder()
         alignmentX = LEFT_ALIGNMENT
         fixedSize(this, COMMENT_CARD_HEIGHT)
-        add(stripe(visualIndex), BorderLayout.WEST)
+        // A comment has no active state, so the card keeps one look and the stripe shows its color.
+        putClientProperty(SELECTABLE, false)
 
-        val content = JPanel().apply { isOpaque = false; layout = BoxLayout(this, BoxLayout.Y_AXIS) }
-        content.add(JLabel("Comment #${comment.id}").apply { foreground = UiStyles.FG_PRIMARY; font = font.deriveFont(Font.BOLD) })
-        content.add(Box.createVerticalStrut(3))
-        content.add(JLabel("${Timecode.format(comment.startMs)}  ·  ${formatDuration(comment.durationMs)}").apply { foreground = UiStyles.FG_SECONDARY })
-        content.add(Box.createVerticalStrut(5))
-        content.add(JTextArea(comment.text).apply {
+        val commentColor = runCatching { Color.decode(comment.colorHex) }.getOrDefault(UiStyles.FG_PRIMARY)
+        add(colorStripe(commentColor), BorderLayout.WEST)
+
+        val header = JPanel().apply {
+            isOpaque = false
+            layout = BoxLayout(this, BoxLayout.X_AXIS)
+            add(JLabel("Comment #${comment.id}").apply {
+                foreground = commentColor
+                font = font.deriveFont(Font.BOLD, 11f)
+            })
+            add(Box.createHorizontalStrut(8))
+            add(JLabel("${Timecode.format(comment.startMs)} · ${formatDuration(comment.durationMs)}").apply {
+                foreground = UiStyles.FG_SECONDARY
+                font = font.deriveFont(11f)
+            })
+            add(Box.createHorizontalGlue())
+        }
+        val body = JTextArea(comment.text).apply {
+            name = "comment-text-${comment.id}"
             isEditable = false
             isOpaque = false
+            isFocusable = false
             foreground = UiStyles.FG_PRIMARY
             lineWrap = true
             wrapStyleWord = true
             rows = 2
             font = font.deriveFont(12f)
             border = BorderFactory.createEmptyBorder()
-        })
-        add(content, BorderLayout.CENTER)
-
-        val actionsPanel = JPanel().apply { isOpaque = false; layout = BoxLayout(this, BoxLayout.X_AXIS) }
-        val color = JButton("Color").apply {
-            name = "comment-color-${comment.id}"
-            toolTipText = "Change comment color"
-            foreground = runCatching { Color.decode(comment.colorHex) }.getOrDefault(UiStyles.FG_PRIMARY)
-            UiStyles.styleSecondary(this)
-            addActionListener { chooseCommentColorFor(comment.id) }
         }
+        val actionsPanel = JPanel().apply { isOpaque = false; layout = BoxLayout(this, BoxLayout.X_AXIS) }
         val edit = UiStyles.smallIconButton(UiStyles.pencilIcon(), "Edit comment") {
             EditCommentDialog.showEdit(this@PointsCardsView, comment, actions)
         }
         val delete = UiStyles.smallIconButton(UiStyles.crossIcon(), "Delete comment") {
-            actions.selectByVisualIndex(visualIndex)
             actions.deleteComment(comment.id)
         }
-        actionsPanel.add(color)
-        actionsPanel.add(Box.createHorizontalStrut(6))
         actionsPanel.add(edit)
         actionsPanel.add(Box.createHorizontalStrut(6))
         actionsPanel.add(delete)
-        add(actionsPanel, BorderLayout.EAST)
+
+        // Only the header shares its row with the buttons, so the text can use the full card width.
+        val headerRow = JPanel(BorderLayout(CARD_GAP, 0)).apply {
+            isOpaque = false
+            add(header, BorderLayout.CENTER)
+            add(actionsPanel, BorderLayout.EAST)
+        }
+        // The hover buttons are taller than the labels. Reserve their height now, while they are
+        // still visible, so neither row moves when the pointer enters or leaves the card.
+        val rowHeight = headerRow.preferredSize.height
+        headerRow.preferredSize = Dimension(CARD_WIDTH, rowHeight)
+        headerRow.minimumSize = Dimension(0, rowHeight)
+        headerRow.maximumSize = Dimension(Int.MAX_VALUE, rowHeight)
+
+        // BorderLayout keeps both rows against the left edge; BoxLayout would center the short labels.
+        add(JPanel(BorderLayout(0, 4)).apply {
+            isOpaque = false
+            add(headerRow, BorderLayout.NORTH)
+            add(body, BorderLayout.CENTER)
+        }, BorderLayout.CENTER)
+
+        // The card is too small for long comments, so keep the full text available on hover.
+        // Children need the same tooltip, because Swing reads it from the component under the pointer.
+        val tooltip = tooltipFor(comment)
+        forEachNonButtonComponent(this) { (it as? JComponent)?.toolTipText = tooltip }
         installHoverActions(this, actionsPanel, listOf(edit, delete), false)
         installSelectAndSeek(this, visualIndex, comment.startMs)
-        applyCardSelectionStyle(this, visualIndex == lastState?.selectedVisualIndex)
     }
 
-    private fun chooseCommentColorFor(id: Int) {
-        val comment = renderedEvents.filterIsInstance<CommentDto>().firstOrNull { it.id == id } ?: return
-        val color = chooseCommentColor(this, comment.colorHex) ?: return
-        EdlIO.normalizeColorHex(color)?.let { actions.updateCommentColor(id, it) }
-    }
+    /** Full comment text for the card tooltip. HTML keeps long text on several lines. */
+    private fun tooltipFor(comment: CommentDto): String = Html.wrappedTooltip(comment.text)
 
     private fun installSelectAndSeek(card: JComponent, visualIndex: Int, startMs: Long) {
-        card.addMouseListener(object : MouseAdapter() {
+        val listener = object : MouseAdapter() {
             override fun mouseClicked(event: MouseEvent) {
                 if (SwingUtilities.isLeftMouseButton(event)) {
                     actions.selectByVisualIndex(visualIndex)
                     actions.seekTo(startMs)
                 }
             }
-        })
+        }
+        // Children such as the comment text area consume mouse events, so bind them too.
+        forEachNonButtonComponent(card) { it.addMouseListener(listener) }
+    }
+
+    /** Applies the action to the component and to each descendant that is not a button. */
+    private fun forEachNonButtonComponent(root: Component, action: (Component) -> Unit) {
+        if (root is JButton) return
+        action(root)
+        if (root is Container) root.components.forEach { forEachNonButtonComponent(it, action) }
     }
 
     private fun installHoverActions(card: JComponent, panel: JPanel, buttons: List<JButton>, favoriteInitiallyVisible: Boolean) {
-        buttons.forEach { it.isVisible = false }
+        // The star of a favorite rally belongs to the card at rest, not only while the pointer is over it.
+        fun restVisibility() = buttons.forEachIndexed { index, button -> button.isVisible = index == 0 && favoriteInitiallyVisible }
+        restVisibility()
         val toggle = object : MouseAdapter() {
             private fun show() {
                 buttons.forEach { it.isVisible = true }
@@ -294,7 +324,7 @@ class PointsCardsView(
                         java.awt.Rectangle(card.locationOnScreen, card.size).contains(pointer)
                     }.getOrDefault(false)
                     if (!inside) {
-                        buttons.forEachIndexed { index, button -> button.isVisible = index == 0 && favoriteInitiallyVisible }
+                        restVisibility()
                         card.revalidate(); card.repaint()
                     }
                 }
@@ -305,6 +335,14 @@ class PointsCardsView(
         card.addMouseListener(toggle)
         panel.addMouseListener(toggle)
         buttons.forEach { it.addMouseListener(toggle) }
+    }
+
+    private fun colorStripe(color: Color): JComponent = object : JComponent() {
+        override fun getPreferredSize() = Dimension(4, 1)
+        override fun paintComponent(graphics: Graphics) {
+            graphics.color = color
+            graphics.fillRect(0, 0, width, height)
+        }
     }
 
     private fun stripe(visualIndex: Int): JComponent = object : JComponent() {
@@ -328,17 +366,26 @@ class PointsCardsView(
     }
 
     private fun applyCardSelectionStyle(card: JComponent, selected: Boolean) {
+        if (card.getClientProperty(SELECTABLE) == false) return
         card.background = if (selected) UiStyles.SURFACE_HIGH else UiStyles.CARD_BG
         card.repaint()
     }
 
-    private fun formatDuration(durationMs: Long): String = "%.1f s".format(durationMs / 1_000.0)
+    private fun formatDuration(durationMs: Long): String =
+        String.format(java.util.Locale.ROOT, "%.1f s", durationMs / 1_000.0)
 
-    private companion object {
-        const val RIGHT_PANEL_WIDTH = 340
+    companion object {
+        /** Horizontal margin between the right panel edge and a card. */
         const val CARD_H_MARGIN = 10
-        const val CARD_WIDTH = RIGHT_PANEL_WIDTH - CARD_H_MARGIN * 2
-        const val CARD_HEIGHT = 44
-        const val COMMENT_CARD_HEIGHT = 94
+
+        /** Client property marking a card that has no selected state. */
+        private const val SELECTABLE = "markup.card.selectable"
+        private const val RIGHT_PANEL_WIDTH = 340
+
+        /** Gap between the color stripe, the card content, and the action buttons. */
+        private const val CARD_GAP = 10
+        private const val CARD_WIDTH = RIGHT_PANEL_WIDTH - CARD_H_MARGIN * 2
+        private const val CARD_HEIGHT = 44
+        private const val COMMENT_CARD_HEIGHT = 88
     }
 }

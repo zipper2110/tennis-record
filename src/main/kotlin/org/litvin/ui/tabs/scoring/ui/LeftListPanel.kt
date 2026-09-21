@@ -21,7 +21,7 @@ import javax.swing.text.DocumentFilter
  *
  * Responsibilities:
  * - Hosts the timeline list of points (via TimelineSection)
- * - Provides footer actions (Next Point) and placeholder buttons
+ * - Provides footer actions (Next/Previous Point) and placeholder buttons
  * - Provides player name fields with length limits and change callbacks
  *
  */
@@ -45,6 +45,7 @@ class LeftListPanel(
 
     private val timeline = TimelineSection(actions)
     private val nextPointBtn: JButton
+    private val prevPointBtn: JButton
     private val p1NameField: JTextField
     private val p2NameField: JTextField
     private lateinit var p1ColorBtn: JButton
@@ -88,6 +89,12 @@ class LeftListPanel(
         nextPointBtn.toolTipText = "R — Next Point"
         nextPointBtn.addActionListener { actions.advanceToNextPoint() }
         nextPointBtn.isEnabled = false
+
+        prevPointBtn = fullButton("Previous Point  [Shift+R]")
+        prevPointBtn.name = "previous-point"
+        prevPointBtn.toolTipText = "Shift+R — Previous Point"
+        prevPointBtn.addActionListener { actions.goToPreviousPoint() }
+        prevPointBtn.isEnabled = false
 
         val manualBtn = fullButton("Manual Marker")
         manualBtn.name = "manual-marker"
@@ -208,6 +215,7 @@ class LeftListPanel(
             if (isUpdatingNameFields) return
             val n1 = p1NameField.text.trim()
             val n2 = p2NameField.text.trim()
+            timeline.setPlayerNames(n1, n2)
             onNamesChanged(n1, n2)
         }
         fun notifyColorsChanged() {
@@ -240,6 +248,8 @@ class LeftListPanel(
         }
 
         footer.add(nextPointBtn)
+        footer.add(Box.createVerticalStrut(6))
+        footer.add(prevPointBtn)
         footer.add(Box.createVerticalStrut(6))
         footer.add(manualBtn)
         footer.add(Box.createVerticalStrut(6))
@@ -285,11 +295,16 @@ class LeftListPanel(
         nextPointBtn.isEnabled = enabled
     }
 
+    fun setPreviousEnabled(enabled: Boolean) {
+        prevPointBtn.isEnabled = enabled
+    }
+
     fun setPlayerNames(p1: String, p2: String) {
         isUpdatingNameFields = true
         try {
             p1NameField.text = p1
             p2NameField.text = p2
+            timeline.setPlayerNames(p1, p2)
         } finally {
             isUpdatingNameFields = false
         }

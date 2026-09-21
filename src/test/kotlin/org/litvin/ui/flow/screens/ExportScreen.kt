@@ -23,6 +23,16 @@ internal class ExportScreen(application: ApplicationScreen) : UserFlowScreen(app
         context.driver.setSelected("export-comments", comments)
     }
 
+    fun setComments(enabled: Boolean): ExportScreen = apply {
+        context.driver.setSelected("export-comments", enabled)
+    }
+
+    fun assertComments(enabled: Boolean): ExportScreen = apply {
+        application.eventually("export comments selection to be $enabled") {
+            context.driver.requireSelected("export-comments", enabled)
+        }
+    }
+
     fun setIdleTrim(enabled: Boolean): ExportScreen = apply {
         context.driver.setSelected("export-idle-trim", enabled)
     }
@@ -58,9 +68,18 @@ internal class ExportScreen(application: ApplicationScreen) : UserFlowScreen(app
         }
     }
 
-    fun assertInitializeDisabledBecause(explanation: String): ExportScreen = apply {
-        assertInitializeEnabled(false)
+    fun assertInitializeExplainsBlockedRender(explanation: String): ExportScreen = apply {
+        assertInitializeEnabled(true)
         context.driver.requireAccessibleDescription("export-initialize", explanation)
+        context.dialogs.showNextAsRealModal()
+        context.driver.click("export-initialize")
+        application.eventually("blocked render dialog to be dismissed") {
+            context.driver.dismissDialog("Cannot start render", "OK")
+        }
+        val last = context.dialogs.calls.last()
+        if (last.title != "Cannot start render" || !last.message.contains(explanation)) {
+            throw AssertionError("Blocked render dialog was $last")
+        }
     }
 
     fun assertExactlyOneRenderQueued(): ExportScreen = apply {

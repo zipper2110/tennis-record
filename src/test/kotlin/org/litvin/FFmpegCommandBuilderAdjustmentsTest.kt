@@ -16,7 +16,7 @@ class FFmpegCommandBuilderAdjustmentsTest {
             brightness = 0.1f, // non-identity
             contrast = 1.2f,
             saturation = 0.9f,
-            whiteBalance = WhiteBalanceV1(temperature = 0.2f, tint = 0.1f)
+            whiteBalance = WhiteBalanceV1(temperature = 0.2f)
         )
         val res = FFmpegCommandBuilder.build(
             FFmpegCommandBuilder.BuildParams(

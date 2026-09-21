@@ -42,6 +42,7 @@ interface NavigationActions {
     // Timeline / selection
     fun navigateToPoint(index: Int)
     fun advanceToNextPoint()
+    fun goToPreviousPoint()
     fun toggleFavorite(index: Int)
 }
 

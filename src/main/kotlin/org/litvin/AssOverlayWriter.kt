@@ -91,8 +91,11 @@ object AssOverlayWriter {
             val black = assColor(0x000000, 0x00)
             val p1Square = assColor(c1Rgb, 0x30)
             val p2Square = assColor(c2Rgb, 0x30)
-            val commentFont = (52 * scale).coerceIn(18.0, 96.0)
+            val commentFont = (78 * scale).coerceIn(27.0, 144.0)
             val commentBackdrop = assColor(0x000000, 0x80)
+            val commentAlpha = 0x80 // 50% transparent text and border
+            val commentText = assColor(0xFFFFFF, commentAlpha)
+            val commentOutline = assColor(0x000000, commentAlpha)
 
             // Base styles
             w.appendLine("Style: Title,${style.fontFamily},${fmt(titleFont)},$neon,&H000000FF,&H00000000,$black,1,0,0,0,100,100,2,0,1,1.5,0,7,0,0,0,0")
@@ -104,7 +107,7 @@ object AssOverlayWriter {
             w.appendLine("Style: Panel,${style.fontFamily},20,${withAlpha(black, 0x50)},&H000000FF,&H00000000,$black,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,0")
             w.appendLine("Style: SquareP1,${style.fontFamily},20,${withAlpha(p1Square, 0x30)},&H000000FF,&H00000000,$black,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,0")
             w.appendLine("Style: SquareP2,${style.fontFamily},20,${withAlpha(p2Square, 0x30)},&H000000FF,&H00000000,$black,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,0")
-            w.appendLine("Style: CommentText,${style.fontFamily},${fmt(commentFont)},$white,&H000000FF,&H00000000,$black,1,0,0,0,100,100,0,0,1,1.2,0,2,0,0,0,0")
+            w.appendLine("Style: CommentText,${style.fontFamily},${fmt(commentFont)},$commentText,&H000000FF,$commentOutline,$black,1,0,0,0,100,100,0,0,1,1.2,0,2,0,0,0,0")
             w.appendLine("Style: CommentBackdrop,${style.fontFamily},20,$commentBackdrop,&H000000FF,&H00000000,$black,0,0,0,0,100,100,0,0,1,0,0,2,0,0,0,0")
             w.appendLine()
 
@@ -233,7 +236,7 @@ object AssOverlayWriter {
                 val verticalPadding = (18 * scale).toInt().coerceAtLeast(6)
                 val lineHeight = (commentFont * 1.25).toInt().coerceAtLeast(18)
                 val boxWidth = ((longestLine * commentFont * 0.56).toInt() + horizontalPadding * 2)
-                    .coerceIn(1, (playResX * 0.86).toInt())
+                    .coerceIn(1, (playResX * 0.93).toInt())
                 val boxHeight = (lines.size * lineHeight + verticalPadding * 2).coerceAtLeast(1)
                 val lowerThirdY = (playResY * 0.82).toInt()
                 val boxLeft = ((playResX - boxWidth) / 2).coerceAtLeast(0)
@@ -246,7 +249,7 @@ object AssOverlayWriter {
                 val textY = lowerThirdY - verticalPadding
 
                 w.appendLine("Dialogue: 4,$start,$end,CommentBackdrop,,0,0,0,,{\\p1}\\1c$commentBackdrop$box{\\p0}")
-                w.appendLine("Dialogue: 5,$start,$end,CommentText,,0,0,0,,{\\an2\\pos(${playResX / 2},$textY)\\1c${assColor(colorRgb, 0x00)}}$escapedText")
+                w.appendLine("Dialogue: 5,$start,$end,CommentText,,0,0,0,,{\\an2\\pos(${playResX / 2},$textY)\\1c${assColor(colorRgb, 0x00)}\\1a${assAlpha(commentAlpha)}\\3a${assAlpha(commentAlpha)}}$escapedText")
             }
         }
     }
@@ -337,7 +340,7 @@ object AssOverlayWriter {
     }
 
     private fun maxCommentLineLength(playResX: Int, fontSize: Double): Int =
-        ((playResX * 0.72) / (fontSize * 0.56)).toInt().coerceAtLeast(12)
+        ((playResX * 0.86) / (fontSize * 0.56)).toInt().coerceAtLeast(12)
 
     private fun wrapCommentLines(text: String, maxChars: Int): List<String> =
         text.replace("\r\n", "\n").replace('\r', '\n').split('\n').flatMap { line ->
@@ -399,6 +402,9 @@ object AssOverlayWriter {
         // &HAABBGGRR
         return String.format(Locale.US, "&H%02X%02X%02X%02X", aa, b, g, r)
     }
+
+    /** ASS alpha override, e.g. "&H99&" (00 opaque, FF transparent). */
+    private fun assAlpha(aa: Int): String = String.format(Locale.US, "&H%02X&", aa.coerceIn(0, 255))
 
     private fun withAlpha(col: String, aa: Int): String {
         // Replace the AA part in &HAABBGGRR

@@ -16,6 +16,13 @@ object Html {
         .replace("'", "&#39;")
 
     /**
+     * Build a tooltip that wraps long text and keeps the line breaks of the source text.
+     */
+    @JvmStatic
+    fun wrappedTooltip(text: String, widthPx: Int = 260): String =
+        "<html><body width='${widthPx}'>" + escapeHtml(text).replace("\n", "<br>") + "</body></html>"
+
+    /**
      * Wrap long text in JLabel using HTML container of fixed width so BoxLayout can grow height.
      */
     @JvmStatic

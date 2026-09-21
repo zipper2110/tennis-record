@@ -92,6 +92,53 @@ class ExportConfigurationUiFlowIT {
     }
 
     @Test
+    fun `opening export in a project with comments includes the comments by default`(context: UiFlowContext) {
+        val project = context.fixtures.exportReadyProject()
+        val output = context.workspace.resolve("exports").resolve("commented-match.mp4")
+        val application = ApplicationScreen(context)
+
+        application.projects.open().openRecent(project.manifest.id)
+        application.export.open()
+            .initialize(output)
+            .assertExactlyOneRenderQueued()
+
+        assertEquals(true, context.renderService.jobs.single().includeComments)
+    }
+
+    @Test
+    fun `opening export in a project without comments leaves the comments unchecked`(context: UiFlowContext) {
+        val project = context.fixtures.emptyProject()
+        val output = context.workspace.resolve("exports").resolve("uncommented-match.mp4")
+        val application = ApplicationScreen(context)
+
+        application.projects.open().openRecent(project.manifest.id)
+        application.rallies.markPoint(1_000, 2_000)
+
+        application.export.open()
+            .initialize(output)
+            .assertExactlyOneRenderQueued()
+
+        assertEquals(false, context.renderService.jobs.single().includeComments)
+    }
+
+    @Test
+    fun `export keeps the comments choice of the user for the project`(context: UiFlowContext) {
+        val project = context.fixtures.exportReadyProject()
+        val output = context.workspace.resolve("exports").resolve("comments-off-match.mp4")
+        val application = ApplicationScreen(context)
+
+        application.projects.open().openRecent(project.manifest.id)
+        application.export.open().setComments(false)
+        application.rallies.open()
+        application.export.open()
+            .assertComments(false)
+            .initialize(output)
+            .assertExactlyOneRenderQueued()
+
+        assertEquals(false, context.renderService.jobs.single().includeComments)
+    }
+
+    @Test
     fun `changing bitrate quality keeps the selected resolution`(context: UiFlowContext) {
         val project = context.fixtures.exportReadyProject()
         val output = context.workspace.resolve("exports").resolve("four-k-match.mp4")

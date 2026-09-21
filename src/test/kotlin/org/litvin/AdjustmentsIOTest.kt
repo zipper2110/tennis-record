@@ -20,7 +20,7 @@ class AdjustmentsIOTest {
             brightness = 0.1f,
             contrast = 1.25f,
             saturation = 0.9f,
-            whiteBalance = WhiteBalanceV1(temperature = 0.2f, tint = -0.1f),
+            whiteBalance = WhiteBalanceV1(temperature = 0.2f),
             zoom = 1.3f,
             panX = -0.2f,
             panY = 0.4f,
