@@ -13,11 +13,17 @@
     ]
   },
   "ffmpeg": {
-    "version": "N-126277-ga8c7afa7d7",
-    "variant": "win64-lgpl-shared",
-    "archiveName": "ffmpeg-N-126277-ga8c7afa7d7-win64-lgpl-shared.zip",
-    "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-08-26-13-06/ffmpeg-N-126277-ga8c7afa7d7-win64-lgpl-shared.zip",
-    "sha256": "5468714ae763676281f627fe87119d9f1e89ef01a2e754c27fe8626623de6f82",
-    "extractedDirectory": "ffmpeg-N-126277-ga8c7afa7d7-win64-lgpl-shared"
+    "version": "n9.0.2-3-ga5923073bf",
+    "variant": "win64-gpl-shared-9.0",
+    "archiveName": "ffmpeg-n9.0.2-3-ga5923073bf-win64-gpl-shared-9.0.zip",
+    "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-09-20-13-11/ffmpeg-n9.0.2-3-ga5923073bf-win64-gpl-shared-9.0.zip",
+    "sha256": "d60e8896f647443412d585e2008e32c6c6ca55a7b584f5048a045a3cf142f798",
+    "extractedDirectory": "ffmpeg-n9.0.2-3-ga5923073bf-win64-gpl-shared-9.0",
+    "directories": [
+      "bin"
+    ],
+    "files": [
+      "LICENSE.txt"
+    ]
   }
 }

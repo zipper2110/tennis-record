@@ -1,6 +1,6 @@
 package org.litvin.ui.tabs.scoring.ui
 
-import org.litvin.markup.PointV1
+import org.litvin.points.PointV1
 import org.litvin.scoring.Outcome
 import org.litvin.scoring.ScoringEngine
 import org.litvin.shared.util.Timecode
@@ -160,7 +160,7 @@ class PointsListPanel : JPanel(BorderLayout()) {
                 val empty = JPanel(BorderLayout())
                 empty.isOpaque = false
                 empty.border = EmptyBorder(12, 8, 12, 8)
-                val msg = JLabel("No points yet. Open the Markup tab and add point markers.")
+                val msg = JLabel("No points yet. Open the Points tab and add point markers.")
                 msg.foreground = Color(0xAD, 0xAA, 0xAA)
                 msg.font = msg.font.deriveFont(Font.ITALIC, 12f)
                 empty.add(msg, BorderLayout.NORTH)

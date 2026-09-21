@@ -10,6 +10,7 @@ import com.fasterxml.jackson.databind.SerializationFeature
 import com.fasterxml.jackson.module.kotlin.KotlinModule
 import com.fasterxml.jackson.module.kotlin.readValue
 import java.io.File
+import org.litvin.JsonFileIO
 
 /**
  * Adjustments v1 schema and JSON read/write helpers (epic 5.1).
@@ -75,14 +76,14 @@ object AdjustmentsIO {
 
     /** Write AdjustmentsV1 to the given file path. */
     fun write(filePath: String, adj: AdjustmentsV1) {
-        mapper.writeValue(File(filePath), adj)
+        JsonFileIO.writeAtomically(mapper, filePath, adj)
     }
 
     /** Read AdjustmentsV1 from the given file path; returns identity defaults if file does not exist. */
     fun read(filePath: String): AdjustmentsV1 {
         val f = File(filePath)
         if (!f.exists()) return AdjustmentsV1()
-        return mapper.readValue(f)
+        return JsonFileIO.read(mapper, f.path, AdjustmentsV1::class.java)
     }
 
     /** Convenience: read for a given project directory. */

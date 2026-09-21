@@ -1,16 +1,16 @@
-package org.litvin.ui.tabs.markup.ui
+package org.litvin.ui.tabs.points.ui
 
 import org.litvin.shared.util.Timecode
 import org.litvin.ui.UiStyles
 import org.litvin.ui.commons.Html
 import org.litvin.ui.commons.applyDarkScrollbar
 import org.litvin.ui.commons.scrollIntoView
-import org.litvin.ui.tabs.markup.CommentDto
-import org.litvin.ui.tabs.markup.MarkupActions
-import org.litvin.ui.tabs.markup.MarkupEventDto
-import org.litvin.ui.tabs.markup.MarkupViewState
-import org.litvin.ui.tabs.markup.PointDto
-import org.litvin.ui.tabs.markup.RallyEventDto
+import org.litvin.ui.tabs.points.CommentDto
+import org.litvin.ui.tabs.points.PointsActions
+import org.litvin.ui.tabs.points.TimelineEventDto
+import org.litvin.ui.tabs.points.PointsViewState
+import org.litvin.ui.tabs.points.PointDto
+import org.litvin.ui.tabs.points.PointEventDto
 import java.awt.BorderLayout
 import java.awt.Color
 import java.awt.Component
@@ -33,9 +33,9 @@ import javax.swing.JTextArea
 import javax.swing.ScrollPaneConstants
 import javax.swing.SwingUtilities
 
-/** Chronological Rallies & events card list for marked rallies and source-pinned comments. */
+/** Chronological Points & events card list for marked points and source-pinned comments. */
 class PointsCardsView(
-    private val actions: MarkupActions,
+    private val actions: PointsActions,
 ) : JPanel(BorderLayout()) {
 
     private val listPanel = JPanel().apply {
@@ -57,8 +57,8 @@ class PointsCardsView(
     }
 
     private val cardComponents = mutableListOf<JComponent>()
-    private var lastState: MarkupViewState? = null
-    private var renderedEvents: List<MarkupEventDto> = emptyList()
+    private var lastState: PointsViewState? = null
+    private var renderedEvents: List<TimelineEventDto> = emptyList()
 
     init {
         isOpaque = true
@@ -68,7 +68,7 @@ class PointsCardsView(
         runCatching { applyDarkScrollbar(scroll, background) }
     }
 
-    fun setState(state: MarkupViewState) {
+    fun setState(state: PointsViewState) {
         val previousKeys = lastState?.events.orEmpty().map { it.stableKey }.toSet()
         lastState = state
         val ordered = orderedEvents(state)
@@ -95,14 +95,14 @@ class PointsCardsView(
     internal fun visibleTitles(): List<String> = renderedEvents.map {
         when (it) {
             is CommentDto -> "Comment #${it.id}"
-            is RallyEventDto -> "#${rallyOrdinal(it)}"
+            is PointEventDto -> "#${pointOrdinal(it)}"
         }
     }
 
     internal fun visibleText(): String = renderedEvents.joinToString("\n") {
         when (it) {
             is CommentDto -> it.text
-            is RallyEventDto -> it.point.label.orEmpty()
+            is PointEventDto -> it.point.label.orEmpty()
         }
     }
 
@@ -110,7 +110,7 @@ class PointsCardsView(
     internal fun selectedTitle(): String? =
         lastState?.selectedVisualIndex?.let { visibleTitles().getOrNull(it) }
 
-    private fun rebuild(state: MarkupViewState, ordered: List<MarkupEventDto>) {
+    private fun rebuild(state: PointsViewState, ordered: List<TimelineEventDto>) {
         listPanel.removeAll()
         pendingContainer.removeAll()
         cardComponents.clear()
@@ -118,7 +118,7 @@ class PointsCardsView(
 
         ordered.forEachIndexed { visualIndex, event ->
             val card = when (event) {
-                is RallyEventDto -> buildRallyCard(visualIndex, event.point)
+                is PointEventDto -> buildPointCard(visualIndex, event.point)
                 is CommentDto -> buildCommentCard(visualIndex, event)
             }
             cardComponents += card
@@ -139,11 +139,11 @@ class PointsCardsView(
         pendingContainer.repaint()
     }
 
-    private fun orderedEvents(state: MarkupViewState): List<MarkupEventDto> =
-        state.events.sortedWith(compareBy<MarkupEventDto> { it.startMs }.thenBy { it.stableKey })
+    private fun orderedEvents(state: PointsViewState): List<TimelineEventDto> =
+        state.events.sortedWith(compareBy<TimelineEventDto> { it.startMs }.thenBy { it.stableKey })
 
-    private fun rallyOrdinal(rally: RallyEventDto): Int =
-        renderedEvents.filterIsInstance<RallyEventDto>().indexOfFirst { it.point.id == rally.point.id } + 1
+    private fun pointOrdinal(event: PointEventDto): Int =
+        renderedEvents.filterIsInstance<PointEventDto>().indexOfFirst { it.point.id == event.point.id } + 1
 
     private fun buildPendingCard(visualIndex: Int, startMs: Long): JComponent = JPanel(BorderLayout(CARD_GAP, 0)).apply {
         isOpaque = true
@@ -163,7 +163,7 @@ class PointsCardsView(
         applyCardSelectionStyle(this, visualIndex == lastState?.selectedVisualIndex)
     }
 
-    private fun buildRallyCard(visualIndex: Int, point: PointDto): JComponent = JPanel(BorderLayout(CARD_GAP, 0)).apply {
+    private fun buildPointCard(visualIndex: Int, point: PointDto): JComponent = JPanel(BorderLayout(CARD_GAP, 0)).apply {
         isOpaque = true
         background = UiStyles.CARD_BG
         border = cardBorder()
@@ -174,7 +174,7 @@ class PointsCardsView(
         add(JPanel().apply {
             isOpaque = false
             layout = BoxLayout(this, BoxLayout.X_AXIS)
-            add(JLabel("#${rallyOrdinal(RallyEventDto(point))}").apply { foreground = UiStyles.FG_PRIMARY; font = font.deriveFont(Font.BOLD) })
+            add(JLabel("#${pointOrdinal(PointEventDto(point))}").apply { foreground = UiStyles.FG_PRIMARY; font = font.deriveFont(Font.BOLD) })
             add(Box.createHorizontalStrut(12))
             add(JPanel(FlowLayout(FlowLayout.LEFT, 14, 0)).apply {
                 isOpaque = false
@@ -309,7 +309,7 @@ class PointsCardsView(
     }
 
     private fun installHoverActions(card: JComponent, panel: JPanel, buttons: List<JButton>, favoriteInitiallyVisible: Boolean) {
-        // The star of a favorite rally belongs to the card at rest, not only while the pointer is over it.
+        // The star of a favorite point belongs to the card at rest, not only while the pointer is over it.
         fun restVisibility() = buttons.forEachIndexed { index, button -> button.isVisible = index == 0 && favoriteInitiallyVisible }
         restVisibility()
         val toggle = object : MouseAdapter() {
@@ -379,7 +379,7 @@ class PointsCardsView(
         const val CARD_H_MARGIN = 10
 
         /** Client property marking a card that has no selected state. */
-        private const val SELECTABLE = "markup.card.selectable"
+        private const val SELECTABLE = "points.card.selectable"
         private const val RIGHT_PANEL_WIDTH = 340
 
         /** Gap between the color stripe, the card content, and the action buttons. */

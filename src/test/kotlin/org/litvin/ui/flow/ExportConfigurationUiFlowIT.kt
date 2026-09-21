@@ -19,8 +19,8 @@ class ExportConfigurationUiFlowIT {
         val application = ApplicationScreen(context)
 
         application.projects.open().openRecent(project.manifest.id)
-        application.rallies.markPoint(1_000, 2_000)
-        val pointId = application.rallies.assertSinglePointPersisted(project.directory, 1_000, 2_000)
+        application.points.markPoint(1_000, 2_000)
+        val pointId = application.points.assertSinglePointPersisted(project.directory, 1_000, 2_000)
         application.scoring.open()
             .awardPointToPlayer1()
             .assertOutcomePersisted(project.directory, pointId, Outcome.P1)
@@ -39,8 +39,8 @@ class ExportConfigurationUiFlowIT {
         val application = ApplicationScreen(context)
 
         application.projects.open().openRecent(project.manifest.id)
-        application.rallies.markPoint(1_000, 2_000)
-        val pointId = application.rallies.assertSinglePointPersisted(project.directory, 1_000, 2_000)
+        application.points.markPoint(1_000, 2_000)
+        val pointId = application.points.assertSinglePointPersisted(project.directory, 1_000, 2_000)
         application.scoring.open()
             .awardNoPoint()
             .assertOutcomePersisted(project.directory, pointId, Outcome.NONE)
@@ -112,7 +112,7 @@ class ExportConfigurationUiFlowIT {
         val application = ApplicationScreen(context)
 
         application.projects.open().openRecent(project.manifest.id)
-        application.rallies.markPoint(1_000, 2_000)
+        application.points.markPoint(1_000, 2_000)
 
         application.export.open()
             .initialize(output)
@@ -129,7 +129,7 @@ class ExportConfigurationUiFlowIT {
 
         application.projects.open().openRecent(project.manifest.id)
         application.export.open().setComments(false)
-        application.rallies.open()
+        application.points.open()
         application.export.open()
             .assertComments(false)
             .initialize(output)

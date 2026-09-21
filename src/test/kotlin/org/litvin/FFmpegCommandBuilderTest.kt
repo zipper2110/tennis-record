@@ -1,6 +1,6 @@
 package org.litvin
 
-import org.litvin.markup.PointV1
+import org.litvin.points.PointV1
 import kotlin.test.Test
 import kotlin.test.assertTrue
 import kotlin.test.assertEquals
@@ -82,11 +82,24 @@ class FFmpegCommandBuilderTest {
                 subtitlesAssPath = null,
             )
         )
-        // Filter complex should exist and contain trim + concat with correct n
+        // Each kept segment is seeked on its own input rather than trimmed after decoding
+        assertEquals(2, res.args.count { it == "-i" }, "Expected one input per kept segment")
+        val ssValues = res.args.withIndex().filter { it.value == "-ss" }.map { res.args[it.index + 1] }
+        val tValues = res.args.withIndex().filter { it.value == "-t" }.map { res.args[it.index + 1] }
+        assertEquals(listOf("0.000", "2.000"), ssValues, "Expected an input seek per segment start")
+        assertEquals(listOf("1.000", "1.000"), tValues, "Expected an input duration per segment")
+        // Every -ss/-t pair must precede its -i, otherwise it would seek the output instead
+        res.args.withIndex().filter { it.value == "-ss" }.forEach { (idx, _) ->
+            assertEquals("-t", res.args[idx + 2], "Expected the segment length right after the seek")
+            assertEquals("-i", res.args[idx + 4], "-ss must be an input option")
+        }
+        // Filter complex should exist and concat the segments with correct n
         val fcIdx = res.args.indexOf("-filter_complex")
         assertTrue(fcIdx >= 0, "-filter_complex must be present for idleTrim with keeps")
         val fc = res.args[fcIdx + 1]
-        assertTrue(fc.contains("trim=start="))
+        assertTrue(!fc.contains("trim="), "Decoded-then-discarded trim must not be used, was: $fc")
+        assertTrue(fc.contains("[0:v]setpts=PTS-STARTPTS"), "Expected first segment rebased, was: $fc")
+        assertTrue(fc.contains("[1:v]setpts=PTS-STARTPTS"), "Expected second segment rebased, was: $fc")
         assertTrue(fc.contains("concat=n=2"), "Expected concat n=2, was: $fc")
         // Ensure mapping is present
         val mapIdx = res.args.indexOf("-map")

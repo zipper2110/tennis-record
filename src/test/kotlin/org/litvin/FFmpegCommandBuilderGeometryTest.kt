@@ -2,7 +2,7 @@ package org.litvin
 
 import org.litvin.adjustments.AdjustmentsV1
 import org.litvin.adjustments.GeometryPlan
-import org.litvin.markup.PointV1
+import org.litvin.points.PointV1
 import org.litvin.media.mpv.MpvShaderParams
 import org.litvin.media.mpv.MpvVideoInfo
 import kotlin.test.Test

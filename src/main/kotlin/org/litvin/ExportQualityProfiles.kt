@@ -49,6 +49,6 @@ object ExportQualityProfiles {
 
     fun description(preset: ExportPreset, outWidth: Int, outHeight: Int, outputFrameRate: String?): String? {
         val tier = tiers.firstOrNull { it.id == normalizedId(preset.id) } ?: return preset.description
-        return "${tier.label} — up to ${bitrateK(tier, outWidth, outHeight, outputFrameRate) / 1_000} Mb/s"
+        return "${tier.label} — up to ${bitrateK(tier, outWidth, outHeight, outputFrameRate) / 1_000} Megabits/s"
     }
 }

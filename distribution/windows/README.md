@@ -2,7 +2,9 @@
 
 The Windows x64 package is a self-contained `jpackage` application image and
 per-user EXE installer. It includes Java 17, the pinned libmpv build, and the pinned
-BtbN FFmpeg LGPL shared build listed in `native-dependencies.json`.
+BtbN FFmpeg GPL shared build listed in `native-dependencies.json`. Only the
+FFmpeg archive's `bin/` directory and `LICENSE.txt` are bundled; its headers,
+import libraries and HTML docs are not.
 
 ## Local app-image build
 
@@ -27,6 +29,6 @@ must be replaced with final brand artwork before public launch.
 - Build on Windows x64 with Eclipse Temurin JDK 17 and WiX Toolset 3.
 - Configure Azure Artifact Signing and GitHub OIDC variables/secrets.
 - Keep Tennis Record and distributed derivatives under GPLv3-or-later while
-  the application bundles the GPL build of libmpv.
+  the application bundles the GPL builds of libmpv and FFmpeg.
 - Publish corresponding source beside every binary release.
 - Review the generated Maven dependency license/SBOM output before release.

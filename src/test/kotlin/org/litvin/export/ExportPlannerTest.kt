@@ -2,9 +2,9 @@ package org.litvin.export
 
 import org.litvin.ExportPreset
 import org.litvin.CommentOverlaySpan
-import org.litvin.markup.CommentV1
-import org.litvin.markup.EdlV1
-import org.litvin.markup.PointV1
+import org.litvin.points.CommentV1
+import org.litvin.points.EdlV1
+import org.litvin.points.PointV1
 import org.litvin.projects.ProjectManifestV1
 import org.litvin.scoring.Outcome
 import org.litvin.scoring.ScoreV1
@@ -135,7 +135,7 @@ class ExportPlannerTest {
         )
 
         assertEquals(
-            "Source video not found. Set it in Projects/Markup.",
+            "Source video not found. Set it in Projects/Points.",
             ExportPlanner.initializationReadiness(
                 hasProject = true,
                 sourceVideoExists = false,
@@ -162,6 +162,22 @@ class ExportPlannerTest {
         assertEquals("1.50 KB", RenderFormatting.formatSize(1_500))
         assertEquals("2.00 MB", RenderFormatting.formatSize(2_000_000))
         assertEquals("1:02:03", RenderFormatting.formatDuration(3_723_000))
+    }
+
+    @Test
+    fun renderFormattingDescribesHowTheVideoWasCut() {
+        assertEquals("Full video", RenderFormatting.formatCutMode(idleTrim = false, favoriteOnly = false))
+        assertEquals("Full video", RenderFormatting.formatCutMode(idleTrim = false, favoriteOnly = true))
+        assertEquals("Cut points", RenderFormatting.formatCutMode(idleTrim = true, favoriteOnly = false))
+        assertEquals("Favorite points", RenderFormatting.formatCutMode(idleTrim = true, favoriteOnly = true))
+    }
+
+    @Test
+    fun renderFormattingDescribesOutputFrameRate() {
+        assertEquals("60 FPS", RenderFormatting.formatFrameRate("60"))
+        assertEquals("29.97 FPS", RenderFormatting.formatFrameRate("30000/1001"))
+        assertNull(RenderFormatting.formatFrameRate(null))
+        assertNull(RenderFormatting.formatFrameRate("not-a-rate"))
     }
 
     @Test

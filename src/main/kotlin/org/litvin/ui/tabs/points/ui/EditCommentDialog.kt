@@ -1,10 +1,10 @@
-package org.litvin.ui.tabs.markup.ui
+package org.litvin.ui.tabs.points.ui
 
 import org.litvin.shared.util.Timecode
 import org.litvin.ui.UiStyles
-import org.litvin.ui.tabs.markup.CommentDto
-import org.litvin.ui.tabs.markup.CommentPatch
-import org.litvin.ui.tabs.markup.MarkupActions
+import org.litvin.ui.tabs.points.CommentDto
+import org.litvin.ui.tabs.points.CommentPatch
+import org.litvin.ui.tabs.points.PointsActions
 import java.awt.BorderLayout
 import java.awt.Color
 import java.awt.Component
@@ -33,18 +33,18 @@ import javax.swing.JTextField
 import javax.swing.KeyStroke
 import javax.swing.SwingUtilities
 
-/** Modal editor for creating or changing a source-time-pinned rally comment. */
+/** Modal editor for creating or changing a source-time-pinned point comment. */
 object EditCommentDialog {
     /** How long a new comment stays on screen until the user changes it. */
     private const val DEFAULT_DURATION_MS = 5_000L
 
-    fun showCreate(parent: Component, initialStartMs: Long, defaultColor: String, actions: MarkupActions) {
+    fun showCreate(parent: Component, initialStartMs: Long, defaultColor: String, actions: PointsActions) {
         show(parent, "Add comment", initialStartMs, DEFAULT_DURATION_MS, "", defaultColor) { startMs, durationMs, text, color ->
             actions.createComment(startMs, durationMs, text, color)
         }
     }
 
-    fun showEdit(parent: Component, comment: CommentDto, actions: MarkupActions) {
+    fun showEdit(parent: Component, comment: CommentDto, actions: PointsActions) {
         show(parent, "Edit comment", comment.startMs, comment.durationMs, comment.text, comment.colorHex) { startMs, durationMs, text, color ->
             actions.editComment(
                 comment.id,
@@ -65,20 +65,20 @@ object EditCommentDialog {
         val owner = SwingUtilities.getWindowAncestor(parent)
         val dialog = JDialog(owner as? Window, title, Dialog.ModalityType.APPLICATION_MODAL)
         val text = JTextArea(initialText, 5, 30).apply {
-            name = "rallies-comment-text"
+            name = "points-comment-text"
             lineWrap = true
             wrapStyleWord = true
         }
-        val start = JTextField(formatTimestamp(initialStartMs), 14).apply { name = "rallies-comment-start" }
-        val duration = JTextField(formatSeconds(initialDurationMs), 8).apply { name = "rallies-comment-duration" }
+        val start = JTextField(formatTimestamp(initialStartMs), 14).apply { name = "points-comment-start" }
+        val duration = JTextField(formatSeconds(initialDurationMs), 8).apply { name = "points-comment-duration" }
         var colorHex = initialColor
         val color = JButton("Change…").apply {
-            name = "rallies-comment-color"
+            name = "points-comment-color"
             icon = UiStyles.colorSwatchIcon(colorFor(colorHex))
             toolTipText = colorHex
         }
         val error = JLabel(" ").apply { foreground = Color(0xFF, 0x6B, 0x6B) }
-        val saveButton = JButton("Save").apply { name = "rallies-comment-save" }
+        val saveButton = JButton("Save").apply { name = "points-comment-save" }
         val cancelButton = JButton("Cancel")
 
         color.addActionListener {
@@ -138,8 +138,8 @@ object EditCommentDialog {
         // Enter saves from the single-line fields; the text area keeps Enter for new lines.
         dialog.rootPane.defaultButton = saveButton
         dialog.rootPane.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW)
-            .put(KeyStroke.getKeyStroke("ESCAPE"), "rallies-comment-cancel")
-        dialog.rootPane.actionMap.put("rallies-comment-cancel", object : AbstractAction() {
+            .put(KeyStroke.getKeyStroke("ESCAPE"), "points-comment-cancel")
+        dialog.rootPane.actionMap.put("points-comment-cancel", object : AbstractAction() {
             override fun actionPerformed(event: ActionEvent?) = dialog.dispose()
         })
         dialog.addWindowListener(object : WindowAdapter() {
@@ -174,7 +174,7 @@ object EditCommentDialog {
             .movePointRight(3)
             .setScale(0, RoundingMode.HALF_UP)
             .longValueExact()
-        val normalizedColor = org.litvin.markup.EdlIO.normalizeColorHex(color) ?: return null
+        val normalizedColor = org.litvin.points.EdlIO.normalizeColorHex(color) ?: return null
         val trimmedText = text.trim()
         if (startMs < 0 || durationMs <= 0 || trimmedText.isBlank()) null
         else ParsedComment(startMs, durationMs, trimmedText, normalizedColor)

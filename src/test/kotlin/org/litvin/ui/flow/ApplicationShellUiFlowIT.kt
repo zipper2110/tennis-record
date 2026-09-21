@@ -15,7 +15,7 @@ class ApplicationShellUiFlowIT {
         application.assertProjectsOnlyNavigation()
 
         application.projects.importMatch()
-        application.rallies.assertReady()
+        application.points.assertReady()
         application.assertProjectNavigation()
 
         val created = initial.fixtures.onlyProject()
@@ -28,7 +28,7 @@ class ApplicationShellUiFlowIT {
         application = ApplicationScreen(restarted)
         application.assertProjectsOnlyNavigation()
         application.projects.assertRecent(created.manifest.id).openRecent(created.manifest.id)
-        application.rallies.assertReady()
+        application.points.assertReady()
         application.projects.open().assertCurrentProject(created.manifest.name)
     }
 

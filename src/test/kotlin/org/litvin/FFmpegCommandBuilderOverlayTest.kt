@@ -1,6 +1,6 @@
 package org.litvin
 
-import org.litvin.markup.PointV1
+import org.litvin.points.PointV1
 import kotlin.test.Test
 import kotlin.test.assertTrue
 

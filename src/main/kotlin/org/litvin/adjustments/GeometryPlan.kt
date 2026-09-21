@@ -33,7 +33,7 @@ data class GeometryPlan(
 
         /**
          * Builds the plan for a [width] x [height] frame. The crop rectangle has the frame aspect and stays
-         * inside the rotated frame, with the same math as the Crop & Rotate editor.
+         * inside the rotated frame, with the same math as the Transform editor.
          */
         fun of(adjustments: AdjustmentsV1, width: Int, height: Int): GeometryPlan {
             val rotation = CropGeometryMath.normalizeRotation(adjustments.rotationDeg.coerceIn(-180.0f, 180.0f)).toDouble()

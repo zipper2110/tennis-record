@@ -1,10 +1,10 @@
 package org.litvin
 
-import org.litvin.markup.CommentDefaultsV1
-import org.litvin.markup.CommentV1
-import org.litvin.markup.components.CommentDispatcher
-import org.litvin.markup.components.CommentPatch
-import org.litvin.markup.components.CommentState
+import org.litvin.points.CommentDefaultsV1
+import org.litvin.points.CommentV1
+import org.litvin.points.components.CommentDispatcher
+import org.litvin.points.components.CommentPatch
+import org.litvin.points.components.CommentState
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse

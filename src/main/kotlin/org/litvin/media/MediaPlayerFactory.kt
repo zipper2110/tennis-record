@@ -6,7 +6,7 @@ import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicBoolean
 
 enum class MediaScreen {
-    MARKUP,
+    POINTS,
     COLORS,
     CROP,
     SCORING,

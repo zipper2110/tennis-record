@@ -1,4 +1,4 @@
-package org.litvin.markup
+package org.litvin.points
 
 import com.fasterxml.jackson.annotation.JsonInclude
 import com.fasterxml.jackson.databind.DeserializationFeature
@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.SerializationFeature
 import com.fasterxml.jackson.module.kotlin.KotlinModule
 import com.fasterxml.jackson.module.kotlin.readValue
 import io.github.oshai.kotlinlogging.KotlinLogging
+import org.litvin.JsonFileIO
 import java.io.File
 import java.util.Locale
 import java.util.UUID
@@ -131,14 +132,14 @@ object EdlIO {
         if (changed) {
             logger.info { "Repaired missing/duplicate point ids before save; changes will be persisted" }
         }
-        mapper.writeValue(File(edlFilePath), normalizeComments(edl.copy(points = fixedPoints)))
+        JsonFileIO.writeAtomically(mapper, edlFilePath, normalizeComments(edl.copy(points = fixedPoints)))
     }
 
     /** Read EDL from the given file path; returns empty EdlV1 if file does not exist. Repairs ids if needed. */
     fun read(edlFilePath: String): EdlV1 {
         val f = File(edlFilePath)
         if (!f.exists()) return EdlV1(emptyList(), 1)
-        val raw: EdlV1 = mapper.readValue(f)
+        val raw: EdlV1 = JsonFileIO.read(mapper, f.path, EdlV1::class.java)
         val (fixedPoints, changed) = ensureUniqueIds(raw.points)
         if (changed) {
             logger.info { "Backfilled/repaired point ids while loading; will persist on next autosave" }

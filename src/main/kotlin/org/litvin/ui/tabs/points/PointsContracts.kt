@@ -1,12 +1,12 @@
-package org.litvin.ui.tabs.markup
+package org.litvin.ui.tabs.points
 
 /**
- * Contracts for the Markup tab UI and its container.
+ * Contracts for the Points tab UI and its container.
  *
  * These APIs are intentionally narrow and decoupled from domain types.
  * Leaf Swing components should depend only on these contracts and UI commons.
  */
-interface MarkupActions {
+interface PointsActions {
     fun togglePlayPause()
     fun seekTo(ms: Long)
     fun jumpToSelected()
@@ -31,26 +31,26 @@ interface MarkupActions {
     fun saveNow()
 }
 
-/** Immutable snapshot of the Markup view state consumed by leaf components. */
-data class MarkupViewState(
+/** Immutable snapshot of the Points view state consumed by leaf components. */
+data class PointsViewState(
     val isPlaying: Boolean,
     val currentTimeMs: Long,
     val selectedVisualIndex: Int?,
     val pendingDraftStartMs: Long?,
-    val events: List<MarkupEventDto>,
+    val events: List<TimelineEventDto>,
     val autosave: AutosaveState,
 )
 
-sealed interface MarkupEventDto {
+sealed interface TimelineEventDto {
     val startMs: Long
     val stableKey: String
 }
 
-data class RallyEventDto(
+data class PointEventDto(
     val point: PointDto,
-) : MarkupEventDto {
+) : TimelineEventDto {
     override val startMs: Long get() = point.startMs
-    override val stableKey: String get() = "rally:${point.id}"
+    override val stableKey: String get() = "point:${point.id}"
 }
 
 data class CommentDto(
@@ -59,11 +59,11 @@ data class CommentDto(
     val durationMs: Long,
     val text: String,
     val colorHex: String,
-) : MarkupEventDto {
+) : TimelineEventDto {
     override val stableKey: String get() = "comment:$id"
 }
 
-/** Lightweight DTO for a markup point shown in UI components. */
+/** Lightweight DTO for a point shown in UI components. */
 data class PointDto(
     val id: String,
     val startMs: Long,

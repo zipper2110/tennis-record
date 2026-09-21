@@ -14,7 +14,7 @@ import org.litvin.ui.tabs.crop.SwingCropRotatePanel
 import org.litvin.ui.tabs.crop.presenter.DefaultCropRotatePresenter
 import org.litvin.ui.tabs.export.ExportSettingsPreferences
 import org.litvin.ui.tabs.export.SwingExportPanel
-import org.litvin.ui.tabs.markup.SwingMarkupPanel
+import org.litvin.ui.tabs.points.SwingPointsPanel
 import org.litvin.ui.tabs.projects.SwingProjectsPanel
 import org.litvin.ui.tabs.projects.presenter.DefaultProjectsPresenter
 import org.litvin.ui.tabs.scoring.SwingScoringPanel
@@ -39,7 +39,7 @@ import javax.swing.KeyStroke
 
 object SwingApplicationFactory {
     private const val CARD_PROJECTS = "projects"
-    private const val CARD_RALLIES = "markup"
+    private const val CARD_POINTS = "points"
     private const val CARD_EXPORT = "export"
     private const val CARD_SCORING = "scoring"
     private const val CARD_ADJ_COLORS = "adjustments"
@@ -73,12 +73,12 @@ object SwingApplicationFactory {
 
             val sidebar = JPanel().apply {
                 UiStyles.styleSidebarContainer(this)
-                preferredSize = Dimension(100, 0)
+                preferredSize = Dimension(81, 0)
                 foreground = UiStyles.SIDEBAR_FG
             }
 
             lateinit var btnProjects: UiStyles.SidebarButton
-            lateinit var btnRallies: UiStyles.SidebarButton
+            lateinit var btnPoints: UiStyles.SidebarButton
             lateinit var btnColors: UiStyles.SidebarButton
             lateinit var btnScoring: UiStyles.SidebarButton
             lateinit var btnExport: UiStyles.SidebarButton
@@ -97,13 +97,13 @@ object SwingApplicationFactory {
             val cardLayout = cards.layout as CardLayout
             val applicationPreferences = services.preferences.node(PreferencesProvider.APPLICATION)
 
-            val ralliesPanel = SwingMarkupPanel(
-                services.mediaPlayers.create(MediaScreen.MARKUP),
+            val pointsPanel = SwingPointsPanel(
+                services.mediaPlayers.create(MediaScreen.POINTS),
                 services.adjustments,
-                services.executors.createExecutor("markup-autosave"),
+                services.executors.createExecutor("points-autosave"),
                 services.dialogs,
-            ) { showHelp(HelpPage.RALLIES) }
-            closeActions += ralliesPanel::close
+            ) { showHelp(HelpPage.POINTS) }
+            closeActions += pointsPanel::close
 
             val colorsPanel = SwingColorAdjustmentsPanel(
                 services.mediaPlayers.create(MediaScreen.COLORS),
@@ -143,7 +143,7 @@ object SwingApplicationFactory {
             var currentCard: String? = null
             fun currentHelpPage(): HelpPage = when (currentCard) {
                 CARD_PROJECTS -> HelpPage.PROJECTS
-                CARD_RALLIES -> HelpPage.RALLIES
+                CARD_POINTS -> HelpPage.POINTS
                 CARD_ADJ_COLORS -> HelpPage.COLORS
                 CARD_ADJ_CROP_ROTATE -> HelpPage.CROP
                 CARD_SCORING -> HelpPage.SCORING
@@ -152,9 +152,10 @@ object SwingApplicationFactory {
             }
 
             fun goTo(card: String) {
+                if (card == currentCard) return
                 when (currentCard) {
                     CARD_PROJECTS -> projectsPanel.onDeactivated()
-                    CARD_RALLIES -> ralliesPanel.onDeactivated()
+                    CARD_POINTS -> pointsPanel.onDeactivated()
                     CARD_ADJ_COLORS -> colorsPanel.onDeactivated()
                     CARD_ADJ_CROP_ROTATE -> cropRotatePanel.onDeactivated()
                     CARD_SCORING -> scoringPanel.onDeactivated()
@@ -163,7 +164,7 @@ object SwingApplicationFactory {
                 cardLayout.show(cards, card)
                 when (card) {
                     CARD_PROJECTS -> projectsPanel.onActivated()
-                    CARD_RALLIES -> ralliesPanel.onActivated()
+                    CARD_POINTS -> pointsPanel.onActivated()
                     CARD_ADJ_COLORS -> colorsPanel.onActivated()
                     CARD_ADJ_CROP_ROTATE -> cropRotatePanel.onActivated()
                     CARD_SCORING -> scoringPanel.onActivated()
@@ -171,7 +172,7 @@ object SwingApplicationFactory {
                     CARD_TEST -> testPanel?.onActivated()
                 }
                 btnProjects.active = card == CARD_PROJECTS
-                btnRallies.active = card == CARD_RALLIES
+                btnPoints.active = card == CARD_POINTS
                 btnColors.active = card == CARD_ADJ_COLORS
                 btnCropRotate.active = card == CARD_ADJ_CROP_ROTATE
                 btnScoring.active = card == CARD_SCORING
@@ -191,13 +192,13 @@ object SwingApplicationFactory {
                 services.dialogs,
             ) { showHelp(HelpPage.PROJECTS) }.apply {
                 onProjectOpened = { path ->
-                    ralliesPanel.setProjectManifest(path)
+                    pointsPanel.setProjectManifest(path)
                     colorsPanel.setProjectManifest(path)
                     cropRotatePanel.setProjectManifest(path)
                     scoringPanel.setProjectManifest(path)
                     exportPanel.setProjectManifest(path)
                     testPanel?.setProjectManifest(path)
-                    btnRallies.isVisible = true
+                    btnPoints.isVisible = true
                     btnColors.isVisible = true
                     btnCropRotate.isVisible = true
                     btnScoring.isVisible = true
@@ -205,13 +206,13 @@ object SwingApplicationFactory {
                     btnTest?.isVisible = true
                     sidebar.revalidate()
                     sidebar.repaint()
-                    frame.title = "Tennis Record — Markup"
-                    goTo(CARD_RALLIES)
+                    frame.title = "Tennis Record — Points"
+                    goTo(CARD_POINTS)
                 }
             }
 
             cards.add(projectsPanel, CARD_PROJECTS)
-            cards.add(ralliesPanel, CARD_RALLIES)
+            cards.add(pointsPanel, CARD_POINTS)
             cards.add(colorsPanel, CARD_ADJ_COLORS)
             cards.add(cropRotatePanel, CARD_ADJ_CROP_ROTATE)
             cards.add(scoringPanel, CARD_SCORING)
@@ -228,16 +229,16 @@ object SwingApplicationFactory {
                 goTo(CARD_ADJ_COLORS)
             }.apply { name = "nav-colors" }
             addItem(btnColors)
-            btnCropRotate = UiStyles.sidebarButton("Crop", UiStyles.cropRotateIcon()) {
-                frame.title = "Tennis Record — Crop & Rotate"
+            btnCropRotate = UiStyles.sidebarButton("Transform", UiStyles.cropRotateIcon()) {
+                frame.title = "Tennis Record — Transform"
                 goTo(CARD_ADJ_CROP_ROTATE)
             }.apply { name = "nav-crop" }
             addItem(btnCropRotate)
-            btnRallies = UiStyles.sidebarButton("Rallies", UiStyles.rallyIcon()) {
-                frame.title = "Tennis Record — Rallies"
-                goTo(CARD_RALLIES)
-            }.apply { name = "nav-rallies" }
-            addItem(btnRallies)
+            btnPoints = UiStyles.sidebarButton("Points", UiStyles.pointsIcon()) {
+                frame.title = "Tennis Record — Points"
+                goTo(CARD_POINTS)
+            }.apply { name = "nav-points" }
+            addItem(btnPoints)
             btnScoring = UiStyles.sidebarButton("Scoring", UiStyles.targetIcon()) {
                 frame.title = "Tennis Record — Scoring"
                 goTo(CARD_SCORING)
@@ -264,7 +265,7 @@ object SwingApplicationFactory {
                 addItem(btnTest!!)
             }
 
-            btnRallies.isVisible = false
+            btnPoints.isVisible = false
             btnColors.isVisible = false
             btnCropRotate.isVisible = false
             btnScoring.isVisible = false

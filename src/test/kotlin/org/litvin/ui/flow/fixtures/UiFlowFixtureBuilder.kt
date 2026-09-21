@@ -2,10 +2,10 @@ package org.litvin.ui.flow.fixtures
 
 import org.litvin.adjustments.AdjustmentsIO
 import org.litvin.adjustments.AdjustmentsV1
-import org.litvin.markup.EdlIO
-import org.litvin.markup.EdlV1
-import org.litvin.markup.CommentV1
-import org.litvin.markup.PointV1
+import org.litvin.points.EdlIO
+import org.litvin.points.EdlV1
+import org.litvin.points.CommentV1
+import org.litvin.points.PointV1
 import org.litvin.projects.ManifestIO
 import org.litvin.projects.ProjectManifestV1
 import org.litvin.scoring.Outcome

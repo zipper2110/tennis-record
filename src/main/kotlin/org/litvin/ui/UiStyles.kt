@@ -217,7 +217,7 @@ object UiStyles {
     fun styleSidebarContainer(panel: JPanel) {
         panel.background = SIDEBAR_BG
         panel.isOpaque = true
-        panel.border = BorderFactory.createEmptyBorder(12, 12, 12, 12)
+        panel.border = BorderFactory.createEmptyBorder(12, 0, 12, 0)
         panel.layout = BoxLayout(panel, BoxLayout.Y_AXIS)
     }
 
@@ -241,7 +241,7 @@ object UiStyles {
             isFocusPainted = false
             cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
             foreground = SIDEBAR_FG
-            border = BorderFactory.createEmptyBorder(8, 6, 8, 6)
+            border = BorderFactory.createEmptyBorder(8, 0, 8, 0)
             preferredSize = Dimension(180, 56)
             minimumSize = Dimension(0, 56)
             maximumSize = Dimension(Int.MAX_VALUE, 56)
@@ -284,7 +284,7 @@ object UiStyles {
     fun cropRotateIcon(size: Int = 20): Icon = ikon(Material2AL.CROP_ROTATE, size, LIME)
 
     // Tab icon: Crop (prefer Ikonli Feather.CROP with fallback)
-    fun rallyIcon(size: Int = 20): Icon = ikon(Material2MZ.SPORTS_TENNIS, size, LIME)
+    fun pointsIcon(size: Int = 20): Icon = ikon(Material2MZ.SPORTS_TENNIS, size, LIME)
 
     /** Primary CTA button with gradient; includes a leading circle-plus icon. */
     fun primaryButton(text: String, onClick: () -> Unit): JButton = object : JButton(text) {

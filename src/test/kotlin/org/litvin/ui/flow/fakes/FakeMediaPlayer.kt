@@ -154,7 +154,7 @@ class FakeMediaPlayerFactory : MediaPlayerFactory {
 
     fun assertEditingFlowEvents() {
         val snapshot = calls
-        val requiredScreens = setOf(MediaScreen.MARKUP, MediaScreen.COLORS, MediaScreen.SCORING)
+        val requiredScreens = setOf(MediaScreen.POINTS, MediaScreen.COLORS, MediaScreen.SCORING)
         val loadedScreens = snapshot.filter { it.action == "load" }.mapTo(linkedSetOf()) { it.screen }
         check(loadedScreens.containsAll(requiredScreens)) {
             "Expected media loads for $requiredScreens, recorded $snapshot"

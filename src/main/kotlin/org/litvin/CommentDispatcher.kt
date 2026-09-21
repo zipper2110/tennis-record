@@ -1,10 +1,10 @@
-package org.litvin.markup.components
+package org.litvin.points.components
 
 import io.github.oshai.kotlinlogging.KotlinLogging
-import org.litvin.markup.CommentDefaultsV1
-import org.litvin.markup.CommentV1
-import org.litvin.markup.EdlIO
-import org.litvin.markup.EdlV1
+import org.litvin.points.CommentDefaultsV1
+import org.litvin.points.CommentV1
+import org.litvin.points.EdlIO
+import org.litvin.points.EdlV1
 
 data class CommentPatch(
     val startMs: Int? = null,

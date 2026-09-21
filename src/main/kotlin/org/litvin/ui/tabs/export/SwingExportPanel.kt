@@ -21,11 +21,13 @@ import org.litvin.export.ExportFrameRates
 import org.litvin.export.ExportResolutionOption
 import org.litvin.export.ExportResolutionProbe
 import org.litvin.export.ExportResolutions
+import org.litvin.export.ExportSourceBitrateProbe
+import org.litvin.export.ExportSourceBitrates
 import org.litvin.export.ExportRenderPlanRequest
 import org.litvin.export.RenderFormatting
-import org.litvin.markup.EdlIO
-import org.litvin.markup.EdlV1
-import org.litvin.markup.PointV1
+import org.litvin.points.EdlIO
+import org.litvin.points.EdlV1
+import org.litvin.points.PointV1
 import org.litvin.projects.ManifestIO
 import org.litvin.scoring.Outcome
 import org.litvin.scoring.ScoreIO
@@ -37,6 +39,7 @@ import org.litvin.ui.commons.SwingFilePicker
 import org.litvin.ui.commons.SwingUserDialogService
 import org.litvin.ui.commons.UserDialogService
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import java.awt.*
 import java.io.File
 import javax.swing.*
@@ -68,6 +71,7 @@ class SwingExportPanel(
         onHelp,
     )
 
+    private val logger = KotlinLogging.logger {}
     private val closed = AtomicBoolean(false)
     private var queueSubscription: AutoCloseable? = null
 
@@ -103,7 +107,7 @@ class SwingExportPanel(
     }
     private val commentsCheck = JCheckBox("Include comments", false).apply {
         name = "export-comments"
-        toolTipText = "Burn Rallies comments into the video as centered lower-third text."
+        toolTipText = "Burn the comments from the Points tab into the video as centered lower-third text."
     }
     private val initButton = UiStyles.primaryButton("Initialize Render") { onInitializeRender() }.apply {
         name = "export-initialize"
@@ -132,6 +136,7 @@ class SwingExportPanel(
 
     // Helper text labels (from JavaFX ExportTab)
     private val qualityLabel = JLabel("")
+    private val sourceBitrateLabel = JLabel("")
     private val resSummaryLabel = JLabel("")
     private val scalePlanLabel = JLabel("")
     private val pointsCountLabel = JLabel("")
@@ -229,6 +234,9 @@ class SwingExportPanel(
         qualityLabel.text = ""
         left.add(Box.createRigidArea(Dimension(0, 4)))
         left.add(qualityLabel)
+        UiStyles.styleHelper(sourceBitrateLabel)
+        sourceBitrateLabel.text = ""
+        left.add(sourceBitrateLabel)
         left.add(Box.createRigidArea(Dimension(0, 12)))
 
         left.add(sectionLabel("Encoder"))
@@ -312,15 +320,6 @@ class SwingExportPanel(
         add(center, BorderLayout.CENTER)
 
         // --- Wiring updates like JavaFX implementation ---
-        fun selectedResolution() = (resCombo.selectedItem as? ExportResolutionOption)?.resolution
-            ?: ExportPlanner.parseResolution("1080p")
-        fun updateQualitySummary(idx: Int) {
-            if (idx !in presets.indices) return
-            val p = presets[idx]
-            val resolution = selectedResolution()
-            val frameRate = (frameRateCombo.selectedItem as? ExportFrameRateOption)?.frameRate?.ffmpegArgument
-            Html.setWrapped(qualityLabel, ExportQualityProfiles.description(p, resolution.width, resolution.height, frameRate).orEmpty())
-        }
         fun updateResolutionPreview() {
             val resolution = selectedResolution()
             resSummaryLabel.text = "Output: ${resolution.width} x ${resolution.height} (${resolution.label})"
@@ -429,7 +428,8 @@ class SwingExportPanel(
                         "Scoreboard".takeIf { cur.includeScoreboard },
                         "Comments".takeIf { cur.includeComments },
                     ).joinToString(" + ").takeIf { it.isNotEmpty() }?.let { "  ·  $it" }.orEmpty()
-                    nameLabel.text = File(cur.outputPath).name + overlays
+                    val cut = RenderFormatting.formatCutMode(cur.idleTrim, cur.favoriteOnly)
+                    nameLabel.text = File(cur.outputPath).name + "  ·  " + cut + overlays
                     jobIdLabel.text = "Job ID: ${cur.id}"
                     progressBar.value = (cur.progress * 100).toInt()
                     progressBar.string = "${(cur.progress * 100).toInt()}%"
@@ -439,7 +439,7 @@ class SwingExportPanel(
                     when (cur.status) {
                         RenderStatus.FAILED -> {
                             val reason = cur.failureReason ?: "Unknown error"
-                            progressLabel.text = "FAILED — $reason"
+                            progressLabel.text = "FAILED  ·  $reason"
                             if (lastFailureNotifiedJobId != cur.id) {
                                 lastFailureNotifiedJobId = cur.id
                                 lastFailureJob = cur
@@ -447,7 +447,7 @@ class SwingExportPanel(
                             }
                         }
                         RenderStatus.COMPLETED -> {
-                            progressLabel.text = "Completed — Size: $sz"
+                            progressLabel.text = "Completed  ·  Size: $sz"
                             refreshCompletedFromStore()
                         }
                         RenderStatus.CANCELED -> {
@@ -474,6 +474,7 @@ class SwingExportPanel(
         manifestPath = path
         refreshResolutionOptions()
         refreshFrameRateOptions()
+        refreshSourceBitrate()
         updatePointsSummary()
         updateFavoriteOnlyAvailability()
         updateInitButtonState()
@@ -622,6 +623,32 @@ class SwingExportPanel(
         } finally {
             refreshingFrameRateOptions = false
         }
+        // The guard above suppresses the combo listener, so the bitrate summary
+        // would otherwise keep the frame rate it was computed with before the probe.
+        updateQualitySummary(presetCombo.selectedIndex)
+    }
+
+    private fun selectedResolution() = (resCombo.selectedItem as? ExportResolutionOption)?.resolution
+        ?: ExportPlanner.parseResolution("1080p")
+
+    private fun updateQualitySummary(idx: Int) {
+        if (idx !in presets.indices) return
+        val p = presets[idx]
+        val resolution = selectedResolution()
+        val frameRate = (frameRateCombo.selectedItem as? ExportFrameRateOption)?.frameRate?.ffmpegArgument
+        Html.setWrapped(qualityLabel, ExportQualityProfiles.description(p, resolution.width, resolution.height, frameRate).orEmpty())
+    }
+
+    private fun refreshSourceBitrate() {
+        val sourcePath = try {
+            manifestPath?.let(ManifestIO::read)?.sourceVideo
+        } catch (_: Throwable) {
+            null
+        }
+        val bitrate = sourcePath
+            ?.takeIf { File(it).isFile }
+            ?.let { ExportSourceBitrateProbe.probe(it, ApplicationLayout.current().ffprobeExecutable) }
+        sourceBitrateLabel.text = ExportSourceBitrates.label(bitrate)
     }
 
     private fun sectionLabel(text: String): JComponent {
@@ -736,9 +763,16 @@ class SwingExportPanel(
 
     private fun readCurrentProjectEdl(): EdlV1? {
         val projectDir = currentProjectDir()
+        if (projectDir == null) {
+            logger.info { "Export summary: no project directory (manifestPath=$manifestPath)" }
+            return null
+        }
         return try {
-            if (projectDir != null) EdlIO.readForProjectDir(projectDir) else null
-        } catch (_: Throwable) {
+            EdlIO.readForProjectDir(projectDir).also {
+                logger.info { "Export summary: read ${it.points.size} points from ${EdlIO.edlFilePath(projectDir)}" }
+            }
+        } catch (t: Throwable) {
+            logger.warn(t) { "Export summary: failed to read EDL from ${EdlIO.edlFilePath(projectDir)}" }
             null
         }
     }
@@ -747,7 +781,8 @@ class SwingExportPanel(
         val projectDir = currentProjectDir()
         return try {
             if (projectDir != null) ScoreIO.readForProjectDir(projectDir) else ScoreV1()
-        } catch (_: Throwable) {
+        } catch (t: Throwable) {
+            logger.warn(t) { "Export summary: failed to read score for $projectDir" }
             ScoreV1()
         }
     }

@@ -3,7 +3,7 @@ package org.litvin.ui.flow
 import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.RegisterExtension
-import org.litvin.markup.EdlIO
+import org.litvin.points.EdlIO
 import org.litvin.projects.ManifestIO
 import org.litvin.ui.flow.harness.SwingUiFlowExtension
 import org.litvin.ui.flow.harness.UiFlowContext
@@ -21,13 +21,13 @@ class ValidationRecoveryUiFlowIT {
 
     @Test
     @Disabled("Deferred to packaged/native smoke: Windows foreground focus can swallow the Robot project-card click")
-    fun `missing source can be relinked and opens Rallies`(context: UiFlowContext) {
+    fun `missing source can be relinked and opens Points`(context: UiFlowContext) {
         val project = context.fixtures.missingSourceProject()
         val application = ApplicationScreen(context)
 
         application.projects.open()
             .relinkMissingSource(project.manifest.id, context.fixtures.sourceVideo)
-        application.rallies.assertReady()
+        application.points.assertReady()
 
         application.eventually("project manifest source to be repaired") {
             val repaired = ManifestIO.read(project.manifestFile.toString())

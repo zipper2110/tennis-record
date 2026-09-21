@@ -1,11 +1,11 @@
-package org.litvin.ui.tabs.markup.components
+package org.litvin.ui.tabs.points.components
 
 import org.litvin.ui.commons.AppShortcuts
 import java.awt.event.ActionEvent
 import javax.swing.*
 
 /**
- * Installs and uninstalls keyboard shortcuts for the Markup tab.
+ * Installs and uninstalls keyboard shortcuts for the Points tab.
  *
  * Responsibilities:
  * - Bind Space/C/V/Delete and Left/Right (with Shift for big step) to provided actions
@@ -15,7 +15,7 @@ import javax.swing.*
 class Keybindings(
     private val target: JComponent,
     private val isTextEditingFocus: () -> Boolean,
-    private val actions: MarkupKeyActions
+    private val actions: PointsKeyActions
 ) {
     private val registered = mutableListOf<Pair<KeyStroke, String>>()
     private val conditions = intArrayOf(
@@ -43,16 +43,16 @@ class Keybindings(
 
     private fun install() {
         // Primary controls
-        bind(AppShortcuts.PLAY_PAUSE.keyStroke, "markup.toggle") { actions.toggle() }
-        bind(AppShortcuts.POINT_START.keyStroke, "markup.pointStart") { actions.startAtPlayhead() }
-        bind(AppShortcuts.POINT_END.keyStroke, "markup.pointEnd") { actions.endAtPlayhead() }
-        bind(AppShortcuts.TOGGLE_FAVORITE.keyStroke, "markup.toggleFavorite") { actions.toggleFavoriteSelected() }
-        bind(AppShortcuts.DELETE.keyStroke, "markup.delete") { actions.deleteSelected() }
+        bind(AppShortcuts.PLAY_PAUSE.keyStroke, "points.toggle") { actions.toggle() }
+        bind(AppShortcuts.POINT_START.keyStroke, "points.pointStart") { actions.startAtPlayhead() }
+        bind(AppShortcuts.POINT_END.keyStroke, "points.pointEnd") { actions.endAtPlayhead() }
+        bind(AppShortcuts.TOGGLE_FAVORITE.keyStroke, "points.toggleFavorite") { actions.toggleFavoriteSelected() }
+        bind(AppShortcuts.DELETE.keyStroke, "points.delete") { actions.deleteSelected() }
         // Seeks (nudge)
-        bind(AppShortcuts.LEFT.keyStroke, "markup.seekLeft") { actions.nudge(-1_000) }
-        bind(AppShortcuts.RIGHT.keyStroke, "markup.seekRight") { actions.nudge(+1_000) }
-        bind(AppShortcuts.SHIFT_LEFT.keyStroke, "markup.seekLeftBig") { actions.nudge(-5_000) }
-        bind(AppShortcuts.SHIFT_RIGHT.keyStroke, "markup.seekRightBig") { actions.nudge(+5_000) }
+        bind(AppShortcuts.LEFT.keyStroke, "points.seekLeft") { actions.nudge(-1_000) }
+        bind(AppShortcuts.RIGHT.keyStroke, "points.seekRight") { actions.nudge(+1_000) }
+        bind(AppShortcuts.SHIFT_LEFT.keyStroke, "points.seekLeftBig") { actions.nudge(-5_000) }
+        bind(AppShortcuts.SHIFT_RIGHT.keyStroke, "points.seekRightBig") { actions.nudge(+5_000) }
     }
 
     fun uninstall() {
@@ -71,7 +71,7 @@ class Keybindings(
     }
 }
 
-interface MarkupKeyActions {
+interface PointsKeyActions {
     fun toggle()
     fun startAtPlayhead()
     fun endAtPlayhead()

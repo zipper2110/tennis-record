@@ -1,6 +1,6 @@
 package org.litvin
 
-import org.litvin.markup.EdlIO
+import org.litvin.points.EdlIO
 import org.litvin.scoring.ScoreIO
 import kotlin.test.Test
 import kotlin.test.assertEquals

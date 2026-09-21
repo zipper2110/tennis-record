@@ -1,6 +1,6 @@
 package org.litvin.ui.tabs.scoring.ui
 
-import org.litvin.markup.PointV1
+import org.litvin.points.PointV1
 import org.litvin.scoring.Outcome
 import org.litvin.ui.tabs.scoring.NavigationActions
 import org.litvin.ui.tabs.scoring.ScoringActions

@@ -1,9 +1,9 @@
-package org.litvin.ui.tabs.markup.ui
+package org.litvin.ui.tabs.points.ui
 
 import org.litvin.shared.util.Timecode
-import org.litvin.ui.tabs.markup.MarkupActions
-import org.litvin.ui.tabs.markup.PointDto
-import org.litvin.ui.tabs.markup.PointPatch
+import org.litvin.ui.tabs.points.PointsActions
+import org.litvin.ui.tabs.points.PointDto
+import org.litvin.ui.tabs.points.PointPatch
 import java.awt.Component
 import java.awt.GridBagConstraints
 import java.awt.GridBagLayout
@@ -15,12 +15,12 @@ import javax.swing.JPanel
 import javax.swing.JTextField
 
 /**
- * EditPointDialog — a small modal editor for a single markup point.
+ * EditPointDialog — a small modal editor for a single point.
  *
  * Responsibilities:
  * - Show/edit fields: start time, end time, label
  * - Support Confirm (OK) and Delete actions; Cancel just closes the dialog
- * - Communicate changes strictly via MarkupActions
+ * - Communicate changes strictly via PointsActions
  * - Keep work lightweight on EDT (no long-running operations)
  */
 object EditPointDialog {
@@ -29,7 +29,7 @@ object EditPointDialog {
      * Shows the dialog. On OK, calls actions.editPoint(). On Delete, asks for confirmation and calls actions.deletePoint().
      * Parsing/formatting uses Timecode utilities. Any parsing error will show an error dialog and keep the editor open.
      */
-    fun show(parent: Component, point: PointDto, actions: MarkupActions) {
+    fun show(parent: Component, point: PointDto, actions: PointsActions) {
         val panel = JPanel(GridBagLayout())
         val gc = GridBagConstraints().apply {
             insets = Insets(4, 4, 4, 4)

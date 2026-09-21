@@ -7,9 +7,9 @@ import org.litvin.projects.ManifestIO
 import org.litvin.SessionSettings
 import org.litvin.adjustments.AdjustmentsStore
 import org.litvin.adjustments.AdjustmentsSession
-import org.litvin.markup.EdlIO
-import org.litvin.markup.EdlV1
-import org.litvin.markup.PointV1
+import org.litvin.points.EdlIO
+import org.litvin.points.EdlV1
+import org.litvin.points.PointV1
 import org.litvin.media.PlayerStatus
 import org.litvin.media.mpv.MpvSwingMediaPlayerAdapter
 import org.litvin.media.SwingMediaPlayer
@@ -135,7 +135,7 @@ class SwingScoringPanel(
         ensurePlayerLoaded()
         player.activatePreview("scoring activated")
         player.pause()
-        // Refresh points every time the tab is opened to reflect latest Markup changes
+        // Refresh points every time the tab is opened to reflect latest Points tab changes
         refreshPointsFromProject()
         // Do not auto-play; optionally restore focus
         EventQueue.invokeLater { player.component.requestFocusInWindow() }
@@ -167,7 +167,7 @@ class SwingScoringPanel(
 
     fun dispose() = close()
 
-    // Media player (reuse Markup adapter)
+    // Media player (reuse Points tab adapter)
     private var unsubscribeAdjustments: (() -> Unit)? = null
 
     // Deferred media loading
@@ -549,7 +549,7 @@ class SwingScoringPanel(
         geometryViewport.name = "video"
         videoPanel.add(geometryViewport)
 
-        // Apply adjustments from the central store (parity with Markup/Color tabs)
+        // Apply adjustments from the central store (parity with Points/Color tabs)
         unsubscribeAdjustments?.invoke()
         unsubscribeAdjustments = adjustments.subscribe { adj ->
             player.applyPreviewAdjustments(adj)
@@ -890,7 +890,7 @@ class SwingScoringPanel(
             val c2 = player2ColorHex
             ScoreIO.writeForProjectDir(dir, ScoreV1(outcomes = map, version = 1, player1Name = s1, player2Name = s2, player1ColorHex = c1, player2ColorHex = c2))
         } catch (t: Throwable) {
-            // Non-fatal; show error similarly to Markup autosave
+            // Non-fatal; show error similarly to Points tab autosave
             dialogs.showError(this, t.message ?: t.toString(), "Autosave failed")
         }
     }

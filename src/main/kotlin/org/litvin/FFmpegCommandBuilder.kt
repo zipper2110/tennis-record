@@ -1,6 +1,6 @@
 package org.litvin
 
-import org.litvin.markup.PointV1
+import org.litvin.points.PointV1
 
 /**
  * Task 3.7 — FFmpeg command builder (v1)
@@ -12,7 +12,8 @@ import org.litvin.markup.PointV1
  * - H.264 (libx264) MP4 output only.
  * - Applies scale when needed.
  * - Uses CRF and x264 preset from ExportPreset; also uses VBV maxrate/bufsize if provided.
- * - Idle-trim ON → uses filter_complex trim/atrim + concat with accurate re-encode at segment borders.
+ * - Idle-trim ON → one input-level seek (-ss/-t) per kept segment, joined with the concat filter,
+ *   so decoding costs the kept duration rather than the whole source span.
  */
 object FFmpegCommandBuilder {
     data class BuildParams(
@@ -30,6 +31,12 @@ object FFmpegCommandBuilder {
         // Source frame size for the crop/rotate geometry. When unknown, the output size gives the aspect.
         val sourceWidth: Int? = null,
         val sourceHeight: Int? = null,
+        // Output time at which this command's first kept segment starts. Non-zero only when the
+        // export is split into chunks: the scoreboard ASS is written once on the whole output
+        // timeline, so a chunk has to shift its frames into that timeline before the burn-in.
+        val outputTimeOffsetMs: Long = 0,
+        // True when this command writes an intermediate chunk that a later pass joins by stream copy.
+        val chunkOutput: Boolean = false,
     )
 
     data class Result(
@@ -63,7 +70,25 @@ object FFmpegCommandBuilder {
         val args = mutableListOf<String>()
         // Enable info-level logs and show banner; also request machine-readable progress to stderr
         args += listOf("-y", "-v", "info", "-progress", "pipe:2", "-nostats")
-        args += listOf("-i", p.sourcePath)
+
+        // Idle-trim opens the source once per kept segment with an input-level seek. `-ss` before
+        // `-i` seeks through the index and decodes only from the preceding keyframe, so the work is
+        // proportional to the kept duration. Cutting with the trim filter instead would decode the
+        // whole span up to the last keep and throw most of it away, which made a 5-second export of
+        // a one-hour source cost the same as exporting the hour. `-ss` before the input has been
+        // frame-accurate since ffmpeg 2.1 (it decodes and discards up to the exact point), so the
+        // segment durations still match what ScoreboardTimelineBuilder assumes.
+        val segmentInputs = p.idleTrim && p.keeps.isNotEmpty()
+        if (segmentInputs) {
+            p.keeps.forEach { keep ->
+                val startSecs = keep.startMs / 1000.0
+                val durationSecs = (keep.endMs - keep.startMs).coerceAtLeast(0) / 1000.0
+                args += listOf("-ss", startSecs.formatSecs(), "-t", durationSecs.formatSecs())
+                args += listOf("-i", p.sourcePath)
+            }
+        } else {
+            args += listOf("-i", p.sourcePath)
+        }
 
         var filterComplex: String? = null
         var vMap = "[vout]"
@@ -125,18 +150,17 @@ object FFmpegCommandBuilder {
         }
         val geometry = buildGeometryFilter(p.adjustments)
 
-        if (p.idleTrim && p.keeps.isNotEmpty()) {
-            // Build trim/concat graph
+        if (segmentInputs) {
+            // Build the concat graph over the per-segment inputs. Each input was already seeked and
+            // length-limited on the command line, so the segment only needs its timestamps rebased.
             val parts = mutableListOf<String>()
             val vLabels = mutableListOf<String>()
             val aLabels = mutableListOf<String>()
-            p.keeps.forEachIndexed { idx, keep ->
-                val s = keep.startMs / 1000.0
-                val e = keep.endMs / 1000.0
+            p.keeps.forEachIndexed { idx, _ ->
                 val vLbl = "v$idx"
                 val aLbl = "a$idx"
-                parts += "[0:v]trim=start=${s.formatSecs()}:end=${e.formatSecs()},setpts=PTS-STARTPTS[$vLbl]"
-                parts += "[0:a]atrim=start=${s.formatSecs()}:end=${e.formatSecs()},asetpts=PTS-STARTPTS[$aLbl]"
+                parts += "[$idx:v]setpts=PTS-STARTPTS[$vLbl]"
+                parts += "[$idx:a]asetpts=PTS-STARTPTS[$aLbl]"
                 vLabels += "[$vLbl]"
                 aLabels += "[$aLbl]"
             }
@@ -157,7 +181,16 @@ object FFmpegCommandBuilder {
             val subPath = p.subtitlesAssPath
             if (subPath != null) {
                 val esc = escapeForFilterPath(subPath)
-                parts += "$baseLabel" + "subtitles='${esc}'" + vMap
+                // The subtitles filter picks events by frame timestamp. A chunk's frames start at
+                // zero, so shift them onto the whole-output timeline for the burn-in and rebase
+                // afterwards; the chunk still encodes from zero.
+                val offsetSecs = p.outputTimeOffsetMs / 1000.0
+                val burnIn = if (p.outputTimeOffsetMs > 0) {
+                    "setpts=PTS+${offsetSecs.formatSecs()}/TB,subtitles='${esc}',setpts=PTS-STARTPTS"
+                } else {
+                    "subtitles='${esc}'"
+                }
+                parts += "$baseLabel" + burnIn + vMap
             } else {
                 vMap = baseLabel
             }
@@ -228,9 +261,17 @@ object FFmpegCommandBuilder {
 
         // Container options
         // Always specify container format when known to support temporary .part outputs where extension is not standard.
-        c?.format?.let { fmt -> args += listOf("-f", fmt) }
-        if (c?.fastStart == true) {
-            args += listOf("-movflags", "+faststart")
+        if (p.chunkOutput) {
+            // Chunks are joined by the concat demuxer and copied into the real container afterwards.
+            // MPEG-TS is the container meant for that: it carries H.264/AAC, tolerates being cut and
+            // appended at arbitrary points, and remuxes back out without touching the frames.
+            // faststart would only relocate an index this file never keeps.
+            args += listOf("-f", "mpegts")
+        } else {
+            c?.format?.let { fmt -> args += listOf("-f", fmt) }
+            if (c?.fastStart == true) {
+                args += listOf("-movflags", "+faststart")
+            }
         }
 
         args += p.outputPath

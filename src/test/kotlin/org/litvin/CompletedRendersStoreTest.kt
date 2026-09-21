@@ -24,8 +24,10 @@ class CompletedRendersStoreTest {
                 presetId = "balanced",
                 outWidth = 1920,
                 outHeight = 1080,
+                outputFrameRate = "30000/1001",
                 encoderLabel = "H.264 (libx264)",
-                idleTrim = false,
+                idleTrim = true,
+                favoriteOnly = true,
                 includeScoreboard = true,
                 includeComments = true,
                 overlayTimeline = emptyList(),
@@ -44,7 +46,10 @@ class CompletedRendersStoreTest {
             assertEquals(job.encoderLabel, item.encoderLabel)
             assertEquals(job.outWidth, item.outWidth)
             assertEquals(job.outHeight, item.outHeight)
+            assertEquals(job.outputFrameRate, item.outputFrameRate)
             assertEquals(job.bytesWritten, item.bytesWritten)
+            assertTrue(item.idleTrim)
+            assertTrue(item.favoriteOnly)
             assertTrue(item.includeScoreboard)
             assertTrue(item.includeComments)
             assertEquals(1_234L, item.createdAtEpochMs)

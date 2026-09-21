@@ -63,7 +63,7 @@ class ScoringRulesTest {
             addGame(Outcome.P2) // P2 equalizes
         }
         // Now tiebreak: P1 wins 7–5
-        // Sequence with no need to be exact rally-by-rally; just ensure a 2-pt lead at >=7
+        // Sequence with no need to be exact point-by-point; just ensure a 2-pt lead at >=7
         repeat(5) { // 5-5
             val p1 = "p${id++}"; pointIds += p1; outcomes[p1] = Outcome.P1
             val p2 = "p${id++}"; pointIds += p2; outcomes[p2] = Outcome.P2

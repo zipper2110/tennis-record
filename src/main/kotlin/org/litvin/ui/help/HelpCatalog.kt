@@ -7,8 +7,8 @@ enum class HelpPage(val title: String) {
     OVERVIEW("Overview"),
     PROJECTS("Projects"),
     COLORS("Colors"),
-    CROP("Crop & Rotate"),
-    RALLIES("Rallies"),
+    CROP("Transform"),
+    POINTS("Points"),
     SCORING("Scoring"),
     EXPORT("Export"),
 }
@@ -34,13 +34,13 @@ object HelpCatalog {
             summary = "Turn a full tennis recording into a compact, scored video without changing the source file.",
             workflow = listOf(
                 "Import a source video or open a recent project.",
-                "Optionally tune the color and frame the video with Crop & Rotate.",
-                "Mark the start and end of each rally.",
+                "Optionally tune the color and frame the video with Transform.",
+                "Mark the start and end of each point.",
                 "Assign each marked point to a player or mark it as no point.",
                 "Choose export settings and render the finished video.",
             ),
             actions = listOf(
-                "Projects, rally marks, adjustments, and scoring are saved in project files.",
+                "Projects, point marks, adjustments, and scoring are saved in project files.",
                 "Edits are non-destructive: the original video is only read, never rewritten.",
                 "Most editing changes autosave as you work.",
             ),
@@ -105,13 +105,13 @@ object HelpCatalog {
                 HelpShortcut(AppShortcuts.SHIFT_RIGHT, "Move right by 10 pixels"),
                 HelpShortcut(AppShortcuts.SHIFT_UP, "Move up by 10 pixels"),
                 HelpShortcut(AppShortcuts.SHIFT_DOWN, "Move down by 10 pixels"),
-                HelpShortcut(AppShortcuts.HELP, "Open Crop & Rotate help"),
+                HelpShortcut(AppShortcuts.HELP, "Open Transform help"),
             ),
             notes = listOf("Arrow-key nudging works while the crop canvas has focus."),
         ),
         HelpContent(
-            page = HelpPage.RALLIES,
-            summary = "Mark the video interval for every rally that should be kept, and add comments to the video.",
+            page = HelpPage.POINTS,
+            summary = "Mark the video interval for every point that should be kept, and add comments to the video.",
             workflow = listOf(
                 "Move the playhead to the beginning of a point and set Point Start.",
                 "Move to the end and set Point End to create a marked point.",
@@ -137,7 +137,7 @@ object HelpCatalog {
                 HelpShortcut(AppShortcuts.RIGHT, "Seek forward 1 second"),
                 HelpShortcut(AppShortcuts.SHIFT_LEFT, "Seek back 5 seconds"),
                 HelpShortcut(AppShortcuts.SHIFT_RIGHT, "Seek forward 5 seconds"),
-                HelpShortcut(AppShortcuts.HELP, "Open Rallies help"),
+                HelpShortcut(AppShortcuts.HELP, "Open Points help"),
             ),
         ),
         HelpContent(
@@ -150,7 +150,7 @@ object HelpCatalog {
                 "Enable Include Scoreboard on Export to burn the score into the rendered video.",
             ),
             actions = listOf(
-                "Star or unstar the current point without returning to Rallies.",
+                "Star or unstar the current point without returning to Points.",
                 "Choose playback speed and optionally enable frame-by-frame arrow-key stepping while paused.",
                 "Scoring, names, and colors autosave to the project.",
             ),

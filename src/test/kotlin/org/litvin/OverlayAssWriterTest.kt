@@ -57,7 +57,7 @@ class OverlayAssWriterTest {
                 ),
             ),
             commentSpans = listOf(
-                CommentOverlaySpan(12, 1_000, 3_000, "IN {review}\nGreat rally", "#22AAFF"),
+                CommentOverlaySpan(12, 1_000, 3_000, "IN {review}\nGreat point", "#22AAFF"),
             ),
             outWidth = 1_920,
             outHeight = 1_080,

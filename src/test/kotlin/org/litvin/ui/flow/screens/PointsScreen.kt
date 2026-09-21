@@ -1,39 +1,39 @@
 package org.litvin.ui.flow.screens
 
-import org.litvin.markup.EdlIO
-import org.litvin.markup.CommentV1
+import org.litvin.points.EdlIO
+import org.litvin.points.CommentV1
 import org.litvin.shared.util.Timecode
 import org.litvin.ui.commons.AppShortcuts
 import java.nio.file.Path
 import javax.swing.KeyStroke
 
-internal class RalliesScreen(application: ApplicationScreen) : UserFlowScreen(application) {
-    fun open(): RalliesScreen = apply { open("nav-rallies", "rallies-point-start") }
+internal class PointsScreen(application: ApplicationScreen) : UserFlowScreen(application) {
+    fun open(): PointsScreen = apply { open("nav-points", "points-point-start") }
 
-    fun assertReady() = assertVisible("rallies-point-start")
+    fun assertReady() = assertVisible("points-point-start")
 
-    fun markPoint(startMs: Long, endMs: Long): RalliesScreen = apply {
+    fun markPoint(startMs: Long, endMs: Long): PointsScreen = apply {
         require(startMs >= 0) { "point start must not be negative" }
         require(endMs > startMs) { "point end must be after its start" }
         val player = context.mediaPlayers.players.firstOrNull()
-            ?: error("Rallies media player has not been created")
+            ?: error("Points media player has not been created")
         player.seek(startMs)
-        application.eventually("rallies playhead to reach $startMs ms") {
-            context.driver.requireText("rallies-current-time", formatTime(startMs))
+        application.eventually("points playhead to reach $startMs ms") {
+            context.driver.requireText("points-current-time", formatTime(startMs))
         }
         context.driver.press(KeyStroke.getKeyStroke(AppShortcuts.POINT_START.keyStroke))
         player.seek(endMs)
-        application.eventually("rallies playhead to reach $endMs ms") {
-            context.driver.requireText("rallies-current-time", formatTime(endMs))
+        application.eventually("points playhead to reach $endMs ms") {
+            context.driver.requireText("points-current-time", formatTime(endMs))
         }
         context.driver.press(KeyStroke.getKeyStroke(AppShortcuts.POINT_END.keyStroke))
     }
 
     fun assertPointCount(marked: Int, favorites: Int = 0, comments: Int = 0) {
-        application.eventually("rallies point count to become $marked marked / $favorites favorite / $comments comments") {
-            context.driver.requireText("rallies-point-count", "$marked Marked")
-            context.driver.requireText("rallies-favorite-count", "$favorites Fav")
-            context.driver.requireText("rallies-comment-count", "$comments Comments")
+        application.eventually("points point count to become $marked marked / $favorites favorite / $comments comments") {
+            context.driver.requireText("points-point-count", "$marked Marked")
+            context.driver.requireText("points-favorite-count", "$favorites Fav")
+            context.driver.requireText("points-comment-count", "$comments Comments")
         }
     }
 
@@ -57,18 +57,18 @@ internal class RalliesScreen(application: ApplicationScreen) : UserFlowScreen(ap
         return EdlIO.readForProjectDir(projectDirectory.toString()).points.single().id
     }
 
-    fun addComment(startMs: Long, durationSeconds: String, text: String): RalliesScreen = apply {
+    fun addComment(startMs: Long, durationSeconds: String, text: String): PointsScreen = apply {
         val player = context.mediaPlayers.players.firstOrNull()
-            ?: error("Rallies media player has not been created")
+            ?: error("Points media player has not been created")
         player.seek(startMs)
-        application.eventually("rallies playhead to reach $startMs ms") {
-            context.driver.requireText("rallies-current-time", formatTime(startMs))
+        application.eventually("points playhead to reach $startMs ms") {
+            context.driver.requireText("points-current-time", formatTime(startMs))
         }
-        context.driver.click("rallies-add-comment")
-        context.driver.setText("rallies-comment-text", text)
-        context.driver.setText("rallies-comment-start", formatInputTime(startMs))
-        context.driver.setText("rallies-comment-duration", durationSeconds)
-        context.driver.click("rallies-comment-save")
+        context.driver.click("points-add-comment")
+        context.driver.setText("points-comment-text", text)
+        context.driver.setText("points-comment-start", formatInputTime(startMs))
+        context.driver.setText("points-comment-duration", durationSeconds)
+        context.driver.click("points-comment-save")
     }
 
     fun assertCommentPersisted(projectDirectory: Path, id: Int, startMs: Int, durationMs: Int, text: String, color: String) {

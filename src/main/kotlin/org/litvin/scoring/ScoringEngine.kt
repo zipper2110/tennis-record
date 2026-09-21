@@ -1,6 +1,6 @@
 package org.litvin.scoring
 
-import org.litvin.markup.PointV1
+import org.litvin.points.PointV1
 
 /**
  * Pure scoring computation engine.

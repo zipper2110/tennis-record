@@ -1,7 +1,7 @@
-const eventNames = new Set(['session_started','session_heartbeat','session_ended','project_created','project_opened','source_video_opened','markup_point_added','markup_point_removed','score_point_recorded','adjustment_changed','export_started','export_completed','export_failed','export_cancelled']);
+const eventNames = new Set(['session_started','session_heartbeat','session_ended','project_created','project_opened','source_video_opened','point_added','point_removed','score_point_recorded','adjustment_changed','export_started','export_completed','export_failed','export_cancelled']);
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const appVersion = /^[0-9A-Za-z.+-]{1,32}$/;
-const noProperties = new Set(['session_started','session_heartbeat','session_ended','project_created','project_opened','markup_point_added','markup_point_removed','score_point_recorded']);
+const noProperties = new Set(['session_started','session_heartbeat','session_ended','project_created','project_opened','point_added','point_removed','score_point_recorded']);
 
 export type ValidatedEvent = { sequence_number: number; name: string; elapsed_ms: number; properties: Record<string, unknown> };
 export type ValidatedBatch = { session_id: string; app_version: string; os_family: string; events: ValidatedEvent[] };

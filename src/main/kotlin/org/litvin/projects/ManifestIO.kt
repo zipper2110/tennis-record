@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.SerializationFeature
 import com.fasterxml.jackson.module.kotlin.KotlinModule
 import com.fasterxml.jackson.module.kotlin.readValue
 import java.io.File
+import org.litvin.JsonFileIO
 import java.time.Instant
 import java.time.format.DateTimeFormatter
 
@@ -31,10 +32,10 @@ object ManifestIO {
     fun manifestFilePath(projectDir: String): String = File(projectDir, "project.trproj").absolutePath
 
     fun write(manifestFilePath: String, manifest: ProjectManifestV1) {
-        mapper.writeValue(File(manifestFilePath), manifest)
+        JsonFileIO.writeAtomically(mapper, manifestFilePath, manifest)
     }
 
     fun read(manifestFilePath: String): ProjectManifestV1 {
-        return mapper.readValue(File(manifestFilePath))
+        return JsonFileIO.read(mapper, manifestFilePath, ProjectManifestV1::class.java)
     }
 }

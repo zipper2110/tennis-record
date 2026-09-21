@@ -15,6 +15,18 @@ object RenderFormatting {
         }
     }
 
+    /** How the source video was cut for a render: full video, all cut points, or favorites only. */
+    fun formatCutMode(idleTrim: Boolean, favoriteOnly: Boolean): String = when {
+        !idleTrim -> "Full video"
+        favoriteOnly -> "Favorite points"
+        else -> "Cut points"
+    }
+
+    /** Output frame rate for display, e.g. "60 FPS" or "29.97 FPS"; null when the job kept the source rate. */
+    fun formatFrameRate(rawRate: String?): String? = rawRate
+        ?.let(ExportFrameRates::parse)
+        ?.let { "${it.displayFps} FPS" }
+
     fun formatDuration(ms: Long): String {
         var remaining = ms.coerceAtLeast(0L)
         val h = remaining / 3_600_000

@@ -108,7 +108,7 @@ object AnalyticsEventRegistry {
         fun enum(key: String, values: Array<out Enum<*>>) = properties.path(key).isTextual && properties.path(key).textValue() in values.map { enumWireValue(it) }
         fun duration() = properties.path("duration_ms").isInt && isValidDuration(properties.path("duration_ms").intValue())
         return when (name) {
-            "session_started", "session_heartbeat", "session_ended", "project_created", "project_opened", "markup_point_added", "markup_point_removed", "score_point_recorded" -> noProperties()
+            "session_started", "session_heartbeat", "session_ended", "project_created", "project_opened", "point_added", "point_removed", "score_point_recorded" -> noProperties()
             "source_video_opened" -> exactKeys("result") && enum("result", SourceVideoResult.entries.toTypedArray())
             "adjustment_changed" -> exactKeys("adjustment_category") && enum("adjustment_category", AdjustmentCategory.entries.toTypedArray())
             "export_started" -> exactKeys("container", "encoder_family") && enum("container", ExportContainer.entries.toTypedArray()) && enum("encoder_family", EncoderFamily.entries.toTypedArray())
@@ -135,8 +135,8 @@ object AnalyticsEventRegistry {
         AnalyticsEvent.ProjectCreated -> "project_created"
         AnalyticsEvent.ProjectOpened -> "project_opened"
         is AnalyticsEvent.SourceVideoOpened -> "source_video_opened"
-        AnalyticsEvent.MarkupPointAdded -> "markup_point_added"
-        AnalyticsEvent.MarkupPointRemoved -> "markup_point_removed"
+        AnalyticsEvent.PointAdded -> "point_added"
+        AnalyticsEvent.PointRemoved -> "point_removed"
         AnalyticsEvent.ScorePointRecorded -> "score_point_recorded"
         is AnalyticsEvent.AdjustmentChanged -> "adjustment_changed"
         is AnalyticsEvent.ExportStarted -> "export_started"

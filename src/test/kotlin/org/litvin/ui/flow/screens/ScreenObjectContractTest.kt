@@ -13,7 +13,7 @@ class ScreenObjectContractTest {
         val screenTypes = listOf(
             ApplicationScreen::class.java,
             ProjectsScreen::class.java,
-            RalliesScreen::class.java,
+            PointsScreen::class.java,
             ColorsScreen::class.java,
             CropScreen::class.java,
             ScoringScreen::class.java,

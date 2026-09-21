@@ -1,10 +1,10 @@
 package org.litvin
 
-import org.litvin.markup.EdlIO
-import org.litvin.markup.EdlV1
-import org.litvin.markup.CommentDefaultsV1
-import org.litvin.markup.CommentV1
-import org.litvin.markup.PointV1
+import org.litvin.points.EdlIO
+import org.litvin.points.EdlV1
+import org.litvin.points.CommentDefaultsV1
+import org.litvin.points.CommentV1
+import org.litvin.points.PointV1
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -21,7 +21,7 @@ class EdlIOTest {
         val edl = EdlV1(
             points = listOf(
                 PointV1(id = "A", startMs = 0, endMs = 500),
-                PointV1(id = "B", startMs = 1_000, endMs = 2_000, label = "Rally"),
+                PointV1(id = "B", startMs = 1_000, endMs = 2_000, label = "Point"),
                 PointV1(id = "C", startMs = 2_000, endMs = 2_500, notes = "Nice serve")
             ),
             version = 1

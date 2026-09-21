@@ -1,7 +1,7 @@
-package org.litvin.ui.tabs.markup.ui
+package org.litvin.ui.tabs.points.ui
 
-import org.litvin.markup.CommentV1
-import org.litvin.markup.PointV1
+import org.litvin.points.CommentV1
+import org.litvin.points.PointV1
 import org.litvin.shared.util.Timecode
 import org.litvin.ui.commons.Html
 import java.awt.Color

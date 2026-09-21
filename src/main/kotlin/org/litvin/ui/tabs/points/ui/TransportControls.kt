@@ -1,8 +1,8 @@
-package org.litvin.ui.tabs.markup.ui
+package org.litvin.ui.tabs.points.ui
 
 import org.litvin.ui.UiStyles
 import org.litvin.ui.commons.TransportBar
-import org.litvin.ui.tabs.markup.MarkupActions
+import org.litvin.ui.tabs.points.PointsActions
 import java.awt.BorderLayout
 import java.awt.Component
 import java.awt.Dimension
@@ -14,29 +14,29 @@ import javax.swing.JLabel
 import javax.swing.JPanel
 
 /**
- * TransportControls — play/pause + time, with Start/End and Jump actions for the Markup tab.
+ * TransportControls — play/pause + time, with Start/End and Jump actions for the Points tab.
  *
  * Responsibilities:
  * - Render a shared TransportBar (seek/back/forward + play/pause + time label)
  * - Expose setPlaying() and setTimeText() to update UI from container state
  * - Surface buttons for Start at Playhead, End at Playhead, and Jump to Selected point
- * - Emit all actions strictly via MarkupActions and the provided onNudge(deltaMs) callback
+ * - Emit all actions strictly via PointsActions and the provided onNudge(deltaMs) callback
  */
 class TransportControls(
-    private val actions: MarkupActions,
+    private val actions: PointsActions,
     /** Called when user clicks one of the seek buttons; deltaMs can be negative. */
     private val onNudge: (deltaMs: Long) -> Unit,
 ) : JPanel(BorderLayout()) {
 
-    private val btnStart = JButton("Point Start [C]").apply { name = "rallies-point-start" }
-    private val btnEnd = JButton("Point End [V]").apply { name = "rallies-point-end" }
-    private val btnComment = JButton("Add comment").apply { name = "rallies-add-comment" }
-    private val timeLabel = JLabel("00:00:00.000").apply { name = "rallies-current-time" }
+    private val btnStart = JButton("Point Start [C]").apply { name = "points-point-start" }
+    private val btnEnd = JButton("Point End [V]").apply { name = "points-point-end" }
+    private val btnComment = JButton("Add comment").apply { name = "points-add-comment" }
+    private val timeLabel = JLabel("00:00:00.000").apply { name = "points-current-time" }
 
     private val transportBar = TransportBar(
         onTogglePlayPause = { actions.togglePlayPause() },
         onSeek = { delta -> onNudge(delta) },
-        playPauseComponentName = "rallies-play-pause",
+        playPauseComponentName = "points-play-pause",
     )
 
     init {
@@ -49,7 +49,7 @@ class TransportControls(
         btnComment.addActionListener { actions.addCommentAtPlayhead() }
 
         val pointActions = JPanel()
-        pointActions.name = "markup-point-actions"
+        pointActions.name = "points-point-actions"
         pointActions.isOpaque = false
         pointActions.layout = BoxLayout(pointActions, BoxLayout.X_AXIS)
         pointActions.add(btnStart)
@@ -58,10 +58,10 @@ class TransportControls(
         pointActions.add(Box.createHorizontalStrut(8))
         pointActions.add(btnComment)
 
-        transportBar.name = "markup-video-controls"
+        transportBar.name = "points-video-controls"
 
         val timePanel = JPanel()
-        timePanel.name = "markup-current-time"
+        timePanel.name = "points-time-panel"
         timePanel.isOpaque = false
         timePanel.layout = BoxLayout(timePanel, BoxLayout.X_AXIS)
         val currentTimeLabel = JLabel("Current time:")

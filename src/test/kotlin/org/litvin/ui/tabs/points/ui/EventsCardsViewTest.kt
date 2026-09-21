@@ -1,12 +1,12 @@
-package org.litvin.ui.tabs.markup.ui
+package org.litvin.ui.tabs.points.ui
 
-import org.litvin.ui.tabs.markup.AutosaveState
-import org.litvin.ui.tabs.markup.CommentDto
-import org.litvin.ui.tabs.markup.MarkupActions
-import org.litvin.ui.tabs.markup.MarkupViewState
-import org.litvin.ui.tabs.markup.PointDto
-import org.litvin.ui.tabs.markup.PointPatch
-import org.litvin.ui.tabs.markup.RallyEventDto
+import org.litvin.ui.tabs.points.AutosaveState
+import org.litvin.ui.tabs.points.CommentDto
+import org.litvin.ui.tabs.points.PointsActions
+import org.litvin.ui.tabs.points.PointsViewState
+import org.litvin.ui.tabs.points.PointDto
+import org.litvin.ui.tabs.points.PointPatch
+import org.litvin.ui.tabs.points.PointEventDto
 import java.awt.Component
 import java.awt.Container
 import javax.swing.SwingUtilities
@@ -21,13 +21,13 @@ class EventsCardsViewTest {
         SwingUtilities.invokeAndWait {
             val view = PointsCardsView(NoOpActions)
             view.setState(
-                MarkupViewState(
+                PointsViewState(
                     isPlaying = false,
                     currentTimeMs = 0,
                     selectedVisualIndex = null,
                     pendingDraftStartMs = null,
                     events = listOf(
-                        RallyEventDto(PointDto("rally-a", 1_000, 2_000, null)),
+                        PointEventDto(PointDto("pt-a", 1_000, 2_000, null)),
                         CommentDto(4, 500, 2_000, "Call was in", "#FFFFFF"),
                     ),
                     autosave = AutosaveState(false, null),
@@ -44,21 +44,21 @@ class EventsCardsViewTest {
         SwingUtilities.invokeAndWait {
             val view = PointsCardsView(NoOpActions)
             view.setState(
-                MarkupViewState(
+                PointsViewState(
                     isPlaying = false,
                     currentTimeMs = 0,
                     selectedVisualIndex = null,
                     pendingDraftStartMs = null,
                     events = listOf(
-                        RallyEventDto(PointDto("rally-fav", 1_000, 2_000, null, favorite = true)),
-                        RallyEventDto(PointDto("rally-plain", 3_000, 4_000, null)),
+                        PointEventDto(PointDto("pt-fav", 1_000, 2_000, null, favorite = true)),
+                        PointEventDto(PointDto("pt-plain", 3_000, 4_000, null)),
                     ),
                     autosave = AutosaveState(false, null),
                 ),
             )
 
-            assertTrue(findByName(view, "favorite-point-rally-fav")!!.isVisible, "favorite star should show at rest")
-            assertFalse(findByName(view, "favorite-point-rally-plain")!!.isVisible, "plain rally shows its star on hover only")
+            assertTrue(findByName(view, "favorite-point-pt-fav")!!.isVisible, "favorite star should show at rest")
+            assertFalse(findByName(view, "favorite-point-pt-plain")!!.isVisible, "plain point shows its star on hover only")
         }
     }
 
@@ -68,7 +68,7 @@ class EventsCardsViewTest {
         return root.components.firstNotNullOfOrNull { findByName(it, name) }
     }
 
-    private object NoOpActions : MarkupActions {
+    private object NoOpActions : PointsActions {
         override fun togglePlayPause() = Unit
         override fun seekTo(ms: Long) = Unit
         override fun jumpToSelected() = Unit

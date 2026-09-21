@@ -13,14 +13,16 @@ https://github.com/shinchiro/mpv-winbuild-cmake
 The bundled libmpv-2.dll is unmodified and remains replaceable in the
 installation directory.
 
-FFmpeg n7.1.4-6-g181cfa1008, BtbN win64-lgpl-shared-7.1 build
+FFmpeg n9.0.2-3-ga5923073bf, BtbN win64-gpl-shared-9.0 build
 Copyright FFmpeg developers and dependency authors.
-License: GNU Lesser General Public License v2.1 or later for this selected
-build variant. Source/build information:
+License: GNU General Public License v3 or later for this selected build
+variant, which is configured with --enable-gpl --enable-version3 and includes
+GPL components such as x264 and x265. Source/build information:
 https://github.com/BtbN/FFmpeg-Builds
 https://ffmpeg.org/
 The shared libraries and executables are unmodified and remain replaceable in
-the installation directory.
+the installation directory. The FFmpeg license text is installed at
+natives/windows-x64/ffmpeg/LICENSE.txt.
 
 Eclipse Temurin OpenJDK 17 runtime
 Copyright Eclipse Foundation and OpenJDK contributors.

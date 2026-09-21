@@ -1,6 +1,6 @@
 package org.litvin.scoring
 
-import org.litvin.markup.PointV1
+import org.litvin.points.PointV1
 
 /**
  * Shared scoring rules engine snapshot generator (v0.1.0, task 3.21).

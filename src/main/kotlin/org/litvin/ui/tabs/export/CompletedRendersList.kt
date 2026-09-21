@@ -145,15 +145,21 @@ class CompletedRendersList(
     }
 
     private fun formatItem(item: CompletedRender): String {
-        val size = RenderFormatting.formatSize(item.bytesWritten)
         val overlays = listOfNotNull(
             "Scoreboard".takeIf { item.includeScoreboard },
             "Comments".takeIf { item.includeComments },
-        ).joinToString(" + ").takeIf { it.isNotEmpty() }?.let { "  ·  $it" }.orEmpty()
+        ).joinToString(" + ").takeIf { it.isNotEmpty() }
         val res = if (item.outHeight >= 2160 || item.outWidth >= 3840) "4K" else "1080p"
         val proj = item.projectName?.takeIf { it.isNotBlank() }
-        val left = if (proj != null) "[$proj] ${item.fileName}" else item.fileName
-        return "$left$overlays  —  ${item.encoderLabel} / $res  —  $size"
+        val video = listOfNotNull(res, RenderFormatting.formatFrameRate(item.outputFrameRate))
+            .joinToString(" / ")
+        return listOfNotNull(
+            if (proj != null) "[$proj] ${item.fileName}" else item.fileName,
+            overlays,
+            RenderFormatting.formatCutMode(item.idleTrim, item.favoriteOnly),
+            "${item.encoderLabel} / $video",
+            RenderFormatting.formatSize(item.bytesWritten),
+        ).joinToString("  ·  ")
     }
 
 }

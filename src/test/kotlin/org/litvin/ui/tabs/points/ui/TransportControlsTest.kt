@@ -1,8 +1,8 @@
-package org.litvin.ui.tabs.markup.ui
+package org.litvin.ui.tabs.points.ui
 
 import org.junit.jupiter.api.Test
-import org.litvin.ui.tabs.markup.MarkupActions
-import org.litvin.ui.tabs.markup.PointPatch
+import org.litvin.ui.tabs.points.PointsActions
+import org.litvin.ui.tabs.points.PointPatch
 import java.awt.Component
 import java.awt.Container
 import javax.swing.JLabel
@@ -21,8 +21,8 @@ class TransportControlsTest {
             controls.setSize(1600, 64)
             controls.layoutRecursively()
 
-            val videoControls = controls.findByName("markup-video-controls")
-            val timePanel = controls.findByName("markup-current-time")
+            val videoControls = controls.findByName("points-video-controls")
+            val timePanel = controls.findByName("points-time-panel")
             assertNotNull(videoControls)
             assertNotNull(timePanel)
 
@@ -72,7 +72,7 @@ class TransportControlsTest {
         return listOf(this) + children
     }
 
-    private object NoOpActions : MarkupActions {
+    private object NoOpActions : PointsActions {
         override fun togglePlayPause() = Unit
         override fun seekTo(ms: Long) = Unit
         override fun jumpToSelected() = Unit

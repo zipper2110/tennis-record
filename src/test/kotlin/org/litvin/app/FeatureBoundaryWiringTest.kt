@@ -21,7 +21,7 @@ import org.litvin.ui.tabs.crop.SwingCropRotatePanel
 import org.litvin.ui.tabs.crop.presenter.DefaultCropRotatePresenter
 import org.litvin.ui.tabs.export.ExportSettingsPreferences
 import org.litvin.ui.tabs.export.SwingExportPanel
-import org.litvin.ui.tabs.markup.SwingMarkupPanel
+import org.litvin.ui.tabs.points.SwingPointsPanel
 import org.litvin.ui.tabs.projects.SwingProjectsPanel
 import org.litvin.ui.tabs.projects.presenter.DefaultProjectsPresenter
 import org.litvin.ui.tabs.scoring.SwingScoringPanel
@@ -52,7 +52,7 @@ class FeatureBoundaryWiringTest {
         val preferences = MemoryPreferences()
         val players = List(4) { FakeSwingMediaPlayer() }
 
-        var markup: SwingMarkupPanel? = null
+        var points: SwingPointsPanel? = null
         var colors: SwingColorAdjustmentsPanel? = null
         var scoring: SwingScoringPanel? = null
         var export: SwingExportPanel? = null
@@ -64,7 +64,7 @@ class FeatureBoundaryWiringTest {
                 ioExecutor = autosaveExecutor,
             )
             SwingProjectsPanel(presenter, picker, dialogs)
-            markup = SwingMarkupPanel(players[0], adjustments, autosaveExecutor, dialogs)
+            points = SwingPointsPanel(players[0], adjustments, autosaveExecutor, dialogs)
             colors = SwingColorAdjustmentsPanel(players[1], adjustments, preferences)
             scoring = SwingScoringPanel(players[2], adjustments, dialogs)
             crop = SwingCropRotatePanel(players[3], DefaultCropRotatePresenter(adjustments))
@@ -83,8 +83,8 @@ class FeatureBoundaryWiringTest {
         assertEquals(1, render.observerRegistrations)
 
         SwingUtilities.invokeAndWait {
-            markup!!.close()
-            markup!!.close()
+            points!!.close()
+            points!!.close()
             colors!!.close()
             colors!!.close()
             scoring!!.close()

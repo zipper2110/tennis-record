@@ -24,7 +24,7 @@ import kotlin.test.assertTrue
 class SwingUiFlowExtensionTest {
     @Test
     fun fakeMediaCallbacksPreserveEveryQueuedStatusTransitionOnTheEdt() {
-        val player = FakeMediaPlayer(MediaScreen.MARKUP)
+        val player = FakeMediaPlayer(MediaScreen.POINTS)
         val transitions = mutableListOf<Pair<PlayerStatus, Boolean>>()
         player.onStatusChanged = { transitions += it to SwingUtilities.isEventDispatchThread() }
 

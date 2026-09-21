@@ -82,7 +82,7 @@ class SwingApplicationFactoryTest {
                 checkNotNull(findComponent<AbstractButton>(opened.frame) { it.name == "projects-open-${projectFixture.project.id}" })
                     .doClick()
             }
-            assertTrue(checkNotNull(findComponent(opened.frame) { it.name == "rallies-point-start" }).isShowing)
+            assertTrue(checkNotNull(findComponent(opened.frame) { it.name == "points-point-start" }).isShowing)
 
             GuiActionRunner.execute {
                 checkNotNull(findComponent<AbstractButton>(opened.frame) { it.name == "nav-projects" }).doClick()

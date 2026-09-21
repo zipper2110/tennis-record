@@ -1,4 +1,4 @@
-package org.litvin.ui.tabs.markup
+package org.litvin.ui.tabs.points
 
 import java.awt.EventQueue
 import java.util.concurrent.ExecutorService
@@ -8,7 +8,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import javax.swing.Timer
 
 /**
- * Debounced autosave controller for the Markup tab.
+ * Debounced autosave controller for the Points tab.
  *
  * - Schedules autosave with a debounce timer (no EDT blocking)
  * - Executes provided [saver] off-EDT
@@ -35,6 +35,22 @@ class AutosaveController(
     fun autosaveNow() {
         if (timer.isRunning) timer.stop()
         triggerSave()
+    }
+
+    /**
+     * Saves pending changes and waits for them to reach disk. Callers that hand the project over to
+     * another view (a tab switch) need the file to be current before that view reads it.
+     */
+    fun flush() {
+        if (closed.get()) return
+        if (timer.isRunning) timer.stop()
+        triggerSave()
+        val pending = synchronized(saveLock) { inFlightSave }
+        try {
+            pending?.get()
+        } catch (_: Exception) {
+            // The saver reports its own failures; waiting for it must not fail the caller.
+        }
     }
 
     fun isPending(): Boolean = try {

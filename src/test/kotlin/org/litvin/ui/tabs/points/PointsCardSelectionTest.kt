@@ -1,16 +1,16 @@
-package org.litvin.ui.tabs.markup
+package org.litvin.ui.tabs.points
 
 import org.litvin.adjustments.AdjustmentsStore
-import org.litvin.markup.CommentV1
-import org.litvin.markup.EdlIO
-import org.litvin.markup.EdlV1
-import org.litvin.markup.PointV1
+import org.litvin.points.CommentV1
+import org.litvin.points.EdlIO
+import org.litvin.points.EdlV1
+import org.litvin.points.PointV1
 import org.litvin.media.MediaScreen
 import org.litvin.projects.ManifestIO
 import org.litvin.projects.ProjectManifestV1
 import org.litvin.ui.flow.fakes.FakeMediaPlayer
 import org.litvin.ui.flow.fakes.ScriptedDialogService
-import org.litvin.ui.tabs.markup.ui.PointsCardsView
+import org.litvin.ui.tabs.points.ui.PointsCardsView
 import java.awt.Component
 import java.awt.Container
 import java.awt.EventQueue
@@ -25,18 +25,18 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
 /**
- * Guards the selection behaviour of the Rallies tab cards:
- * a comment card has no active state, and Delete removes the selected rally.
+ * Guards the selection behaviour of the Points tab cards:
+ * a comment card has no active state, and Delete removes the selected point.
  */
-class MarkupCardSelectionTest {
+class PointsCardSelectionTest {
 
     private lateinit var projectDir: File
-    private var panel: SwingMarkupPanel? = null
+    private var panel: SwingPointsPanel? = null
 
     @BeforeTest
     fun setUp() {
         System.setProperty("java.awt.headless", "true")
-        projectDir = Files.createTempDirectory("markup-comments").toFile()
+        projectDir = Files.createTempDirectory("points-comments").toFile()
         val video = File(projectDir, "source.mp4").apply { writeText("not a real video") }
         val manifest = ManifestIO.manifestFilePath(projectDir.absolutePath)
         ManifestIO.write(
@@ -52,7 +52,7 @@ class MarkupCardSelectionTest {
         EdlIO.writeForProjectDir(
             projectDir.absolutePath,
             EdlV1(
-                points = listOf(PointV1(id = "rally-1", startMs = 0, endMs = 1_000)),
+                points = listOf(PointV1(id = "pt-1", startMs = 0, endMs = 1_000)),
                 comments = listOf(CommentV1(id = 7, startMs = 4_000, durationMs = 2_000, text = "Good depth", colorHex = "#FFFFFF")),
                 nextCommentId = 8,
             ),
@@ -66,10 +66,10 @@ class MarkupCardSelectionTest {
     }
 
     @Test
-    fun commentCardsHaveNoActiveStateAndDeleteRemovesTheSelectedRally() {
-        val player = FakeMediaPlayer(MediaScreen.MARKUP)
+    fun commentCardsHaveNoActiveStateAndDeleteRemovesTheSelectedPoint() {
+        val player = FakeMediaPlayer(MediaScreen.POINTS)
         SwingUtilities.invokeAndWait {
-            panel = SwingMarkupPanel(
+            panel = SwingPointsPanel(
                 player,
                 AdjustmentsStore.legacySession(),
                 Executors.newSingleThreadExecutor { runnable -> Thread(runnable, "test-autosave") },
@@ -87,14 +87,14 @@ class MarkupCardSelectionTest {
         drainEventQueue()
         assertNull(cards.selectedTitle(), "a comment must never become the active card")
 
-        // A playhead inside a rally still selects it, and Delete removes it
+        // A playhead inside a point still selects it, and Delete removes it
         // instead of recursing into itself.
         player.seek(500)
         drainEventQueue()
         drainEventQueue()
         assertEquals("#1", cards.selectedTitle())
         SwingUtilities.invokeAndWait {
-            target.actionMap.get("markup.delete").actionPerformed(null)
+            target.actionMap.get("points.delete").actionPerformed(null)
         }
         drainEventQueue()
         assertEquals(listOf("Comment #7"), cards.visibleTitles())

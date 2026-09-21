@@ -25,7 +25,6 @@ import javax.swing.AbstractAction
 import javax.swing.BorderFactory
 import javax.swing.JButton
 import javax.swing.JComponent
-import javax.swing.JLabel
 import javax.swing.JOptionPane
 import javax.swing.JPanel
 import javax.swing.JSplitPane
@@ -33,7 +32,7 @@ import javax.swing.KeyStroke
 import javax.swing.SwingUtilities
 
 /**
- * Crop & Rotate tab with a live video preview, like the Colors tab.
+ * Transform tab with a live video preview, like the Colors tab.
  *
  * The player shows the rotated full frame. [CropEditorOverlay] draws the crop rectangle and the handles
  * over the video. The right panel keeps the numeric transform controls.
@@ -55,6 +54,7 @@ class SwingCropRotatePanel(
     private val transformControls = CropTransformControls(
         onChanged = { adjustments -> presenter.onIntent(CropRotateIntent.ChangeTransform(adjustments)) },
         onResetTransform = { presenter.onIntent(CropRotateIntent.ResetTransform) },
+        onHelp = { onHelp() },
     )
 
     private val playPauseBtn: JButton = UiStyles.squarePrimaryButton(UiStyles.playIcon(28)) { togglePlayPause() }.apply {
@@ -104,7 +104,6 @@ class SwingCropRotatePanel(
     }
 
     init {
-        leftPanel.add(buildHeader(), BorderLayout.NORTH)
         leftPanel.add(viewportPanel, BorderLayout.CENTER)
         leftPanel.add(buildTransport(), BorderLayout.SOUTH)
         add(split, BorderLayout.CENTER)
@@ -182,7 +181,7 @@ class SwingCropRotatePanel(
             is CropRotateViewEffect.ShowError -> JOptionPane.showMessageDialog(
                 this,
                 effect.message,
-                "Crop & Rotate",
+                "Transform",
                 JOptionPane.WARNING_MESSAGE,
             )
         }
@@ -267,29 +266,6 @@ class SwingCropRotatePanel(
         bind(video, AppShortcuts.SHIFT_DOWN.keyStroke, "cropNudgeDownFast", focused) { editor.nudge(0, 10) }
     }
 
-    private fun buildHeader(): JPanel {
-        return JPanel(BorderLayout()).apply {
-            name = "adj-cr-left-header"
-            isOpaque = true
-            background = UiStyles.DARK_BG
-            border = BorderFactory.createEmptyBorder(10, 14, 10, 14)
-            val title = JLabel("Crop & Rotate").apply {
-                foreground = Color.WHITE
-                font = font.deriveFont(font.style, font.size2D + 2.0f)
-            }
-            val actions = JPanel(FlowLayout(FlowLayout.RIGHT, 8, 0)).apply {
-                isOpaque = false
-                add(JButton("Help [F1]").apply {
-                    name = "crop-help"
-                    toolTipText = "F1 - Help"
-                    UiStyles.styleSecondary(this)
-                    addActionListener { onHelp() }
-                })
-            }
-            add(title, BorderLayout.WEST)
-            add(actions, BorderLayout.EAST)
-        }
-    }
 
     private fun buildTransport(): JPanel {
         val playRow = JPanel(FlowLayout(FlowLayout.CENTER, 0, 6)).apply {

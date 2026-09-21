@@ -1,16 +1,16 @@
-package org.litvin.ui.tabs.markup
+package org.litvin.ui.tabs.points
 
 import org.litvin.GeometryViewportPanel
 import org.litvin.projects.ManifestIO
 import org.litvin.adjustments.AdjustmentsStore
 import org.litvin.adjustments.AdjustmentsSession
-import org.litvin.markup.EdlIO
-import org.litvin.markup.EdlV1
-import org.litvin.markup.PointV1
-import org.litvin.markup.components.CommentDispatcher
-import org.litvin.markup.components.CommentPatch as DispatcherCommentPatch
-import org.litvin.markup.components.CommentState
-import org.litvin.markup.components.MarkupDispatcher
+import org.litvin.points.EdlIO
+import org.litvin.points.EdlV1
+import org.litvin.points.PointV1
+import org.litvin.points.components.CommentDispatcher
+import org.litvin.points.components.CommentPatch as DispatcherCommentPatch
+import org.litvin.points.components.CommentState
+import org.litvin.points.components.PointsDispatcher
 import org.litvin.media.PlayerStatus
 import org.litvin.media.mpv.MpvSwingMediaPlayerAdapter
 import org.litvin.media.SwingMediaPlayer
@@ -18,12 +18,12 @@ import org.litvin.shared.util.Timecode
 import org.litvin.ui.UiStyles
 import org.litvin.ui.commons.SwingUserDialogService
 import org.litvin.ui.commons.UserDialogService
-import org.litvin.ui.tabs.markup.ui.SwingTimelineComponent
-import org.litvin.ui.tabs.markup.ui.EditCommentDialog
-import org.litvin.ui.tabs.markup.components.Keybindings
-import org.litvin.ui.tabs.markup.components.MarkupKeyActions
-import org.litvin.ui.tabs.markup.ui.PointsCardsView
-import org.litvin.ui.tabs.markup.ui.TransportControls
+import org.litvin.ui.tabs.points.ui.SwingTimelineComponent
+import org.litvin.ui.tabs.points.ui.EditCommentDialog
+import org.litvin.ui.tabs.points.components.Keybindings
+import org.litvin.ui.tabs.points.components.PointsKeyActions
+import org.litvin.ui.tabs.points.ui.PointsCardsView
+import org.litvin.ui.tabs.points.ui.TransportControls
 import java.awt.*
 import java.io.File
 import java.util.concurrent.ExecutorService
@@ -33,17 +33,17 @@ import javax.swing.*
 import kotlin.math.max
 
 /**
- * Phase 3 — Swing Markup editor panel.
+ * Phase 3 — Swing Points editor panel.
  *
  * Features implemented to meet Phase 3 acceptance:
  * - Custom timeline component drawing VIDEO and MARKS tracks, with playhead bound to media time
  * - Bind timeline to media time via the Swing player adapter callbacks; smooth playhead updates
- * - EDL interactions via MarkupDispatcher: Start(C)/End(V) auto-create, delete, inline edit via table
+ * - EDL interactions via PointsDispatcher: Start(C)/End(V) auto-create, delete, inline edit via table
  * - Keyboard mappings: Space, C, V, Delete, Left/Right and Shift+Arrows; context menu on table rows
  * - Basic autosave of EDL (edl.json) with 300 ms debounce
  *
  */
-class SwingMarkupPanel(
+class SwingPointsPanel(
     private val player: SwingMediaPlayer,
     private val adjustments: AdjustmentsSession,
     autosaveExecutor: ExecutorService,
@@ -54,7 +54,7 @@ class SwingMarkupPanel(
     constructor(onHelp: () -> Unit = {}) : this(
         MpvSwingMediaPlayerAdapter(),
         AdjustmentsStore.legacySession(),
-        Executors.newSingleThreadExecutor { runnable -> Thread(runnable, "markup-autosave") },
+        Executors.newSingleThreadExecutor { runnable -> Thread(runnable, "points-autosave") },
         SwingUserDialogService(),
         onHelp,
     )
@@ -72,7 +72,7 @@ class SwingMarkupPanel(
     private var loadErrorShown: Boolean = false
 
     // EDL Dispatcher
-    private val dispatcher = MarkupDispatcher()
+    private val dispatcher = PointsDispatcher()
     private val commentDispatcher = CommentDispatcher()
 
     // Current project manifest path (projectDir derived from it)
@@ -83,11 +83,11 @@ class SwingMarkupPanel(
     private var transport: TransportControls
 
     private val markedBadge = UiStyles.smallBadge("0 Marked", UiStyles.CARD_BORDER, UiStyles.LIME)
-        .apply { name = "rallies-point-count" }
+        .apply { name = "points-point-count" }
     private val favoriteBadge = UiStyles.smallBadge("0 Fav", UiStyles.CARD_BORDER, UiStyles.YELLOW)
-        .apply { name = "rallies-favorite-count" }
+        .apply { name = "points-favorite-count" }
     private val commentBadge = UiStyles.smallBadge("0 Comments", UiStyles.CARD_BORDER, UiStyles.FG_SECONDARY)
-        .apply { name = "rallies-comment-count" }
+        .apply { name = "points-comment-count" }
 
     // Cards view (replaces legacy inline cards list)
     private var cardsView: PointsCardsView
@@ -111,7 +111,7 @@ class SwingMarkupPanel(
     fun onActivated() {
         refreshPointsFromProject()
         ensurePlayerLoaded()
-        player.activatePreview("markup activated")
+        player.activatePreview("points activated")
         player.pause()
 
         // Do not auto-play; optionally restore focus to player area
@@ -123,7 +123,7 @@ class SwingMarkupPanel(
     fun onDeactivated() {
         saveNow()
         player.pause()
-        player.deactivatePreview("markup deactivated")
+        player.deactivatePreview("points deactivated")
     }
 
     private fun ensurePlayerLoaded() {
@@ -152,7 +152,7 @@ class SwingMarkupPanel(
     }
 
     // Build a view snapshot for leaf components
-    private fun buildViewState(): MarkupViewState {
+    private fun buildViewState(): PointsViewState {
         val playing = player.status() == PlayerStatus.PLAYING
         val time = player.currentTimeMs()
         val pending = dispatcher.getPendingStart()?.toLong()
@@ -160,7 +160,7 @@ class SwingMarkupPanel(
         val autos = AutosaveState(pending = autosave.isPending(), lastSavedAtMs = autosave.lastSavedAtMs)
 
         val sel = selectedVisualIndex.takeIf { it >= 0 }
-        return MarkupViewState(
+        return PointsViewState(
             isPlaying = playing,
             currentTimeMs = time,
             selectedVisualIndex = sel,
@@ -170,9 +170,9 @@ class SwingMarkupPanel(
         )
     }
 
-    private fun buildEvents(): List<MarkupEventDto> {
-        val rallies = dispatcher.getCompletedPoints().map { point ->
-            RallyEventDto(PointDto(
+    private fun buildEvents(): List<TimelineEventDto> {
+        val pointEvents = dispatcher.getCompletedPoints().map { point ->
+            PointEventDto(PointDto(
                 id = point.id,
                 startMs = point.startMs.toLong(),
                 endMs = point.endMs.toLong(),
@@ -190,7 +190,7 @@ class SwingMarkupPanel(
                 colorHex = comment.colorHex,
             )
         }
-        return (rallies + comments).sortedWith(compareBy<MarkupEventDto> { it.startMs }.thenBy { it.stableKey })
+        return (pointEvents + comments).sortedWith(compareBy<TimelineEventDto> { it.startMs }.thenBy { it.stableKey })
     }
 
     private fun pushCardsState() {
@@ -210,7 +210,7 @@ class SwingMarkupPanel(
 
                 val point = dispatcher.getCompletedPoints().firstOrNull { it.startMs <= t && t < it.endMs }
                 if (point != null) {
-                    selectEventAndScroll("rally:${point.id}")
+                    selectEventAndScroll("point:${point.id}")
                 }
 
                 player.component.requestFocusInWindow()
@@ -219,7 +219,7 @@ class SwingMarkupPanel(
         },
         commentsProvider = { commentDispatcher.state().comments },
         onCommentSelected = { id -> EventQueue.invokeLater { scrollToEvent("comment:$id") } },
-    ).apply { name = "rallies-seek" }
+    ).apply { name = "points-seek" }
 
     // Autosave controller (debounced, off-EDT persistence)
     private val autosave = AutosaveController(
@@ -263,9 +263,9 @@ class SwingMarkupPanel(
 
         // Bottom area: transport/mark controls above the timeline
         // New TransportControls component: encapsulates Start/End/Jump + TransportBar
-        val transportActions = object : MarkupActions {
+        val transportActions = object : PointsActions {
             override fun togglePlayPause() {
-                this@SwingMarkupPanel.togglePlayPause()
+                this@SwingPointsPanel.togglePlayPause()
             }
 
             override fun seekTo(ms: Long) {
@@ -273,15 +273,15 @@ class SwingMarkupPanel(
             }
 
             override fun jumpToSelected() {
-                this@SwingMarkupPanel.jumpToSelected()
+                this@SwingPointsPanel.jumpToSelected()
             }
 
             override fun setStartAtPlayhead() {
-                this@SwingMarkupPanel.onStartAtPlayhead()
+                this@SwingPointsPanel.onStartAtPlayhead()
             }
 
             override fun setEndAtPlayhead() {
-                this@SwingMarkupPanel.onEndAtPlayhead()
+                this@SwingPointsPanel.onEndAtPlayhead()
             }
 
             override fun createPointAt(ms: Long) {
@@ -289,29 +289,29 @@ class SwingMarkupPanel(
             }
 
             override fun editPoint(id: String, patch: PointPatch) {
-                this@SwingMarkupPanel.editPoint(id, patch)
+                this@SwingPointsPanel.editPoint(id, patch)
             }
 
             override fun deletePoint(id: String) {
-                this@SwingMarkupPanel.deletePoint(id)
+                this@SwingPointsPanel.deletePoint(id)
             }
 
             override fun toggleFavorite(id: String) {
-                this@SwingMarkupPanel.toggleFavorite(id)
+                this@SwingPointsPanel.toggleFavorite(id)
             }
 
-            override fun addCommentAtPlayhead() = this@SwingMarkupPanel.addCommentAtPlayhead()
+            override fun addCommentAtPlayhead() = this@SwingPointsPanel.addCommentAtPlayhead()
             override fun createComment(startMs: Long, durationMs: Long, text: String, colorHex: String) =
-                this@SwingMarkupPanel.createComment(startMs, durationMs, text, colorHex)
-            override fun editComment(id: Int, patch: CommentPatch) = this@SwingMarkupPanel.editComment(id, patch)
-            override fun deleteComment(id: Int) = this@SwingMarkupPanel.deleteComment(id)
+                this@SwingPointsPanel.createComment(startMs, durationMs, text, colorHex)
+            override fun editComment(id: Int, patch: CommentPatch) = this@SwingPointsPanel.editComment(id, patch)
+            override fun deleteComment(id: Int) = this@SwingPointsPanel.deleteComment(id)
 
             override fun selectByVisualIndex(index: Int) {
-                this@SwingMarkupPanel.setSelectedVisualAndScroll(index)
+                this@SwingPointsPanel.setSelectedVisualAndScroll(index)
             }
 
             override fun saveNow() {
-                this@SwingMarkupPanel.saveNow()
+                this@SwingPointsPanel.saveNow()
             }
         }
         transport = TransportControls(
@@ -336,7 +336,7 @@ class SwingMarkupPanel(
         leftColumn.isOpaque = false
         // Wrap the video component with the geometry viewport for live zoom/pan (Task 5.4)
         geometryViewport = GeometryViewportPanel(player.component)
-        geometryViewport.name = "rallies-video"
+        geometryViewport.name = "points-video"
         leftColumn.add(geometryViewport, BorderLayout.CENTER)
         leftColumn.add(bottom, BorderLayout.SOUTH)
         leftColumn.minimumSize = Dimension(320, 0)
@@ -360,12 +360,12 @@ class SwingMarkupPanel(
         // Header: title + help on the first line, count badge on the second
         val headerTitleRow = JPanel(BorderLayout())
         headerTitleRow.isOpaque = false
-        headerTitleRow.add(JLabel("Rallies & events").apply {
+        headerTitleRow.add(JLabel("Points & events").apply {
             foreground = UiStyles.FG_PRIMARY
             font = font.deriveFont(font.style, font.size2D + 3.0f)
         }, BorderLayout.WEST)
         headerTitleRow.add(JButton("Help [F1]").apply {
-            name = "rallies-help"
+            name = "points-help"
             toolTipText = "F1 - Help"
             UiStyles.styleSecondary(this)
             addActionListener { onHelp() }
@@ -395,9 +395,9 @@ class SwingMarkupPanel(
         rightPanel.add(header, BorderLayout.NORTH)
 
         // Compose right panel content using extracted components
-        val cardsActions = object : MarkupActions {
+        val cardsActions = object : PointsActions {
             override fun togglePlayPause() {
-                this@SwingMarkupPanel.togglePlayPause()
+                this@SwingPointsPanel.togglePlayPause()
             }
 
             override fun seekTo(ms: Long) {
@@ -405,7 +405,7 @@ class SwingMarkupPanel(
             }
 
             override fun jumpToSelected() {
-                this@SwingMarkupPanel.jumpToSelected()
+                this@SwingPointsPanel.jumpToSelected()
             }
 
             override fun setStartAtPlayhead() {
@@ -421,29 +421,29 @@ class SwingMarkupPanel(
             }
 
             override fun editPoint(id: String, patch: PointPatch) {
-                this@SwingMarkupPanel.editPoint(id, patch)
+                this@SwingPointsPanel.editPoint(id, patch)
             }
 
             override fun deletePoint(id: String) {
-                this@SwingMarkupPanel.deletePoint(id)
+                this@SwingPointsPanel.deletePoint(id)
             }
 
             override fun toggleFavorite(id: String) {
-                this@SwingMarkupPanel.toggleFavorite(id)
+                this@SwingPointsPanel.toggleFavorite(id)
             }
 
-            override fun addCommentAtPlayhead() = this@SwingMarkupPanel.addCommentAtPlayhead()
+            override fun addCommentAtPlayhead() = this@SwingPointsPanel.addCommentAtPlayhead()
             override fun createComment(startMs: Long, durationMs: Long, text: String, colorHex: String) =
-                this@SwingMarkupPanel.createComment(startMs, durationMs, text, colorHex)
-            override fun editComment(id: Int, patch: CommentPatch) = this@SwingMarkupPanel.editComment(id, patch)
-            override fun deleteComment(id: Int) = this@SwingMarkupPanel.deleteComment(id)
+                this@SwingPointsPanel.createComment(startMs, durationMs, text, colorHex)
+            override fun editComment(id: Int, patch: CommentPatch) = this@SwingPointsPanel.editComment(id, patch)
+            override fun deleteComment(id: Int) = this@SwingPointsPanel.deleteComment(id)
 
             override fun selectByVisualIndex(index: Int) {
                 setSelectedVisualAndScroll(index)
             }
 
             override fun saveNow() {
-                this@SwingMarkupPanel.saveNow()
+                this@SwingPointsPanel.saveNow()
             }
         }
         cardsView = PointsCardsView(cardsActions)
@@ -487,11 +487,11 @@ class SwingMarkupPanel(
         player.onStatusChanged = { _ -> EventQueue.invokeLater { updatePlayPauseButton(); refreshUiAtCurrentTime() } }
 
         // Dispatcher callback to refresh UI for all leaf components
-        dispatcher.onPointsChanged = ::onMarkupChanged
-        commentDispatcher.onCommentsChanged = ::onMarkupChanged
+        dispatcher.onPointsChanged = ::onPointsChanged
+        commentDispatcher.onCommentsChanged = ::onPointsChanged
 
         // Consolidated keybindings helper
-        keybindings = Keybindings(this, { isTextEditingFocus() }, object : MarkupKeyActions {
+        keybindings = Keybindings(this, { isTextEditingFocus() }, object : PointsKeyActions {
             override fun toggle() {
                 togglePlayPause()
             }
@@ -505,7 +505,7 @@ class SwingMarkupPanel(
             }
 
             override fun deleteSelected() {
-                this@SwingMarkupPanel.deleteSelected()
+                this@SwingPointsPanel.deleteSelected()
             }
 
             override fun nudge(deltaMs: Long) {
@@ -575,7 +575,7 @@ class SwingMarkupPanel(
         try {
             loadEdl(EdlIO.readForProjectDir(dir))
         } catch (t: Throwable) {
-            dialogs.showError(this, t.message ?: t.toString(), "Failed to refresh rallies and events")
+            dialogs.showError(this, t.message ?: t.toString(), "Failed to refresh points and events")
             return
         }
 
@@ -615,7 +615,7 @@ class SwingMarkupPanel(
         cardsView.scrollToVisualIndex(visualIndex)
     }
 
-    private fun selectedEvent(): MarkupEventDto? = buildEvents().getOrNull(selectedVisualIndex)
+    private fun selectedEvent(): TimelineEventDto? = buildEvents().getOrNull(selectedVisualIndex)
 
     private fun selectEventAndScroll(stableKey: String) {
         val index = buildEvents().indexOfFirst { it.stableKey == stableKey }
@@ -638,7 +638,7 @@ class SwingMarkupPanel(
         }
     }
 
-    private fun onMarkupChanged() {
+    private fun onPointsChanged() {
         val skipAutosave = reloadingProjectFromDisk
         EventQueue.invokeLater {
             updateCountBadge(dispatcher.getCompletedPoints())
@@ -658,23 +658,23 @@ class SwingMarkupPanel(
         )
     }
 
-    private val commentActions: MarkupActions = object : MarkupActions {
-        override fun togglePlayPause() = this@SwingMarkupPanel.togglePlayPause()
+    private val commentActions: PointsActions = object : PointsActions {
+        override fun togglePlayPause() = this@SwingPointsPanel.togglePlayPause()
         override fun seekTo(ms: Long) = player.seek(ms)
-        override fun jumpToSelected() = this@SwingMarkupPanel.jumpToSelected()
-        override fun setStartAtPlayhead() = this@SwingMarkupPanel.onStartAtPlayhead()
-        override fun setEndAtPlayhead() = this@SwingMarkupPanel.onEndAtPlayhead()
+        override fun jumpToSelected() = this@SwingPointsPanel.jumpToSelected()
+        override fun setStartAtPlayhead() = this@SwingPointsPanel.onStartAtPlayhead()
+        override fun setEndAtPlayhead() = this@SwingPointsPanel.onEndAtPlayhead()
         override fun createPointAt(ms: Long) = dispatcher.onPointStart(ms)
-        override fun editPoint(id: String, patch: PointPatch) = this@SwingMarkupPanel.editPoint(id, patch)
-        override fun deletePoint(id: String) = this@SwingMarkupPanel.deletePoint(id)
-        override fun toggleFavorite(id: String) = this@SwingMarkupPanel.toggleFavorite(id)
-        override fun selectByVisualIndex(index: Int) = this@SwingMarkupPanel.setSelectedVisualAndScroll(index)
-        override fun saveNow() = this@SwingMarkupPanel.saveNow()
-        override fun addCommentAtPlayhead() = this@SwingMarkupPanel.addCommentAtPlayhead()
+        override fun editPoint(id: String, patch: PointPatch) = this@SwingPointsPanel.editPoint(id, patch)
+        override fun deletePoint(id: String) = this@SwingPointsPanel.deletePoint(id)
+        override fun toggleFavorite(id: String) = this@SwingPointsPanel.toggleFavorite(id)
+        override fun selectByVisualIndex(index: Int) = this@SwingPointsPanel.setSelectedVisualAndScroll(index)
+        override fun saveNow() = this@SwingPointsPanel.saveNow()
+        override fun addCommentAtPlayhead() = this@SwingPointsPanel.addCommentAtPlayhead()
         override fun createComment(startMs: Long, durationMs: Long, text: String, colorHex: String) =
-            this@SwingMarkupPanel.createComment(startMs, durationMs, text, colorHex)
-        override fun editComment(id: Int, patch: CommentPatch) = this@SwingMarkupPanel.editComment(id, patch)
-        override fun deleteComment(id: Int) = this@SwingMarkupPanel.deleteComment(id)
+            this@SwingPointsPanel.createComment(startMs, durationMs, text, colorHex)
+        override fun editComment(id: Int, patch: CommentPatch) = this@SwingPointsPanel.editComment(id, patch)
+        override fun deleteComment(id: Int) = this@SwingPointsPanel.deleteComment(id)
     }
 
     private fun createComment(startMs: Long, durationMs: Long, text: String, colorHex: String) {
@@ -716,16 +716,16 @@ class SwingMarkupPanel(
             patch.label ?: existing.label,
         )
         maybeShowDispatcherHint()
-        if (updated) EventQueue.invokeLater { selectEventAndScroll("rally:$id") }
+        if (updated) EventQueue.invokeLater { selectEventAndScroll("point:$id") }
     }
 
     private fun deletePoint(id: String) {
         if (dispatcher.deletePoint(id)) setSelectedVisual(-1)
     }
 
-    /** Deletes the selected rally. Comments have no active state, so they are deleted from their card. */
+    /** Deletes the selected point. Comments have no active state, so they are deleted from their card. */
     private fun deleteSelected() {
-        (selectedEvent() as? RallyEventDto)?.let { deletePoint(it.point.id) }
+        (selectedEvent() as? PointEventDto)?.let { deletePoint(it.point.id) }
     }
 
     private fun Long.toCommentIntOrNull(): Int? = takeIf { it in 0..Int.MAX_VALUE.toLong() }?.toInt()
@@ -741,8 +741,8 @@ class SwingMarkupPanel(
     }
 
     private fun toggleFavoriteSelectedPoint() {
-        val rally = selectedEvent() as? RallyEventDto ?: return
-        toggleFavorite(rally.point.id)
+        val selected = selectedEvent() as? PointEventDto ?: return
+        toggleFavorite(selected.point.id)
     }
 
     private fun toggleFavorite(id: String) {
@@ -754,17 +754,17 @@ class SwingMarkupPanel(
     }
 
     private fun autoActivatePoint(t: Long) {
-        // Keep the selected rally while the playhead stays inside it, to avoid a scroll on every tick.
-        (selectedEvent() as? RallyEventDto)?.let { selected ->
+        // Keep the selected point while the playhead stays inside it, to avoid a scroll on every tick.
+        (selectedEvent() as? PointEventDto)?.let { selected ->
             val end = selected.point.endMs
             if (end != null && selected.point.startMs <= t && t < end) return
         }
 
         val hasPending = dispatcher.getPendingStart() != null
         // half-open interval [start, end)
-        val rally = dispatcher.getCompletedPoints().firstOrNull { it.startMs <= t && t < it.endMs }
-        if (rally != null) {
-            selectEventAndScroll("rally:${rally.id}")
+        val point = dispatcher.getCompletedPoints().firstOrNull { it.startMs <= t && t < it.endMs }
+        if (point != null) {
+            selectEventAndScroll("point:${point.id}")
             return
         }
         // Keep pending selected if present; otherwise clear selection
@@ -823,7 +823,7 @@ class SwingMarkupPanel(
             if (prevPending != null && nowPending == null) {
                 // A point was likely created; select the row matching prevPending start
                 val pts = dispatcher.getCompletedPoints()
-                pts.firstOrNull { it.startMs == prevPending }?.let { selectEventAndScroll("rally:${it.id}") }
+                pts.firstOrNull { it.startMs == prevPending }?.let { selectEventAndScroll("point:${it.id}") }
             }
         }
     }
@@ -843,7 +843,8 @@ class SwingMarkupPanel(
     }
 
     private fun autosaveNow() {
-        autosave.autosaveNow()
+        // Wait for the write: leaving the tab hands the project files to whichever view opens next.
+        autosave.flush()
     }
 
     private fun isTextEditingFocus(): Boolean {

@@ -4,7 +4,7 @@ package org.litvin.shared.util
  * Time formatting/parsing helpers for consistent display and editing.
  * - Formats milliseconds to hh:mm:ss.mmm
  * - Parses hh:mm:ss.mmm (or mm:ss.mmm or ss.mmm) into milliseconds
- * - Provides rounding to nearest 10 ms to align with Markup rules
+ * - Provides rounding to nearest 10 ms to align with Points tab rules
  */
 object Timecode {
     /** Format milliseconds to hh:mm:ss.S (tenths). */

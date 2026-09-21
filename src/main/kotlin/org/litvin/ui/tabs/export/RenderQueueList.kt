@@ -1,6 +1,7 @@
 package org.litvin.ui.tabs.export
 
 import org.litvin.RenderJob
+import org.litvin.export.RenderFormatting
 import org.litvin.export.RenderService
 import org.litvin.ui.UiStyles
 import org.litvin.ui.commons.applyDarkScrollbar
@@ -121,6 +122,7 @@ class RenderQueueList(
         val file = File(job.outputPath).name
         val project = job.projectName?.takeIf { it.isNotBlank() }?.let { "[$it] " }.orEmpty()
         val resolution = if (job.outHeight >= 2160 || job.outWidth >= 3840) "4K" else "1080p"
+        val frameRate = RenderFormatting.formatFrameRate(job.outputFrameRate)?.let { " @ $it" }.orEmpty()
         val trim = when {
             job.favoriteOnly -> "Idle trim: ${job.edlSnapshot.size} favorite points"
             job.idleTrim -> "Idle trim: ${job.edlSnapshot.size} points"
@@ -132,7 +134,7 @@ class RenderQueueList(
         ).joinToString(" + ").ifEmpty { "None" }
         val details = listOf(
             "Preset: ${job.presetId}",
-            "Resolution: $resolution (${job.outWidth} x ${job.outHeight})",
+            "Resolution: $resolution (${job.outWidth} x ${job.outHeight})$frameRate",
             "Encoder: ${job.encoderLabel}",
             trim,
             "Overlays: $overlays",

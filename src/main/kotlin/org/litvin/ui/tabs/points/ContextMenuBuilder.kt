@@ -1,4 +1,4 @@
-package org.litvin.ui.tabs.markup
+package org.litvin.ui.tabs.points
 
 import javax.swing.JMenuItem
 import javax.swing.JPopupMenu
@@ -6,9 +6,9 @@ import javax.swing.event.PopupMenuEvent
 import javax.swing.event.PopupMenuListener
 
 /**
- * Builds context/pop-up menus for Markup tab views (table, cards, etc.).
+ * Builds context/pop-up menus for Points tab views (table, cards, etc.).
  *
- * Leaf menu builders depend only on Markup contracts and UI widgets, not on domain services.
+ * Leaf menu builders depend only on Points contracts and UI widgets, not on domain services.
  */
 class ContextMenuBuilder {
 
@@ -20,7 +20,7 @@ class ContextMenuBuilder {
      * @param onDeleteSelected callback to perform delete for the currently selected item
      */
     fun buildTableMenu(
-        actions: MarkupActions,
+        actions: PointsActions,
         canActOnSelection: () -> Boolean,
         onDeleteSelected: () -> Unit,
     ): JPopupMenu {

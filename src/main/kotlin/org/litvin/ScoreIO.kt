@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.SerializationFeature
 import com.fasterxml.jackson.module.kotlin.KotlinModule
 import com.fasterxml.jackson.module.kotlin.readValue
 import java.io.File
+import org.litvin.JsonFileIO
 
 /**
  * Score v1 schema and JSON read/write helpers for scoring outcomes (task 4.9).
@@ -40,14 +41,14 @@ object ScoreIO {
 
     /** Write ScoreV1 to the given file path. */
     fun write(scoreFilePath: String, score: ScoreV1) {
-        mapper.writeValue(File(scoreFilePath), score)
+        JsonFileIO.writeAtomically(mapper, scoreFilePath, score)
     }
 
     /** Read ScoreV1 from the given file path; returns empty ScoreV1 if file does not exist. */
     fun read(scoreFilePath: String): ScoreV1 {
         val f = File(scoreFilePath)
         if (!f.exists()) return ScoreV1()
-        return mapper.readValue(f)
+        return JsonFileIO.read(mapper, f.path, ScoreV1::class.java)
     }
 
     /** Convenience: read ScoreV1 for a given project directory. */

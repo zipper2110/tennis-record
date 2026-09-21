@@ -9,7 +9,7 @@ import org.litvin.ui.tabs.crop.presenter.CropRotateIntent
 import org.litvin.ui.tabs.crop.presenter.CropRotatePresenter
 import org.litvin.ui.tabs.crop.presenter.CropRotateView
 import org.litvin.ui.tabs.export.SwingExportPanel
-import org.litvin.ui.tabs.markup.SwingMarkupPanel
+import org.litvin.ui.tabs.points.SwingPointsPanel
 import org.litvin.ui.tabs.projects.components.ProjectsHeader
 import org.litvin.ui.tabs.scoring.SwingScoringPanel
 import org.litvin.ui.tabs.scoring.ui.ControlsToolbar
@@ -53,8 +53,8 @@ class HelpButtonCallbacksTest {
     }
 
     @Test
-    fun ralliesPanelInvokesHelpCallback() = assertPanelHelp("rallies-help") { callback ->
-        SwingMarkupPanel(callback)
+    fun pointsPanelInvokesHelpCallback() = assertPanelHelp("points-help") { callback ->
+        SwingPointsPanel(callback)
     }
 
     @Test

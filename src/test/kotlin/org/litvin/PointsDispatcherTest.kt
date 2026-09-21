@@ -1,16 +1,16 @@
 package org.litvin
 
-import org.litvin.markup.components.MarkupDispatcher
+import org.litvin.points.components.PointsDispatcher
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-class MarkupDispatcherTest {
+class PointsDispatcherTest {
 
-    private fun newDispatcher(): MarkupDispatcher {
-        val d = MarkupDispatcher()
+    private fun newDispatcher(): PointsDispatcher {
+        val d = PointsDispatcher()
         // drain potential messages
         d.consumeUserMessage()
         return d

@@ -1,7 +1,7 @@
 package org.litvin.ui.tabs.scoring.ui
 
 import org.junit.jupiter.api.Test
-import org.litvin.markup.PointV1
+import org.litvin.points.PointV1
 import org.litvin.scoring.Outcome
 import org.litvin.ui.UiStyles
 import java.awt.Color

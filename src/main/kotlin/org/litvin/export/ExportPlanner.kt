@@ -5,10 +5,10 @@ import org.litvin.OverlaySpan
 import org.litvin.RenderJob
 import org.litvin.ScoreboardTimelineBuilder
 import org.litvin.CommentOverlaySpan
-import org.litvin.markup.CommentV1
-import org.litvin.markup.EdlIO
-import org.litvin.markup.EdlV1
-import org.litvin.markup.PointV1
+import org.litvin.points.CommentV1
+import org.litvin.points.EdlIO
+import org.litvin.points.EdlV1
+import org.litvin.points.PointV1
 import org.litvin.projects.ProjectManifestV1
 import org.litvin.scoring.ScoreV1
 import java.io.File
@@ -153,7 +153,7 @@ object ExportPlanner {
             return ExportReadiness(false, "Open a project first (Projects -> Open).")
         }
         if (!sourceVideoExists) {
-            return ExportReadiness(false, "Source video not found. Set it in Projects/Markup.")
+            return ExportReadiness(false, "Source video not found. Set it in Projects/Points.")
         }
         if (!idleTrim) return ExportReadiness(true)
 

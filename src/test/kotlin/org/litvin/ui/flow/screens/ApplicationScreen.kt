@@ -11,7 +11,7 @@ internal class ApplicationScreen(
     internal val context: UiFlowContext,
 ) {
     val projects = ProjectsScreen(this)
-    val rallies = RalliesScreen(this)
+    val points = PointsScreen(this)
     val colors = ColorsScreen(this)
     val crop = CropScreen(this)
     val scoring = ScoringScreen(this)
@@ -80,7 +80,7 @@ internal class ApplicationScreen(
     private fun assertNavigation(projectNavigationVisible: Boolean) {
         eventually("project navigation visibility to be $projectNavigationVisible") {
             context.driver.requireShowing("nav-projects")
-            listOf("nav-rallies", "nav-colors", "nav-crop", "nav-scoring", "nav-export")
+            listOf("nav-points", "nav-colors", "nav-crop", "nav-scoring", "nav-export")
                 .forEach { name -> context.driver.requireShowing(name, projectNavigationVisible) }
         }
     }

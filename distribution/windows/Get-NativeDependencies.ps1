@@ -61,7 +61,16 @@ function Expand-Dependency {
         throw "Expected extracted directory is missing: $source"
     }
     New-Item -ItemType Directory -Path $Destination -Force | Out-Null
-    if ($Dependency.files) {
+    if ($Dependency.directories -or $Dependency.files) {
+        foreach ($directory in $Dependency.directories) {
+            $sourceDirectory = Join-Path $source $directory
+            if (-not (Test-Path -LiteralPath $sourceDirectory -PathType Container)) {
+                throw "Expected directory is missing from $($Dependency.archiveName): $directory"
+            }
+            $targetDirectory = Join-Path $Destination $directory
+            New-Item -ItemType Directory -Path $targetDirectory -Force | Out-Null
+            Copy-Item -Path (Join-Path $sourceDirectory "*") -Destination $targetDirectory -Recurse -Force
+        }
         foreach ($file in $Dependency.files) {
             Copy-Item -LiteralPath (Join-Path $source $file) -Destination $Destination -Force
         }

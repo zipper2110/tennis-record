@@ -21,7 +21,7 @@ class MediaPlayerFactoryTest {
         val created = ArrayDeque(listOf(player, factoryOwned))
         val factory = PreviewMediaPlayerFactory(playerCreator = { created.removeFirst() })
 
-        val managedPlayer = factory.create(MediaScreen.MARKUP)
+        val managedPlayer = factory.create(MediaScreen.POINTS)
         factory.create(MediaScreen.CROP)
         managedPlayer.close()
         managedPlayer.close()
@@ -77,7 +77,7 @@ class MediaPlayerFactoryTest {
         )
         var result: Result<SwingMediaPlayer>? = null
         val creator = Thread({
-            result = runCatching { factory.create(MediaScreen.MARKUP) }
+            result = runCatching { factory.create(MediaScreen.POINTS) }
             finished.countDown()
         }, "media-post-registration-race-test")
 
