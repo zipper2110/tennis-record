@@ -138,7 +138,7 @@ object ScoreboardLayouts {
         }
         val width = max(contentW, titleW)
         val rowsBottom = headerH + 2 * rowH
-        val footerH = if (look.credit != null) 28.0 else 0.0
+        val footerH = if (look.credit != null) 32.0 else 0.0
         val height = rowsBottom + footerH
         // The point column reaches the bottom corner only when there is no credit line.
         val bottomRadius = if (look.credit != null) 0.0 else radius
@@ -189,7 +189,7 @@ object ScoreboardLayouts {
         }
         if (look.credit != null) {
             items += SceneItem.Box(0.0, rowsBottom - 0.5, width, 1.0, rule, 0.10)
-            items += centered(width / 2, rowsBottom + footerH / 2, look.credit, SEGOE, 16.0, 0x8A918D, TextAnchor.CENTER, bold = false, spacing = 0.6)
+            items += centered(width / 2, rowsBottom + footerH / 2, look.credit, SEGOE, 19.2, 0x8A918D, TextAnchor.CENTER, bold = false, spacing = 0.6)
         }
         return ScoreboardScene(width, height, items)
     }
@@ -213,7 +213,7 @@ object ScoreboardLayouts {
         val titleW = if (title != null) 48.0 + ScoreboardFonts.textWidth(title, ARIAL, true, 28.0, 2.0) + 24.0 else 0.0
         val width = maxOf(420.0, cellsX + cellsW + pointAreaW, titleW)
         val rowsBottom = rowTop + rowGap + 18.0 + 36.0
-        val footerH = if (look.credit != null) 34.0 else 0.0
+        val footerH = if (look.credit != null) 38.0 else 0.0
         val height = rowsBottom + footerH
         val items = mutableListOf<SceneItem>()
 
@@ -233,7 +233,7 @@ object ScoreboardLayouts {
         }
         if (look.credit != null) {
             items += SceneItem.Box(24.0, rowsBottom - 6.0, width - 48.0, 1.0, WHITE, 0.14)
-            items += centered(width / 2, rowsBottom + footerH / 2 - 4.0, look.credit, ARIAL, 20.0, 0xCCCCCC, TextAnchor.CENTER, bold = false, opacity = 0.8)
+            items += centered(width / 2, rowsBottom + footerH / 2 - 4.0, look.credit, ARIAL, 24.0, 0xCCCCCC, TextAnchor.CENTER, bold = false, opacity = 0.8)
         }
         return ScoreboardScene(width, height, items)
     }
@@ -260,7 +260,7 @@ object ScoreboardLayouts {
         val titleW = if (title != null) 18.0 + ScoreboardFonts.textWidth(title, SEGOE, true, titleSize, titleSpacing) + 18.0 else 0.0
         val width = max(contentW, titleW)
         val rowsBottom = headerH + 2 * rowH
-        val footerH = if (look.credit != null) 28.0 else 0.0
+        val footerH = if (look.credit != null) 32.0 else 0.0
         val height = rowsBottom + footerH
         val bottomRadius = if (look.credit != null) 0.0 else radius
         val pointX = width - pointColW
@@ -296,7 +296,7 @@ object ScoreboardLayouts {
         if (look.credit != null) {
             items += SceneItem.Box(0.0, rowsBottom, width, footerH, 0xEEF1F5, look.opacity, Corners(0.0, 0.0, radius, radius))
             items += SceneItem.Box(0.0, rowsBottom - 0.5, width, 1.0, 0xD9DEE7, 1.0)
-            items += centered(width / 2, rowsBottom + footerH / 2, look.credit, SEGOE, 16.0, 0x5E6878, TextAnchor.CENTER, bold = false, spacing = 0.6)
+            items += centered(width / 2, rowsBottom + footerH / 2, look.credit, SEGOE, 19.2, 0x5E6878, TextAnchor.CENTER, bold = false, spacing = 0.6)
         }
         return ScoreboardScene(width, height, items)
     }
@@ -326,7 +326,7 @@ object ScoreboardLayouts {
             0.0
         }
         val rowsBottom = tabH + 2 * rowH
-        val footerH = if (look.credit != null) 22.0 else 0.0
+        val footerH = if (look.credit != null) 25.0 else 0.0
         val height = rowsBottom + footerH
         val bottomRadius = if (look.credit != null) 0.0 else radius
         val pointX = width - pointColW
@@ -354,7 +354,7 @@ object ScoreboardLayouts {
             items += centered(pointX + pointColW / 2, cy, row.points, SEGOE, pointSize, dark, TextAnchor.CENTER, opacity = if (row.trailing) 0.55 else 1.0)
         }
         if (look.credit != null) {
-            items += centered(width / 2, rowsBottom + footerH / 2, look.credit, SEGOE, 14.0, WHITE, TextAnchor.CENTER, bold = false, opacity = 0.6, spacing = 0.5)
+            items += centered(width / 2, rowsBottom + footerH / 2, look.credit, SEGOE, 16.8, WHITE, TextAnchor.CENTER, bold = false, opacity = 0.6, spacing = 0.5)
         }
         return ScoreboardScene(width, height, items)
     }
