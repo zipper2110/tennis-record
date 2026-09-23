@@ -48,8 +48,8 @@ import javax.swing.border.EmptyBorder
  * - Left points list with header badges and footer buttons
  * - Center video area with a scoreboard overlay placeholder
  * - Per-point scrub bar under the video
- * - Bottom area with: top action row (centered No Point), transport, speed control,
- *   and side player panels (P1 / P2)
+ * - Bottom area (ScoringControlsPanel): outcome buttons row (P1 / No Point / P2), then games/sets cards
+ *   around the transport and speed controls
  *
  * No data wiring or persistence yet. All actions are no-ops for v0.1.0 task 4.1.
  *
@@ -250,13 +250,8 @@ class SwingScoringPanel(
     private lateinit var currentPointLabel: JLabel
     private lateinit var currentPointFavoriteBtn: JButton
 
-    // Speed combo is now encapsulated within VideoSyncPanel; no direct reference here
-
-    private lateinit var videoSyncPanel: VideoSyncPanel
-
-    // Bottom panels — extracted into reusable PlayerPanel component
-    private lateinit var leftPlayerPanel: PlayerPanel
-    private lateinit var rightPlayerPanel: PlayerPanel
+    // Bottom panel: outcome buttons, player points/games/sets, and video controls
+    private lateinit var controlsPanel: ScoringControlsPanel
 
     // Computed match state snapshot provided by ScoringEngine
     // See ScoringEngine.MatchState and ScoringEngine.SetScore
@@ -286,8 +281,10 @@ class SwingScoringPanel(
             leftListPanel.setPlayerColors(player1ColorHex, player2ColorHex)
         }
         // Apply colors to point buttons if panels are already created
-        if (::leftPlayerPanel.isInitialized) leftPlayerPanel.setAccentColorHex(player1ColorHex)
-        if (::rightPlayerPanel.isInitialized) rightPlayerPanel.setAccentColorHex(player2ColorHex)
+        if (::controlsPanel.isInitialized) {
+            controlsPanel.player1.setAccentColorHex(player1ColorHex)
+            controlsPanel.player2.setAccentColorHex(player2ColorHex)
+        }
         refreshNameDependentUi()
         // Outcomes
         val validIds = points.map { it.id }.toSet()
@@ -361,8 +358,10 @@ class SwingScoringPanel(
                 player1ColorHex = c1
                 player2ColorHex = c2
                 // Apply immediately to point buttons
-                if (::leftPlayerPanel.isInitialized) leftPlayerPanel.setAccentColorHex(player1ColorHex)
-                if (::rightPlayerPanel.isInitialized) rightPlayerPanel.setAccentColorHex(player2ColorHex)
+                if (::controlsPanel.isInitialized) {
+                    controlsPanel.player1.setAccentColorHex(player1ColorHex)
+                    controlsPanel.player2.setAccentColorHex(player2ColorHex)
+                }
                 rebuildPointsList()
                 refreshVideoScoreboardOverlay()
                 try { namesSaveTimer.restart() } catch (_: Throwable) { saveNow() }
@@ -638,29 +637,13 @@ class SwingScoringPanel(
     }
 
     fun bottomPanel(): JPanel {
-        // Bottom controls & player panels
-        val bottom = JPanel(BorderLayout())
-        bottom.background = Color(0x1A, 0x1A, 0x1A)
-
-        leftPlayerPanel = PlayerPanel(true) { setOutcomeForSelectedPoint(Outcome.P1) }
-        leftPlayerPanel.setPlayerName(displayNameP1())
-        leftPlayerPanel.setAccentColorHex(player1ColorHex)
-        rightPlayerPanel = PlayerPanel(false) { setOutcomeForSelectedPoint(Outcome.P2) }
-        rightPlayerPanel.setPlayerName(displayNameP2())
-        rightPlayerPanel.setAccentColorHex(player2ColorHex)
-        videoSyncPanel = VideoSyncPanel(videoPlayerActions) { setOutcomeForSelectedPoint(Outcome.NONE) }
-
-        bottom.add(leftPlayerPanel, BorderLayout.WEST)
-        bottom.add(videoSyncPanel, BorderLayout.CENTER)
-        bottom.add(rightPlayerPanel, BorderLayout.EAST)
-
-        // Apply former southWrap border directly to the bottom panel and drop the extra wrapper
-        // Preserve previous 10px padding by composing MatteBorder (outer) + EmptyBorder (inner)
-        bottom.border = EmptyBorder(10, 20, 20, 20)
-        return bottom
+        controlsPanel = ScoringControlsPanel(videoPlayerActions) { outcome -> setOutcomeForSelectedPoint(outcome) }
+        controlsPanel.player1.setPlayerName(displayNameP1())
+        controlsPanel.player1.setAccentColorHex(player1ColorHex)
+        controlsPanel.player2.setPlayerName(displayNameP2())
+        controlsPanel.player2.setAccentColorHex(player2ColorHex)
+        return controlsPanel
     }
-
-    // buildPlayerPanel extracted into org.litvin.ui.tabs.scoring.ui.PlayerPanel
 
     private fun togglePlayPause() {
         val wasPlaying = player.status() == PlayerStatus.PLAYING
@@ -685,9 +668,9 @@ class SwingScoringPanel(
 
     private fun updateVideoControls() {
         val state = getState()
-        videoSyncPanel.render(state.isPlaying, state.speedMultiplier)
+        controlsPanel.videoSync.render(state.isPlaying, state.speedMultiplier)
         // Sync frame-step checkbox from session setting
-        videoSyncPanel.setFrameStepEnabled(SessionSettings.frameStepWhenPaused)
+        controlsPanel.videoSync.setFrameStepEnabled(SessionSettings.frameStepWhenPaused)
     }
 
     private fun seekBy(deltaMs: Long) {
@@ -854,17 +837,9 @@ class SwingScoringPanel(
     }
 
     private fun updateActionButtonsState(enable: Boolean, selectedOutcome: Outcome?) {
-        if (::leftPlayerPanel.isInitialized) leftPlayerPanel.setPointButtonEnabled(enable)
-        if (::rightPlayerPanel.isInitialized) rightPlayerPanel.setPointButtonEnabled(enable)
-        if (::videoSyncPanel.isInitialized) videoSyncPanel.setNoPointEnabled(enable)
-
-        val sel = selectedOutcome
-        val p1 = sel == Outcome.P1
-        val p2 = sel == Outcome.P2
-        val none = sel == Outcome.NONE
-        if (::leftPlayerPanel.isInitialized) leftPlayerPanel.setPointSelected(p1)
-        if (::rightPlayerPanel.isInitialized) rightPlayerPanel.setPointSelected(p2)
-        if (::videoSyncPanel.isInitialized) videoSyncPanel.setNoPointSelected(none)
+        if (!::controlsPanel.isInitialized) return
+        controlsPanel.setOutcomeButtonsEnabled(enable)
+        controlsPanel.setSelectedOutcome(selectedOutcome)
     }
 
     private fun setOutcomeForSelectedPoint(outcome: Outcome) {
@@ -918,8 +893,10 @@ class SwingScoringPanel(
     private fun refreshNameDependentUi() {
         val name1 = displayNameP1()
         val name2 = displayNameP2()
-        if (::leftPlayerPanel.isInitialized) leftPlayerPanel.setPlayerName(name1)
-        if (::rightPlayerPanel.isInitialized) rightPlayerPanel.setPlayerName(name2)
+        if (::controlsPanel.isInitialized) {
+            controlsPanel.player1.setPlayerName(name1)
+            controlsPanel.player2.setPlayerName(name2)
+        }
     }
 
     /** Opens the scoreboard settings. The video shows each change at once; Cancel restores the saved settings. */
@@ -1016,8 +993,8 @@ class SwingScoringPanel(
         }
         val p1PtsDisp = displayPoints(true, state.p1Pts, state.p2Pts, state.isTiebreak)
         val p2PtsDisp = displayPoints(false, state.p1Pts, state.p2Pts, state.isTiebreak)
-        if (::leftPlayerPanel.isInitialized) {
-            leftPlayerPanel.render(
+        if (::controlsPanel.isInitialized) {
+            controlsPanel.player1.render(
                 pointsDisplay = p1PtsDisp,
                 games = state.gamesP1,
                 sets = state.setsP1,
@@ -1025,8 +1002,8 @@ class SwingScoringPanel(
                 setWon = state.lastSetWonBy == 1,
             )
         }
-        if (::rightPlayerPanel.isInitialized) {
-            rightPlayerPanel.render(
+        if (::controlsPanel.isInitialized) {
+            controlsPanel.player2.render(
                 pointsDisplay = p2PtsDisp,
                 games = state.gamesP2,
                 sets = state.setsP2,

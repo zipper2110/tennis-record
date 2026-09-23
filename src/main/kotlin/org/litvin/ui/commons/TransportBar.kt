@@ -27,34 +27,40 @@ class TransportBar(
     private val btnPlayPause = UiStyles.squarePrimaryButton(UiStyles.playIcon(28)) {
         onTogglePlayPause()
     }
+    private val seekButtons = listOf(btnSeekBack10, btnSeekBack1, btnSeekFwd1, btnSeekFwd10)
+
+    /**
+     * Compact mode shows only the seek amounts ("-5s") and sizes the buttons to their content.
+     * The tooltips still name the hotkeys. Use it when the full labels do not fit.
+     */
+    var compact: Boolean = false
+        set(value) {
+            if (field == value) return
+            field = value
+            applyLabels()
+        }
+
+    /** Preferred width with the full labels, measured at construction. */
+    val fullPreferredWidth: Int
+
+    /** Preferred width with the compact labels, measured at construction. */
+    val compactPreferredWidth: Int
 
     init {
         isOpaque = false
         layout = BoxLayout(this, BoxLayout.X_AXIS)
         btnPlayPause.name = playPauseComponentName
 
-        fun styleSeek(b: JButton) {
+        seekButtons.forEach { b ->
             UiStyles.styleSecondary(b)
             b.iconTextGap = 6
-            b.preferredSize = Dimension(100, 44)
-            b.minimumSize = Dimension(100, 40)
         }
-        fun styleSeekLarge(b: JButton) {
-            UiStyles.styleSecondary(b)
-            b.iconTextGap = 6
-            b.preferredSize = Dimension(150, 44)
-            b.minimumSize = Dimension(120, 40)
-        }
-        styleSeekLarge(btnSeekBack10); styleSeek(btnSeekBack1); styleSeek(btnSeekFwd1); styleSeekLarge(btnSeekFwd10)
+        applyLabels()
 
         btnSeekBack10.icon = UiStyles.backward5Icon();
-        btnSeekBack10.text = "-5s [shift+←]"
         btnSeekBack1.icon = UiStyles.seekLeftIcon();
-        btnSeekBack1.text = "-1s [←]"
         btnSeekFwd1.icon = UiStyles.seekRightIcon();
-        btnSeekFwd1.text = "+1s [→]"
         btnSeekFwd10.icon = UiStyles.forward5Icon();
-        btnSeekFwd10.text = "+5s [shift+→]"
 
         btnSeekBack10.toolTipText = "Shift+Left"
         btnSeekBack1.toolTipText = "Left"
@@ -77,6 +83,30 @@ class TransportBar(
         add(btnPlayPause); add(Box.createHorizontalStrut(12))
         add(btnSeekFwd1); add(Box.createHorizontalStrut(6))
         add(btnSeekFwd10)
+
+        compact = true
+        compactPreferredWidth = preferredSize.width
+        compact = false
+        fullPreferredWidth = preferredSize.width
+    }
+
+    private fun applyLabels() {
+        val labels = if (compact) COMPACT_LABELS else FULL_LABELS
+        seekButtons.forEachIndexed { i, b ->
+            b.text = labels[i]
+            if (compact) {
+                b.preferredSize = null
+                b.minimumSize = null
+            } else {
+                val large = b === btnSeekBack10 || b === btnSeekFwd10
+                b.preferredSize = Dimension(if (large) 150 else 100, 44)
+                b.minimumSize = Dimension(if (large) 120 else 100, 40)
+            }
+        }
+        // invalidate() clears the BoxLayout size cache also before this bar has a parent;
+        // revalidate() does nothing without a parent.
+        invalidate()
+        revalidate()
     }
 
     private fun seekHandler(delta: Long): ActionListener = ActionListener {
@@ -89,4 +119,9 @@ class TransportBar(
         btnPlayPause.repaint()
     }
 
+    private companion object {
+        // Order matches seekButtons: -5s, -1s, +1s, +5s
+        val FULL_LABELS = listOf("-5s [shift+←]", "-1s [←]", "+1s [→]", "+5s [shift+→]")
+        val COMPACT_LABELS = listOf("-5s", "-1s", "+1s", "+5s")
+    }
 }

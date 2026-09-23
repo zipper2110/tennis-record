@@ -1,33 +1,37 @@
 package org.litvin.ui.tabs.scoring.ui
 
+import com.formdev.flatlaf.FlatClientProperties
 import org.litvin.ui.UiStyles
 import java.awt.*
 import javax.swing.*
 import javax.swing.border.EmptyBorder
 
 /**
- * PlayerPanel — reusable scoring side panel (left/right)
+ * Scoring controls for one player. [ScoringControlsPanel] puts the two parts in different grid rows:
+ * - [header]: the POINTS value and the "Point for <name>" button
+ * - [stats]: the GAMES and SETS cards
  */
-class PlayerPanel(
+class PlayerControls(
     private val isPrimary: Boolean,
     private val onPointClicked: () -> Unit,
-) : JPanel() {
+) {
 
     private val pointsVal = JLabel("0")
-    private var pointBtn: JToggleButton
+    private val pointBtn = JToggleButton()
     private var accentColor: Color = if (isPrimary) Color(0x4D, 0xA3, 0xFF) else Color(0xFF, 0x6B, 0x6B)
 
-    private val gp: SmallStatPanel
-    private val sp: SmallStatPanel
+    private val pointFill = PlayerColorFill(pointBtn)
+
+    private val gp = SmallStatPanel("GAMES", "Game Won") { color -> UiStyles.flagIcon(color = color) }
+    private val sp = SmallStatPanel("SETS", "Set Won") { color -> UiStyles.trophyIcon(color = color) }
+
+    /** One row, left-aligned: POINTS label, points value, point button. */
+    val header: JPanel = JPanel()
+
+    /** Two cards of equal width: GAMES and SETS. */
+    val stats: JPanel = JPanel(GridLayout(1, 2, 8, 0))
 
     init {
-        layout = BoxLayout(this, BoxLayout.Y_AXIS)
-        preferredSize = Dimension(360, 0)
-        isOpaque = false
-
-        // POINTS value row
-        val pointsRow = JPanel(FlowLayout(FlowLayout.LEFT, 8, 0))
-        pointsRow.isOpaque = false
         val pointsLbl = JLabel("POINTS")
         pointsLbl.foreground = Color(0xAD, 0xAA, 0xAA)
         pointsLbl.font = pointsLbl.font.deriveFont(Font.BOLD, 11f)
@@ -36,38 +40,34 @@ class PlayerPanel(
         pointsVal.foreground = if (isPrimary) Color(0xA1, 0xFE, 0x00) else Color.WHITE
         pointsVal.isOpaque = true
         pointsVal.border = EmptyBorder(6, 10, 6, 10)
-        pointsRow.add(pointsLbl)
-        pointsRow.add(pointsVal)
+        // Fixed width for the widest value ("40"), so the point button does not move when the score changes
+        pointsVal.horizontalAlignment = SwingConstants.CENTER
+        pointsVal.text = "40"
+        pointsVal.preferredSize = pointsVal.preferredSize
+        pointsVal.maximumSize = pointsVal.preferredSize
+        pointsVal.text = "0"
 
-        // Point button
-        pointBtn = JToggleButton()
         pointBtn.isFocusPainted = false
-        // Keep default UI text color; accent is shown as a left strip (MatteBorder)
-        pointBtn.foreground = UiStyles.FG_PRIMARY
         pointBtn.background = Color(0x26, 0x26, 0x26)
-        // Initial border is built from current accentColor
-        pointBtn.border = buildPointButtonBorder()
         pointBtn.name = if (isPrimary) "scoring-player-1-point" else "scoring-player-2-point"
+        // A long player name shortens the label ("...") instead of pushing the row out of its column
+        pointBtn.minimumSize = Dimension(0, 0)
         pointBtn.addActionListener { onPointClicked.invoke() }
+        // Border strip, selected fill, and stat icons in the player color
+        applyAccentColor()
 
-        val topRow = JPanel(FlowLayout(FlowLayout.LEFT, 8, 0))
-        topRow.isOpaque = false
-        topRow.add(pointsRow)
-        topRow.add(pointBtn)
+        header.isOpaque = false
+        header.layout = BoxLayout(header, BoxLayout.X_AXIS)
+        header.add(pointsLbl)
+        header.add(Box.createHorizontalStrut(8))
+        header.add(pointsVal)
+        header.add(Box.createHorizontalStrut(12))
+        header.add(pointBtn)
+        header.add(Box.createHorizontalGlue())
 
-        // GAMES & SETS cards
-        val grids = JPanel(GridLayout(1, 2, 8, 0))
-        grids.isOpaque = false
-        grids.border = EmptyBorder(8, 0, 0, 0)
-
-
-        gp = SmallStatPanel("GAMES", "Game Won")
-        sp = SmallStatPanel("SETS", "Set Won")
-        grids.add(gp)
-        grids.add(sp)
-
-        add(topRow)
-        add(grids)
+        stats.isOpaque = false
+        stats.add(gp)
+        stats.add(sp)
     }
 
     fun setPlayerName(name: String) {
@@ -78,8 +78,14 @@ class PlayerPanel(
     fun setAccentColorHex(hex: String?) {
         val c = parseHexOrNull(hex) ?: return
         accentColor = c
+        applyAccentColor()
+    }
+
+    private fun applyAccentColor() {
         pointBtn.border = buildPointButtonBorder()
-        // keep text color default as per design
+        pointFill.accent = accentColor
+        gp.setAccentColor(accentColor)
+        sp.setAccentColor(accentColor)
     }
 
     private fun buildPointButtonBorder(): javax.swing.border.Border {
@@ -123,13 +129,50 @@ class PlayerPanel(
 
 }
 
+/**
+ * Fills a selected toggle button with the player color: the point button (the recorded outcome)
+ * and the Game Won / Set Won markers.
+ *
+ * FlatLaf paints a selected toggle with its own selectedBackground and ignores `background`,
+ * so the fill goes in the FlatLaf style of the button. FlatLaf also ignores selectedForeground
+ * when the button has its own foreground, so this class sets the text color and the icon color.
+ */
+private class PlayerColorFill(
+    private val button: JToggleButton,
+    /** Creates the button icon in the given color; null for a button without an icon. */
+    private val icon: ((Color) -> Icon)? = null,
+) {
+    var accent: Color = UiStyles.FG_SECONDARY
+        set(value) {
+            field = value
+            button.putClientProperty(FlatClientProperties.STYLE, "selectedBackground: ${hex(value)}")
+            update()
+        }
+
+    init {
+        button.addItemListener { update() }
+    }
+
+    /** Selected: black or white text and icon on the player color. Not selected: default text, icon in the player color. */
+    private fun update() {
+        val selected = button.isSelected
+        val text = if (selected) UiStyles.contrastingTextColor(accent) else UiStyles.FG_PRIMARY
+        button.foreground = text
+        icon?.let { button.icon = it(if (selected) text else accent) }
+    }
+
+    private fun hex(c: Color): String = "#%02X%02X%02X".format(c.red, c.green, c.blue)
+}
+
 private class SmallStatPanel(
     title: String,
     buttonText: String,
+    icon: (Color) -> Icon,
 ) : JPanel() {
 
     private val valueLabel: JLabel
     private val toggleButton: JToggleButton
+    private val fill: PlayerColorFill
 
     init {
         layout = BoxLayout(this, BoxLayout.Y_AXIS)
@@ -147,6 +190,7 @@ private class SmallStatPanel(
         valueLabel.alignmentX = 0.5f
 
         toggleButton = readOnlyBtn(buttonText)
+        fill = PlayerColorFill(toggleButton, icon)
 
         add(titleLabel)
         add(Box.createVerticalStrut(4))
@@ -158,7 +202,10 @@ private class SmallStatPanel(
     fun setState(value: String, toggled: Boolean) {
         valueLabel.text = value
         toggleButton.isSelected = toggled
-//        toggleButton.model.isSelected = toggled
+    }
+
+    fun setAccentColor(color: Color) {
+        fill.accent = color
     }
 
     private fun readOnlyBtn(buttonText: String): JToggleButton {
@@ -168,6 +215,7 @@ private class SmallStatPanel(
         }
 
         UiStyles.styleSecondary(btn)
+        btn.iconTextGap = 6
         btn.isFocusable = false
         btn.isRequestFocusEnabled = false
         btn.isRolloverEnabled = false

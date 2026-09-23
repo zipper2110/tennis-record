@@ -93,7 +93,7 @@ class PointsListPanelTest {
             val scored = assertNotNull(panel.findNamed("point-scored", JLabel::class.java))
             val unscored = assertNotNull(panel.findNamed("point-unscored", JLabel::class.java))
             assertEquals("The point is scored", scored.toolTipText)
-            assertEquals("Not scored. Choose who won this point.", unscored.toolTipText)
+            assertEquals("Not scored. Choose who won this point", unscored.toolTipText)
 
             // A tooltip makes the label consume clicks; the label must still select its row.
             unscored.mouseListeners.forEach {

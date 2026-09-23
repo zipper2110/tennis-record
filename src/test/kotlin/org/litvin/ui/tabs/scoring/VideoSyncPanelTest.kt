@@ -20,7 +20,7 @@ class VideoSyncPanelTest {
                 override fun seekBy(milliseconds: Long) { seeks += milliseconds }
                 override fun setSpeedMultiplier(multiplier: Float) {}
                 override fun setFrameStepEnabled(enabled: Boolean) {}
-            }) {}
+            })
 
             val back = panel.descendants()
                 .filterIsInstance<JButton>()
@@ -47,7 +47,7 @@ class VideoSyncPanelTest {
                 override fun seekBy(milliseconds: Long) {}
                 override fun setSpeedMultiplier(multiplier: Float) { selectedSpeeds += multiplier }
                 override fun setFrameStepEnabled(enabled: Boolean) {}
-            }) {}
+            })
 
             val speedCombo = panel.descendants()
                 .filterIsInstance<JComboBox<*>>()

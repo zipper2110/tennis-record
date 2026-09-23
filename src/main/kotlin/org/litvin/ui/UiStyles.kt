@@ -288,6 +288,11 @@ object UiStyles {
 
     fun helpIcon(size: Int = 20): Icon = ikon(Material2AL.HELP_OUTLINE, size, LIME)
 
+    // Scoring "Game Won" / "Set Won" markers (design/scoring.html: flag, emoji_events)
+    fun flagIcon(size: Int = 14, color: Color = FG_PRIMARY): Icon = ikon(Material2AL.FLAG, size, color)
+
+    fun trophyIcon(size: Int = 14, color: Color = FG_PRIMARY): Icon = ikon(Material2AL.EMOJI_EVENTS, size, color)
+
     /** Primary CTA button with gradient; includes a leading circle-plus icon. */
     fun primaryButton(text: String, onClick: () -> Unit): JButton = object : JButton(text) {
         override fun paintComponent(g: Graphics) {
