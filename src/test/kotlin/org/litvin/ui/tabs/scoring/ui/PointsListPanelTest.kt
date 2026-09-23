@@ -74,6 +74,36 @@ class PointsListPanelTest {
     }
 
     @Test
+    fun scoredStatusTooltipDiffersForScoredAndUnscoredPoints() {
+        SwingUtilities.invokeAndWait {
+            val selected = mutableListOf<Int>()
+            val points = (1..2).map { n ->
+                PointV1(id = "point-$n", startMs = n * 1_000, endMs = n * 1_000 + 500)
+            }
+            val panel = PointsListPanel().apply {
+                onSelect = { index, _ -> selected += index }
+                setData(
+                    points = points,
+                    outcomesByPointId = mapOf("point-1" to Outcome.P1),
+                    p1ColorHex = "#4DA3FF",
+                    p2ColorHex = "#FF6B6B",
+                )
+            }
+
+            val scored = assertNotNull(panel.findNamed("point-scored", JLabel::class.java))
+            val unscored = assertNotNull(panel.findNamed("point-unscored", JLabel::class.java))
+            assertEquals("The point is scored", scored.toolTipText)
+            assertEquals("Not scored. Choose who won this point.", unscored.toolTipText)
+
+            // A tooltip makes the label consume clicks; the label must still select its row.
+            unscored.mouseListeners.forEach {
+                it.mouseClicked(java.awt.event.MouseEvent(unscored, java.awt.event.MouseEvent.MOUSE_CLICKED, 0, 0, 1, 1, 1, false))
+            }
+            assertEquals(listOf(1), selected)
+        }
+    }
+
+    @Test
     fun unscoredPointsCarryNoGameOrSetMarkers() {
         SwingUtilities.invokeAndWait {
             val points = (1..8).map { n ->

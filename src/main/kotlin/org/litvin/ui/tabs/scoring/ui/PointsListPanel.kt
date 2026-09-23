@@ -253,11 +253,7 @@ class PointsListPanel : JPanel(BorderLayout()) {
             gameWonBy?.let { right.add(gameBadge(it, onSelectRow)) }
         }
         setWonBy?.let { right.add(setBadge(it, onSelectRow)) }
-        if (scored) {
-            val check = JLabel()
-            check.icon = UiStyles.scoredIcon(18)
-            right.add(check)
-        }
+        right.add(scoredStatus(scored, onSelectRow))
         val favBtn = UiStyles.smallIconButton(UiStyles.favoriteIcon(16, favorite), "Favorite [A]") {
             onFavorite()
         }.apply {
@@ -306,6 +302,20 @@ class PointsListPanel : JPanel(BorderLayout()) {
             onSelectRow = onSelectRow,
         )
     }
+
+    /** Check mark for a scored point, empty ring for an unscored one. Clicks select the row, as for the milestone badges. */
+    private fun scoredStatus(scored: Boolean, onSelectRow: () -> Unit): JLabel =
+        JLabel(if (scored) UiStyles.scoredIcon(18) else UiStyles.unscoredIcon(18)).apply {
+            name = if (scored) "point-scored" else "point-unscored"
+            toolTipText = if (scored) {
+                "The point is scored"
+            } else {
+                "Not scored. Choose who won this point"
+            }
+            addMouseListener(object : MouseAdapter() {
+                override fun mouseClicked(e: MouseEvent) = onSelectRow()
+            })
+        }
 
     private fun milestoneBadge(
         icon: Icon,

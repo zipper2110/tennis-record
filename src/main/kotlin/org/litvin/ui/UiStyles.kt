@@ -615,6 +615,25 @@ object UiStyles {
         }
     }
 
+    /** Empty gray ring for points that are not scored; it holds the place of [scoredIcon]. */
+    fun unscoredIcon(size: Int = 18): Icon = object : Icon {
+        override fun getIconWidth(): Int = size
+        override fun getIconHeight(): Int = size
+        override fun paintIcon(c: Component?, g: Graphics?, x: Int, y: Int) {
+            val g2 = (g as? Graphics2D)?.create() as? Graphics2D ?: return
+            try {
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+                val stroke = (size * 0.1f).coerceAtLeast(1.2f)
+                val inset = stroke / 2.0
+                g2.color = Color(0x5A, 0x5A, 0x5A)
+                g2.stroke = BasicStroke(stroke)
+                g2.draw(java.awt.geom.Ellipse2D.Double(x + inset, y + inset, size - stroke.toDouble(), size - stroke.toDouble()))
+            } finally {
+                g2.dispose()
+            }
+        }
+    }
+
     /**
      * Black or white, whichever has the higher WCAG contrast ratio against [bg].
      * Keeps a letter legible on a player color the user is free to pick.
