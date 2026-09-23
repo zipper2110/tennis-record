@@ -87,6 +87,33 @@ class ScoreboardLayoutsTest {
     }
 
     @Test
+    fun everyStyleShowsTheSetWinnerInBoldAndTheSetLoserInRegularText() {
+        ScoreboardStyleId.entries.forEach { style ->
+            val scene = ScoreboardLayouts.scene(display, ScoreboardSettingsV1(style = style))
+            val winner = scene.label("6")
+            val loser = scene.label("3")
+
+            assertTrue(winner.bold, "$style: the set winner must be bold")
+            assertFalse(loser.bold, "$style: the set loser must not be bold")
+            assertTrue(winner.rgb != loser.rgb || winner.opacity > loser.opacity, "$style: the set loser must be dimmer")
+        }
+    }
+
+    @Test
+    fun aTiedCompletedSetHasNoWinner() {
+        val tied = ScoreboardComponent.display(
+            OverlaySpan(0L, 1_000L, "", p1Name = "Alice", p2Name = "Bob", gamesP1 = 1, gamesP2 = 2, completedSets = listOf(5 to 5)),
+        )
+        ScoreboardStyleId.entries.forEach { style ->
+            val scene = ScoreboardLayouts.scene(tied, ScoreboardSettingsV1(style = style))
+            val setLabels = scene.items.filterIsInstance<SceneItem.Label>().filter { it.text == "5" }
+
+            assertEquals(2, setLabels.size, "$style")
+            assertTrue(setLabels.none { it.bold }, "$style")
+        }
+    }
+
+    @Test
     fun backgroundOpacityDefaultsToTheStyleValueAndCanBeChanged() {
         val default = ScoreboardLayouts.scene(display, ScoreboardSettingsV1())
         val custom = ScoreboardLayouts.scene(display, ScoreboardSettingsV1(backgroundOpacityPercent = 40))

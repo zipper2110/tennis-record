@@ -47,10 +47,12 @@ object ScoreboardLayouts {
     /** [credit] is the text of the line at the bottom of the board, or null when the line is hidden. */
     private data class Look(val title: String?, val accentRgb: Int, val opacity: Double, val credit: String?)
 
+    /** [wonSets] tells, for each completed set, if this player won it. */
     private class Row(
         val name: String,
         val rgb: Int,
         val sets: List<Int>,
+        val wonSets: List<Boolean>,
         val games: Int,
         val points: String,
         val leading: Boolean,
@@ -62,6 +64,7 @@ object ScoreboardLayouts {
             name = display.player1Name,
             rgb = display.player1Rgb,
             sets = display.completedSets.map { it.first },
+            wonSets = display.completedSets.map { it.first > it.second },
             games = display.player1Games,
             points = display.player1PointText,
             leading = display.pointLeader == 1,
@@ -71,6 +74,7 @@ object ScoreboardLayouts {
             name = display.player2Name,
             rgb = display.player2Rgb,
             sets = display.completedSets.map { it.second },
+            wonSets = display.completedSets.map { it.second > it.first },
             games = display.player2Games,
             points = display.player2PointText,
             leading = display.pointLeader == 2,
@@ -176,8 +180,13 @@ object ScoreboardLayouts {
             val cy = headerH + index * rowH + rowH / 2
             items += SceneItem.Box(padX, cy - square / 2, square, square, row.rgb, 1.0, Corners.all(2.5))
             items += centered(nameX, cy, row.name, SEGOE, nameSize, 0xF4F6F5, TextAnchor.MIDDLE_LEFT)
+            // The winner of a completed set is bright and bold. The loser is dim.
             row.sets.forEachIndexed { setIndex, games ->
-                items += centered(setsX + setIndex * setColW + setColW / 2, cy, games.toString(), SEGOE, setSize, 0x7E8581, TextAnchor.CENTER)
+                val won = row.wonSets[setIndex]
+                items += centered(
+                    setsX + setIndex * setColW + setColW / 2, cy, games.toString(), SEGOE, setSize,
+                    if (won) 0xF4F6F5 else 0x6E7571, TextAnchor.CENTER, bold = won,
+                )
             }
             items += centered(setsX + row.sets.size * setColW + setColW / 2, cy, row.games.toString(), SEGOE, setSize, 0xDDE2DF, TextAnchor.CENTER)
             val pointRgb = when {
@@ -226,9 +235,15 @@ object ScoreboardLayouts {
             val cy = rowTop + index * rowGap + 18.0
             items += SceneItem.Box(24.0, cy - 12.0, 24.0, 24.0, row.rgb, 0.85)
             items += centered(nameX, cy, row.name, ARIAL, nameSize, 0xE7ECEF, TextAnchor.MIDDLE_LEFT, bold = false, opacity = 0.93, outline = 1.2)
-            (row.sets + row.games).forEachIndexed { cell, games ->
-                items += centered(cellsX + cell * cellStep + 22.0, cy, games.toString(), ARIAL, cellSize, 0xCCCCCC, TextAnchor.CENTER, bold = false)
+            // The winner of a completed set is white and bold. The loser is dim.
+            row.sets.forEachIndexed { cell, games ->
+                val won = row.wonSets[cell]
+                items += centered(
+                    cellsX + cell * cellStep + 22.0, cy, games.toString(), ARIAL, cellSize,
+                    if (won) WHITE else 0xCCCCCC, TextAnchor.CENTER, bold = won, opacity = if (won) 1.0 else 0.5,
+                )
             }
+            items += centered(cellsX + row.sets.size * cellStep + 22.0, cy, row.games.toString(), ARIAL, cellSize, 0xCCCCCC, TextAnchor.CENTER, bold = false)
             items += centered(width - 24.0, cy, row.points, ARIAL, pointSize, look.accentRgb, TextAnchor.MIDDLE_RIGHT, outline = if (row.leading) 0.0 else 1.2)
         }
         if (look.credit != null) {
@@ -286,8 +301,13 @@ object ScoreboardLayouts {
             )
             items += SceneItem.Box(0.0, top, 7.0, rowH, row.rgb, 1.0, barCorners)
             items += centered(nameX, cy, row.name, SEGOE, nameSize, navy, TextAnchor.MIDDLE_LEFT)
+            // The winner of a completed set is navy and bold. The loser is light gray.
             row.sets.forEachIndexed { setIndex, games ->
-                items += centered(setsX + setIndex * setColW + setColW / 2, cy, games.toString(), SEGOE, setSize, 0x8A93A3, TextAnchor.CENTER)
+                val won = row.wonSets[setIndex]
+                items += centered(
+                    setsX + setIndex * setColW + setColW / 2, cy, games.toString(), SEGOE, setSize,
+                    if (won) navy else 0xA3AAB7, TextAnchor.CENTER, bold = won,
+                )
             }
             items += centered(setsX + row.sets.size * setColW + setColW / 2, cy, row.games.toString(), SEGOE, setSize, navy, TextAnchor.CENTER)
             val pointRgb = if (row.leading) look.accentRgb else WHITE
@@ -347,8 +367,13 @@ object ScoreboardLayouts {
             val cy = tabH + index * rowH + rowH / 2
             items += SceneItem.Box(10.0, cy - 10.0, 4.0, 20.0, row.rgb, 1.0, Corners.all(2.0))
             items += centered(nameX, cy, row.name, SEGOE, nameSize, WHITE, TextAnchor.MIDDLE_LEFT)
+            // The winner of a completed set is white and bold. The loser is dim.
             row.sets.forEachIndexed { setIndex, games ->
-                items += centered(setsX + setIndex * setColW + setColW / 2, cy, games.toString(), SEGOE, setSize, 0x9AA09D, TextAnchor.CENTER)
+                val won = row.wonSets[setIndex]
+                items += centered(
+                    setsX + setIndex * setColW + setColW / 2, cy, games.toString(), SEGOE, setSize,
+                    if (won) WHITE else 0x7F8582, TextAnchor.CENTER, bold = won,
+                )
             }
             items += centered(setsX + row.sets.size * setColW + setColW / 2, cy, row.games.toString(), SEGOE, setSize, WHITE, TextAnchor.CENTER)
             items += centered(pointX + pointColW / 2, cy, row.points, SEGOE, pointSize, dark, TextAnchor.CENTER, opacity = if (row.trailing) 0.55 else 1.0)
