@@ -8,6 +8,8 @@ import org.litvin.points.PointV1
 import org.litvin.projects.ProjectManifestV1
 import org.litvin.scoring.Outcome
 import org.litvin.scoring.ScoreV1
+import org.litvin.scoring.ScoreboardSettingsV1
+import org.litvin.scoring.ScoreboardStyleId
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -68,6 +70,7 @@ class ExportPlannerTest {
             outcomes = mapOf("p1" to Outcome.P1, "p2" to Outcome.P2),
             player1Name = "A",
             player2Name = "B",
+            scoreboard = ScoreboardSettingsV1(style = ScoreboardStyleId.COMPACT, title = "Club final"),
         )
 
         val plan = ExportPlanner.buildRenderPlan(
@@ -92,6 +95,8 @@ class ExportPlannerTest {
         assertEquals(listOf("p1"), plan.job.edlSnapshot.map { it.id })
         assertEquals(true, plan.job.favoriteOnly)
         assertEquals(true, plan.job.includeScoreboard)
+        assertEquals(ScoreboardStyleId.COMPACT, plan.job.scoreboardSettings.style)
+        assertEquals("Club final", plan.job.scoreboardSettings.title)
         assertEquals("30000/1001", plan.job.outputFrameRate)
         assertEquals(1, plan.overlayTimeline.size)
         assertEquals(0, plan.overlayTimeline.single().startMs)

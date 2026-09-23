@@ -1,8 +1,6 @@
 package org.litvin.media.mpv
 
-import com.sun.jna.Memory
 import com.sun.jna.Native
-import com.sun.jna.Pointer
 import com.sun.jna.platform.win32.User32
 import com.sun.jna.platform.win32.WinDef
 import com.sun.jna.platform.win32.WinUser
@@ -14,6 +12,7 @@ import org.litvin.adjustments.AdjustmentsV1
 import org.litvin.media.OverlayShape
 import org.litvin.media.PlayerStatus
 import org.litvin.media.SwingMediaPlayer
+import org.litvin.media.VideoOverlay
 import java.awt.BorderLayout
 import java.awt.Canvas
 import java.awt.Color
@@ -23,15 +22,12 @@ import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
 import java.awt.event.MouseWheelEvent
 import java.awt.geom.Rectangle2D
-import java.awt.image.BufferedImage
-import java.awt.image.RenderedImage
 import java.io.File
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicInteger
 import javax.swing.JPanel
 import javax.swing.SwingUtilities
 import kotlin.math.ceil
-import kotlin.math.roundToInt
 import kotlin.math.roundToLong
 
 /**
@@ -52,10 +48,8 @@ class MpvSwingMediaPlayerAdapter : SwingMediaPlayer {
         /** Only one player keeps a file loaded, so only one hardware decoder runs. */
         private val activeLock = Any()
         private var activePlayer: MpvSwingMediaPlayerAdapter? = null
-        private const val OVERLAY_ID = "0"
-        private const val OVERLAY_MARGIN_PX = 32.0
-        private const val OVERLAY_REFERENCE_HEIGHT = 1080.0
         private const val EDITOR_OVERLAY_ID = "1"
+        private const val SCOREBOARD_OVERLAY_ID = "2"
         private const val EDITOR_MARGIN_VERTICAL = 0.07
         private const val EDITOR_MARGIN_HORIZONTAL = 0.04
     }
@@ -93,7 +87,7 @@ class MpvSwingMediaPlayerAdapter : SwingMediaPlayer {
     @Volatile private var adjustments = AdjustmentsV1()
     @Volatile private var appliedShaderOpts: String? = null
 
-    @Volatile private var overlayImage: RenderedImage? = null
+    @Volatile private var previewOverlay: VideoOverlay? = null
     @Volatile private var osdWidth = 0
     @Volatile private var osdHeight = 0
     @Volatile private var osdMarginTop = 0
@@ -460,59 +454,34 @@ class MpvSwingMediaPlayerAdapter : SwingMediaPlayer {
 
     // ---- Overlay -------------------------------------------------------------------------------------------
 
-    override fun setPreviewOverlayImage(image: RenderedImage?) {
-        overlayImage = image
+    override fun setPreviewOverlay(overlay: VideoOverlay?) {
+        previewOverlay = overlay
         applyOverlay()
     }
 
     /**
-     * Shows the overlay at the top-left of the video area. The size follows the video height
-     * (reference 1080 px), as with the export scoreboard. The overlay-add command uses window pixels.
+     * Draws the preview overlay with libass. The OSD resolution is the window size in device pixels,
+     * and the overlay gets the video area in the same pixels.
      */
     private fun applyOverlay() {
         val mpv = core ?: return
-        val image = overlayImage
-        if (image == null) {
-            mpv.command("overlay-remove", OVERLAY_ID)
+        val overlay = previewOverlay
+        val videoWidth = osdWidth - osdMarginLeft - osdMarginRight
+        val videoHeight = osdHeight - osdMarginTop - osdMarginBottom
+        if (overlay == null || videoWidth <= 0 || videoHeight <= 0) {
+            mpv.command("osd-overlay", SCOREBOARD_OVERLAY_ID, "none", "")
             return
         }
-        val videoAreaHeight = osdHeight - osdMarginTop - osdMarginBottom
-        if (osdWidth <= 0 || videoAreaHeight <= 0) return
-        val scale = videoAreaHeight / OVERLAY_REFERENCE_HEIGHT
-        val displayWidth = (image.width * scale).roundToInt().coerceAtLeast(1)
-        val displayHeight = (image.height * scale).roundToInt().coerceAtLeast(1)
-        val x = osdMarginLeft + (OVERLAY_MARGIN_PX * scale).roundToInt()
-        val y = osdMarginTop + (OVERLAY_MARGIN_PX * scale).roundToInt()
-        // mpv copies the bitmap before the command returns, so a synchronous call keeps the memory valid.
-        val memory = premultipliedBgra(image)
-        mpv.commandSync(
-            "overlay-add", OVERLAY_ID, x.toString(), y.toString(), "&${Pointer.nativeValue(memory)}", "0", "bgra",
-            image.width.toString(), image.height.toString(), (image.width * 4).toString(),
-            displayWidth.toString(), displayHeight.toString(),
+        val videoArea = Rectangle2D.Double(
+            osdMarginLeft.toDouble(),
+            osdMarginTop.toDouble(),
+            videoWidth.toDouble(),
+            videoHeight.toDouble(),
         )
-        memory.close()
-    }
-
-    /** mpv "bgra" is premultiplied B-G-R-A bytes, which is a little-endian premultiplied ARGB int. */
-    private fun premultipliedBgra(image: RenderedImage): Memory {
-        val argb = BufferedImage(image.width, image.height, BufferedImage.TYPE_INT_ARGB)
-        val g = argb.createGraphics()
-        try {
-            g.drawRenderedImage(image, null)
-        } finally {
-            g.dispose()
-        }
-        val pixels = IntArray(image.width * image.height)
-        argb.getRGB(0, 0, image.width, image.height, pixels, 0, image.width)
-        for (index in pixels.indices) {
-            val pixel = pixels[index]
-            val alpha = pixel ushr 24
-            val red = ((pixel shr 16) and 0xff) * alpha / 255
-            val green = ((pixel shr 8) and 0xff) * alpha / 255
-            val blue = (pixel and 0xff) * alpha / 255
-            pixels[index] = (alpha shl 24) or (red shl 16) or (green shl 8) or blue
-        }
-        return Memory(pixels.size * 4L).apply { write(0, pixels, 0, pixels.size) }
+        mpv.command(
+            "osd-overlay", SCOREBOARD_OVERLAY_ID, "ass-events", overlay.assEvents(videoArea).joinToString("\n"),
+            osdWidth.toString(), osdHeight.toString(), "0",
+        )
     }
 
     // ---- Events (mpv event thread) -----------------------------------------------------------------------
@@ -604,7 +573,7 @@ class MpvSwingMediaPlayerAdapter : SwingMediaPlayer {
     }
 
     private fun scheduleOverlay() {
-        if (overlayImage != null) SwingUtilities.invokeLater { applyOverlay() }
+        if (previewOverlay != null) SwingUtilities.invokeLater { applyOverlay() }
     }
 
     private fun setStatus(status: PlayerStatus) {

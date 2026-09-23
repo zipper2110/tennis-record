@@ -11,6 +11,7 @@ import org.litvin.export.EncoderCapabilities
 import org.litvin.export.RenderService
 import org.litvin.media.PlayerStatus
 import org.litvin.media.SwingMediaPlayer
+import org.litvin.media.VideoOverlay
 import org.litvin.projects.ProjectManifestV1
 import org.litvin.projects.ProjectSummary
 import org.litvin.projects.ProjectsRepository
@@ -28,7 +29,6 @@ import org.litvin.ui.tabs.scoring.SwingScoringPanel
 import java.awt.Component
 import java.awt.Dimension
 import java.awt.image.BufferedImage
-import java.awt.image.RenderedImage
 import java.io.File
 import java.util.concurrent.AbstractExecutorService
 import java.util.concurrent.ScheduledThreadPoolExecutor
@@ -190,7 +190,7 @@ class FeatureBoundaryWiringTest {
         override fun applyGeometryAdjustments(adj: AdjustmentsV1) = true
         override fun applyPreviewAdjustments(adj: AdjustmentsV1) = Unit
         override fun applyPreviewRotation(rotationDeg: Float, reason: String) = Unit
-        override fun setPreviewOverlayImage(image: RenderedImage?) = Unit
+        override fun setPreviewOverlay(overlay: VideoOverlay?) = Unit
         override fun stepFrameForward(maximumTimeMs: Long) = 0L
         override fun stepFrameBackward(minimumTimeMs: Long) = 0L
         override fun nextFrame() = Unit

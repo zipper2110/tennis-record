@@ -85,6 +85,36 @@ class LeftListPanelTest {
         }
     }
 
+    @Test
+    fun scoreboardSettingsButtonsAreEnabledAndOpenTheSettings() {
+        SwingUtilities.invokeAndWait {
+            var requests = 0
+            val panel = LeftListPanel(
+                actions = object : NavigationActions {
+                    override fun navigateToPoint(index: Int) = Unit
+                    override fun advanceToNextPoint() = Unit
+                    override fun goToPreviousPoint() = Unit
+                    override fun toggleFavorite(index: Int) = Unit
+                },
+                onNamesChanged = { _, _ -> },
+                onColorsChanged = { _, _ -> },
+                onScoreboardSettings = { requests++ },
+            )
+            val toolbar = ControlsToolbar(onScoreboardSettings = { requests++ })
+
+            val sideButton = panel.findNamed("scoreboard-settings", JButton::class.java)
+            val toolbarButton = toolbar.findNamed("toolbar-scoreboard-settings", JButton::class.java)
+            assertNotNull(sideButton)
+            assertNotNull(toolbarButton)
+            assertTrue(sideButton.isEnabled)
+            assertTrue(toolbarButton.isEnabled)
+
+            sideButton.doClick()
+            toolbarButton.doClick()
+            assertEquals(2, requests)
+        }
+    }
+
     private fun <T : Component> Container.findNamed(name: String, type: Class<T>): T? {
         for (component in components) {
             if (component.name == name && type.isInstance(component)) return type.cast(component)

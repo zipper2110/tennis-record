@@ -1,7 +1,9 @@
 package org.litvin.ui.tabs.scoring
 
 import org.litvin.GeometryViewportPanel
+import org.litvin.OverlaySpan
 import org.litvin.ScoreboardComponent
+import org.litvin.ScoreboardDisplay
 import org.litvin.ScoreboardTimelineBuilder
 import org.litvin.projects.ManifestIO
 import org.litvin.SessionSettings
@@ -10,12 +12,16 @@ import org.litvin.adjustments.AdjustmentsSession
 import org.litvin.points.EdlIO
 import org.litvin.points.EdlV1
 import org.litvin.points.PointV1
+import org.litvin.export.scoreboard.ScoreboardAss
+import org.litvin.export.scoreboard.ScoreboardLayouts
 import org.litvin.media.PlayerStatus
+import org.litvin.media.VideoOverlay
 import org.litvin.media.mpv.MpvSwingMediaPlayerAdapter
 import org.litvin.media.SwingMediaPlayer
 import org.litvin.scoring.Outcome
 import org.litvin.scoring.ScoreIO
 import org.litvin.scoring.ScoreV1
+import org.litvin.scoring.ScoreboardSettingsV1
 import org.litvin.scoring.ScoringEngine
 import org.litvin.scoring.ScoringEngine.MatchState
 import org.litvin.scoring.ScoringEngine.SetScore
@@ -157,7 +163,7 @@ class SwingScoringPanel(
         player.onTimeChanged = null
         player.onStatusChanged = null
         player.onReady = null
-        player.setPreviewOverlayImage(null)
+        player.setPreviewOverlay(null)
         adjustments.flush()
         player.close()
     }
@@ -207,6 +213,12 @@ class SwingScoringPanel(
     private var points: List<PointV1> = emptyList()
 
     // Player colors (hex)
+    private var scoreboardSettings = ScoreboardSettingsV1()
+
+    // Settings that the open settings dialog shows on the video before the user saves them.
+    private var scoreboardPreviewSettings: ScoreboardSettingsV1? = null
+    private var lastScoreboardDisplay: ScoreboardDisplay? = null
+
     private var player1ColorHex: String = "#4DA3FF"
     private var player2ColorHex: String = "#FF6B6B"
 
@@ -267,6 +279,7 @@ class SwingScoringPanel(
         player2Name = score.player2Name
         // Colors
         player1ColorHex = score.player1ColorHex
+        scoreboardSettings = score.scoreboard
         player2ColorHex = score.player2ColorHex
         if (::leftListPanel.isInitialized) {
             leftListPanel.setPlayerNames(player1Name, player2Name)
@@ -330,11 +343,13 @@ class SwingScoringPanel(
         val toolbar = ControlsToolbar(
             centerContent = pointHeaderPanel(),
             centerContentOffsetPx = 270,
+            onScoreboardSettings = ::openScoreboardSettings,
         )
         add(toolbar, BorderLayout.NORTH)
 
         // Root content: left list (fixed width) + center content
         leftListPanel = LeftListPanel(navigationActions,
+            onScoreboardSettings = ::openScoreboardSettings,
             onNamesChanged = { p1, p2 ->
                 player1Name = p1
                 player2Name = p2
@@ -434,7 +449,7 @@ class SwingScoringPanel(
                 leftListPanel.setNextEnabled(false)
                 leftListPanel.setPreviousEnabled(false)
             }
-            player.setPreviewOverlayImage(null)
+            player.setPreviewOverlay(null)
             // Clear bottom panels and overlay
             val zero = MatchState(0, 0, 0, 0, 0, 0, null, null, false)
             updateBottomPanels(zero)
@@ -884,7 +899,16 @@ class SwingScoringPanel(
             val s2 = player2Name
             val c1 = player1ColorHex
             val c2 = player2ColorHex
-            ScoreIO.writeForProjectDir(dir, ScoreV1(outcomes = map, version = 1, player1Name = s1, player2Name = s2, player1ColorHex = c1, player2ColorHex = c2))
+            ScoreIO.writeForProjectDir(dir, ScoreV1(
+                    outcomes = map,
+                    version = 1,
+                    player1Name = s1,
+                    player2Name = s2,
+                    player1ColorHex = c1,
+                    player2ColorHex = c2,
+                    scoreboard = scoreboardSettings,
+                ),
+            )
         } catch (t: Throwable) {
             // Non-fatal; show error similarly to Points tab autosave
             dialogs.showError(this, t.message ?: t.toString(), "Autosave failed")
@@ -898,9 +922,43 @@ class SwingScoringPanel(
         if (::rightPlayerPanel.isInitialized) rightPlayerPanel.setPlayerName(name2)
     }
 
+    /** Opens the scoreboard settings. The video shows each change at once; Cancel restores the saved settings. */
+    private fun openScoreboardSettings() = uiSafe {
+        val sample = lastScoreboardDisplay ?: ScoreboardComponent.display(
+            OverlaySpan(
+                startMs = 0L,
+                endMs = 1L,
+                text = "",
+                p1Name = displayNameP1(),
+                p2Name = displayNameP2(),
+                p1ColorHex = player1ColorHex,
+                p2ColorHex = player2ColorHex,
+                p1Pts = 3,
+                p2Pts = 1,
+                gamesP1 = 4,
+                gamesP2 = 3,
+                completedSets = listOf(6 to 4),
+            ),
+        )
+        val result = try {
+            ScoreboardSettingsDialog.show(this, scoreboardSettings, sample) { preview ->
+                scoreboardPreviewSettings = preview
+                refreshVideoScoreboardOverlay()
+            }
+        } finally {
+            scoreboardPreviewSettings = null
+        }
+        if (result != null) {
+            scoreboardSettings = result
+            saveNow()
+        }
+        refreshVideoScoreboardOverlay()
+        EventQueue.invokeLater { player.component.requestFocusInWindow() }
+    }
+
     private fun refreshVideoScoreboardOverlay() {
         if (points.isEmpty() || selectedPointIndex !in points.indices) {
-            player.setPreviewOverlayImage(null)
+            player.setPreviewOverlay(null)
             return
         }
 
@@ -915,11 +973,17 @@ class SwingScoringPanel(
             )
             val span = spans.getOrNull(selectedPointIndex)
             if (span == null) {
-                player.setPreviewOverlayImage(null)
+                player.setPreviewOverlay(null)
                 return
             }
             val display = ScoreboardComponent.display(span)
-            player.setPreviewOverlayImage(PreviewScoreboardRenderer.render(display))
+            lastScoreboardDisplay = display
+            val settings = scoreboardPreviewSettings ?: scoreboardSettings
+            val scene = ScoreboardLayouts.scene(display, settings)
+            player.setPreviewOverlay(VideoOverlay { area ->
+                val placement = ScoreboardAss.place(scene, settings, area.x, area.y, area.width, area.height)
+                ScoreboardAss.events(scene, placement)
+            })
         } catch (_: Throwable) {
             // Preview overlay is best-effort; scoring/export data remains authoritative.
         }

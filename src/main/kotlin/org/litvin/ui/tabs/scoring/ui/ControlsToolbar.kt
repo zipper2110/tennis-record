@@ -1,7 +1,6 @@
 package org.litvin.ui.tabs.scoring.ui
 
 import org.litvin.ui.UiStyles
-import org.litvin.ui.tabs.scoring.ScoringActions
 import java.awt.BorderLayout
 import java.awt.Color
 import java.awt.Container
@@ -15,17 +14,17 @@ import javax.swing.border.EmptyBorder
 /**
  * E-SC-001 (T3): ControlsToolbar
  *
- * A thin leaf Swing component that hosts top-level Scoring tab actions such as
- * Save and Settings. It emits callbacks strictly via `ScoringActions`.
+ * A thin leaf Swing component that hosts top-level Scoring tab actions, such as
+ * the scoreboard settings. It emits callbacks to the container.
  *
  * Notes
  * - Icons/styles: uses existing `UiStyles` helpers where applicable.
- * - No direct dependency on domain services; all side effects are delegated
- *   through `ScoringActions` provided by the container.
+ * - No direct dependency on domain services; the container does all side effects.
  */
 class ControlsToolbar(
     private val centerContent: JComponent? = null,
     private val centerContentOffsetPx: Int = 0,
+    private val onScoreboardSettings: () -> Unit = {},
 ) : JPanel(BorderLayout()) {
 
     init {
@@ -44,13 +43,11 @@ class ControlsToolbar(
         val right = JPanel(FlowLayout(FlowLayout.RIGHT, 8, 0))
         right.isOpaque = false
 
-        // Settings placeholder (disabled for now, parity with current state)
         val btnSettings = JButton("Scoreboard Settings")
         UiStyles.styleSecondary(btnSettings)
-        btnSettings.isEnabled = false
-
         btnSettings.name = "toolbar-scoreboard-settings"
-        btnSettings.toolTipText = "Temporarily disabled"
+        btnSettings.toolTipText = "Set the scoreboard style, title, position, and size"
+        btnSettings.addActionListener { onScoreboardSettings() }
 
         right.add(btnSettings)
 

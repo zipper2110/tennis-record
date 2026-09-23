@@ -155,8 +155,9 @@ object HelpCatalog {
             ),
             actions = listOf(
                 "Star or unstar the current point without returning to Points.",
+                "Use Scoreboard Settings to choose the scoreboard style, title, position, size, background, and accent color. The exported video uses the same scoreboard as the preview.",
                 "Choose playback speed and optionally enable frame-by-frame arrow-key stepping while paused.",
-                "Scoring, names, and colors autosave to the project.",
+                "Scoring, names, colors, and scoreboard settings autosave to the project.",
             ),
             shortcuts = listOf(
                 HelpShortcut(AppShortcuts.SCORE_PLAYER_1, "Point for Player 1"),

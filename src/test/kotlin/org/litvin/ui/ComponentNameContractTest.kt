@@ -19,6 +19,7 @@ import org.litvin.media.MediaPlayerFactory
 import org.litvin.media.MediaScreen
 import org.litvin.media.PlayerStatus
 import org.litvin.media.SwingMediaPlayer
+import org.litvin.media.VideoOverlay
 import org.litvin.projects.ProjectManifestV1
 import org.litvin.projects.ProjectSummary
 import org.litvin.projects.ProjectsRepository
@@ -28,7 +29,6 @@ import java.awt.Component
 import java.awt.Container
 import java.awt.Dimension
 import java.awt.image.BufferedImage
-import java.awt.image.RenderedImage
 import java.io.File
 import java.util.concurrent.AbstractExecutorService
 import java.util.concurrent.ExecutorService
@@ -138,7 +138,7 @@ class ComponentNameContractTest {
         override fun applyGeometryAdjustments(adj: AdjustmentsV1) = true
         override fun applyPreviewAdjustments(adj: AdjustmentsV1) = Unit
         override fun applyPreviewRotation(rotationDeg: Float, reason: String) = Unit
-        override fun setPreviewOverlayImage(image: RenderedImage?) = Unit
+        override fun setPreviewOverlay(overlay: VideoOverlay?) = Unit
         override fun stepFrameForward(maximumTimeMs: Long) = 0L
         override fun stepFrameBackward(minimumTimeMs: Long) = 0L
         override fun nextFrame() = Unit

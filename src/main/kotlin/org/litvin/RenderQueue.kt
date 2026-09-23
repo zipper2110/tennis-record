@@ -5,6 +5,7 @@ import org.litvin.export.RenderRequestCoordinator
 import org.litvin.export.RenderQueueRequest
 import org.litvin.export.RenderTerminalOutcome
 import org.litvin.points.PointV1
+import org.litvin.scoring.ScoreboardSettingsV1
 import java.util.UUID
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.LinkedBlockingQueue
@@ -38,6 +39,7 @@ data class RenderJob(
     val favoriteOnly: Boolean = false,
     val includeScoreboard: Boolean = false,
     val overlayTimeline: List<OverlaySpan> = emptyList(),
+    val scoreboardSettings: ScoreboardSettingsV1 = ScoreboardSettingsV1(),
     val outputPath: String,
     val includeComments: Boolean = false,
     val commentOverlayTimeline: List<CommentOverlaySpan> = emptyList(),

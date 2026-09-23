@@ -16,6 +16,7 @@ object RenderOverlayScript {
                 commentSpans = commentSpans,
                 outWidth = job.outWidth,
                 outHeight = job.outHeight,
+                settings = job.scoreboardSettings,
             )
         }
     }

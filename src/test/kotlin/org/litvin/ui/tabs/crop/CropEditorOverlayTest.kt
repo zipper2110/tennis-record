@@ -4,10 +4,10 @@ import org.litvin.adjustments.AdjustmentsV1
 import org.litvin.media.OverlayShape
 import org.litvin.media.PlayerStatus
 import org.litvin.media.SwingMediaPlayer
+import org.litvin.media.VideoOverlay
 import java.awt.Component
 import java.awt.event.MouseEvent
 import java.awt.geom.Rectangle2D
-import java.awt.image.RenderedImage
 import java.io.File
 import javax.swing.JPanel
 import kotlin.test.Test
@@ -92,7 +92,7 @@ class CropEditorOverlayTest {
         override fun applyGeometryAdjustments(adj: AdjustmentsV1) = true
         override fun applyPreviewAdjustments(adj: AdjustmentsV1) = Unit
         override fun applyPreviewRotation(rotationDeg: Float, reason: String) = Unit
-        override fun setPreviewOverlayImage(image: RenderedImage?) = Unit
+        override fun setPreviewOverlay(overlay: VideoOverlay?) = Unit
         override fun stepFrameForward(maximumTimeMs: Long) = 0L
         override fun stepFrameBackward(minimumTimeMs: Long) = 0L
         override fun nextFrame() = Unit

@@ -1,5 +1,6 @@
 package org.litvin
 
+import org.litvin.scoring.ScoreboardSettingsV1
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertNotNull
@@ -22,6 +23,25 @@ class RenderOverlayScriptTest {
             assertNotNull(script)
             assertTrue(script.exists())
             assertTrue(script.readText().contains("CommentText"))
+        } finally {
+            tempDir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun writesScoreboardWithTheJobScoreboardSettings() {
+        val tempDir = kotlin.io.path.createTempDirectory("render-overlay-").toFile()
+        try {
+            val job = renderJob().copy(
+                includeScoreboard = true,
+                overlayTimeline = listOf(OverlaySpan(0, 1_000, "", p1Name = "Alice", p2Name = "Bob")),
+                scoreboardSettings = ScoreboardSettingsV1(title = "League Night"),
+            )
+
+            val script = RenderOverlayScript.writeFor(job, File(tempDir, "out.mp4.part"))
+
+            assertNotNull(script)
+            assertTrue(script.readText().contains("LEAGUE NIGHT"))
         } finally {
             tempDir.deleteRecursively()
         }

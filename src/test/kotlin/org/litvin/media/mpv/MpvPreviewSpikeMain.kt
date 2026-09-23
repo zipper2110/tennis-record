@@ -1,9 +1,14 @@
 package org.litvin.media.mpv
 
+import org.litvin.OverlaySpan
+import org.litvin.ScoreboardComponent
 import org.litvin.adjustments.AdjustmentsV1
+import org.litvin.export.scoreboard.ScoreboardAss
+import org.litvin.export.scoreboard.ScoreboardLayouts
+import org.litvin.media.VideoOverlay
+import org.litvin.scoring.ScoreboardSettingsV1
 import java.awt.BorderLayout
 import java.awt.CardLayout
-import java.awt.Color
 import java.awt.Font
 import java.awt.Rectangle
 import java.awt.Robot
@@ -174,16 +179,15 @@ fun main(args: Array<String>) {
     screenshot("d-after-tab-switches")
 
     // E. Scoreboard overlay.
-    val overlay = BufferedImage(440, 166, BufferedImage.TYPE_INT_ARGB).apply {
-        val g = createGraphics()
-        g.color = Color(20, 40, 90, 220)
-        g.fillRoundRect(0, 0, 440, 166, 24, 24)
-        g.color = Color.WHITE
-        g.font = Font("SansSerif", Font.BOLD, 48)
-        g.drawString("6-4  3-2  40-15", 24, 100)
-        g.dispose()
+    val display = ScoreboardComponent.display(
+        OverlaySpan(startMs = 0, endMs = 1, text = "", gamesP1 = 3, gamesP2 = 2, p1Pts = 3, p2Pts = 1, completedSets = listOf(6 to 4)),
+    )
+    val settings = ScoreboardSettingsV1()
+    val scene = ScoreboardLayouts.scene(display, settings)
+    val overlay = VideoOverlay { area ->
+        ScoreboardAss.events(scene, ScoreboardAss.place(scene, settings, area.x, area.y, area.width, area.height))
     }
-    onEdt { player.setPreviewOverlayImage(overlay) }
+    onEdt { player.setPreviewOverlay(overlay) }
     Thread.sleep(800)
     screenshot("e-overlay")
     log("E. overlay set")

@@ -4,7 +4,6 @@ import org.litvin.adjustments.AdjustmentsV1
 import java.awt.Color
 import java.awt.Component
 import java.awt.geom.Rectangle2D
-import java.awt.image.RenderedImage
 import java.io.File
 
 interface SwingMediaPlayer : AutoCloseable {
@@ -26,7 +25,8 @@ interface SwingMediaPlayer : AutoCloseable {
     fun applyGeometryAdjustments(adj: AdjustmentsV1): Boolean
     fun applyPreviewAdjustments(adj: AdjustmentsV1)
     fun applyPreviewRotation(rotationDeg: Float, reason: String = "apply rotation")
-    fun setPreviewOverlayImage(image: RenderedImage?)
+    /** Draws [overlay] over the video, for example the scoreboard. Null removes it. */
+    fun setPreviewOverlay(overlay: VideoOverlay?)
     fun stepFrameForward(maximumTimeMs: Long = Long.MAX_VALUE): Long
     fun stepFrameBackward(minimumTimeMs: Long = 0L): Long
     fun nextFrame()
@@ -54,6 +54,18 @@ interface SwingMediaPlayer : AutoCloseable {
      * Engines without this feature ignore it.
      */
     fun setEditorOverlay(shapes: List<OverlayShape>?) {}
+}
+
+/**
+ * ASS events that a player draws over the video with libass. The export burns the same events
+ * into the video, so the preview and the export look the same.
+ */
+fun interface VideoOverlay {
+    /**
+     * Returns the ASS event texts (the Text field of Dialogue lines) in drawing order.
+     * [videoArea] is the area that shows the video, in overlay pixels. The events use the same pixels.
+     */
+    fun assEvents(videoArea: Rectangle2D.Double): List<String>
 }
 
 /** A vector shape that a player draws over the video. The coordinates are component pixels. */

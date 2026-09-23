@@ -27,12 +27,14 @@ data class ScoreV1(
     val player2Name: String = "Player 2",
     val player1ColorHex: String = "#4DA3FF",
     val player2ColorHex: String = "#FF6B6B",
+    val scoreboard: ScoreboardSettingsV1 = ScoreboardSettingsV1(),
 )
 
 object ScoreIO {
     private val mapper: ObjectMapper = ObjectMapper()
         .registerModule(KotlinModule.Builder().build())
         .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
+        .configure(DeserializationFeature.READ_UNKNOWN_ENUM_VALUES_USING_DEFAULT_VALUE, true)
         .setSerializationInclusion(JsonInclude.Include.NON_NULL)
         .enable(SerializationFeature.INDENT_OUTPUT)
 

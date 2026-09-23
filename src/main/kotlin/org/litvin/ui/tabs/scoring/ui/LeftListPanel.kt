@@ -29,6 +29,7 @@ class LeftListPanel(
     private val actions: NavigationActions,
     private val onNamesChanged: (p1: String, p2: String) -> Unit,
     private val onColorsChanged: (c1Hex: String, c2Hex: String) -> Unit,
+    private val onScoreboardSettings: () -> Unit = {},
 ) : JPanel(BorderLayout()) {
 
     private fun parseHexOrNull(s: String?): Color? {
@@ -105,8 +106,8 @@ class LeftListPanel(
         val settingsBtn = fullButton("Scoreboard Settings")
         settingsBtn.name = "scoreboard-settings"
         settingsBtn.foreground = Color(0xFF, 0xFF, 0xFF)
-        settingsBtn.isEnabled = false
-        settingsBtn.toolTipText = "Temporarily disabled"
+        settingsBtn.toolTipText = "Set the scoreboard style, title, position, and size"
+        settingsBtn.addActionListener { onScoreboardSettings() }
 
         fun nameField(): JTextField {
             val tf = JTextField()

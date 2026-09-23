@@ -5,12 +5,12 @@ import org.litvin.media.MediaPlayerFactory
 import org.litvin.media.MediaScreen
 import org.litvin.media.PlayerStatus
 import org.litvin.media.SwingMediaPlayer
+import org.litvin.media.VideoOverlay
 import java.awt.Color
 import java.awt.Component
 import java.awt.Dimension
 import java.awt.EventQueue
 import java.awt.image.BufferedImage
-import java.awt.image.RenderedImage
 import java.io.File
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicBoolean
@@ -88,8 +88,8 @@ class FakeMediaPlayer(
     override fun applyPreviewAdjustments(adj: AdjustmentsV1) = record("preview-adjustments", adj.toString())
     override fun applyPreviewRotation(rotationDeg: Float, reason: String) =
         record("preview-rotation", "$rotationDeg ($reason)")
-    override fun setPreviewOverlayImage(image: RenderedImage?) =
-        record("preview-overlay", if (image == null) "clear" else "${image.width}x${image.height}")
+    override fun setPreviewOverlay(overlay: VideoOverlay?) =
+        record("preview-overlay", if (overlay == null) "clear" else "set")
 
     override fun stepFrameForward(maximumTimeMs: Long): Long {
         seek((positionMs + FRAME_MS).coerceAtMost(maximumTimeMs))

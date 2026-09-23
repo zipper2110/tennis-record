@@ -3,7 +3,6 @@ package org.litvin.media
 import org.junit.jupiter.api.Test
 import org.litvin.adjustments.AdjustmentsV1
 import java.awt.Component
-import java.awt.image.RenderedImage
 import java.io.File
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -111,7 +110,7 @@ class MediaPlayerFactoryTest {
         override fun applyGeometryAdjustments(adj: AdjustmentsV1): Boolean = true
         override fun applyPreviewAdjustments(adj: AdjustmentsV1) = Unit
         override fun applyPreviewRotation(rotationDeg: Float, reason: String) = Unit
-        override fun setPreviewOverlayImage(image: RenderedImage?) = Unit
+        override fun setPreviewOverlay(overlay: VideoOverlay?) = Unit
         override fun stepFrameForward(maximumTimeMs: Long): Long = 0L
         override fun stepFrameBackward(minimumTimeMs: Long): Long = 0L
         override fun nextFrame() = Unit

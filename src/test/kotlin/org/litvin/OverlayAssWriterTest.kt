@@ -1,9 +1,13 @@
 package org.litvin
 
+import org.litvin.scoring.ScoreboardPosition
+import org.litvin.scoring.ScoreboardSettingsV1
+import org.litvin.scoring.ScoreboardStyleId
 import java.io.File
 import java.security.MessageDigest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class OverlayAssWriterTest {
@@ -35,9 +39,48 @@ class OverlayAssWriterTest {
         assertTrue(text.contains("[Script Info]"))
         assertTrue(text.contains("[V4+ Styles]"))
         assertTrue(text.contains("[Events]"))
-        assertTrue(text.contains("TennisRecord app"))
+        assertTrue(text.contains("TENNISRECORD APP"))
         assertTrue(text.contains("ALICE"))
         assertTrue(text.contains("BOB"))
+        assertTrue(text.contains("YCbCr Matrix: None"))
+    }
+
+    @Test
+    fun writesSelectedStyleAndPositionForEverySpan() {
+        val tmp = File.createTempFile("score-style", ".ass")
+        tmp.deleteOnExit()
+        val span = OverlaySpan(startMs = 0, endMs = 1_000, text = "", p1Name = "Alice", p2Name = "Bob", p1Pts = 2)
+        val settings = ScoreboardSettingsV1(
+            style = ScoreboardStyleId.CLASSIC,
+            title = "Club Final",
+            position = ScoreboardPosition.BOTTOM_RIGHT,
+        )
+
+        AssOverlayWriter.write(tmp, listOf(span, span.copy(startMs = 1_000, endMs = 2_000, p1Pts = 3)), 1_920, 1_080, settings)
+
+        val dialogues = tmp.readLines().filter { it.startsWith("Dialogue:") }
+        val perSpan = dialogues.count { it.contains(",0:00:00.00,0:00:01.00,") }
+        assertTrue(perSpan > 5)
+        assertEquals(perSpan * 2, dialogues.size)
+        // Classic keeps the title case and uses Arial.
+        assertTrue(dialogues.any { it.endsWith("Club Final") && it.contains("\\fnArial") })
+        // The board is in the bottom-right corner: every x position is in the right half of the frame.
+        val xs = dialogues.flatMap { line ->
+            Regex("""\\pos\(([0-9.]+),""").findAll(line).map { it.groupValues[1].toDouble() }.toList()
+        }
+        assertTrue(xs.isNotEmpty())
+        assertTrue(xs.all { it > 960 }, "positions: $xs")
+    }
+
+    @Test
+    fun hidesTheTitleWhenTheSettingsTurnItOff() {
+        val tmp = File.createTempFile("score-no-title", ".ass")
+        tmp.deleteOnExit()
+        val span = OverlaySpan(startMs = 0, endMs = 1_000, text = "", p1Name = "Alice", p2Name = "Bob")
+
+        AssOverlayWriter.write(tmp, listOf(span), 1_920, 1_080, ScoreboardSettingsV1(title = "Hidden Title", showTitle = false))
+
+        assertFalse(tmp.readText().contains("HIDDEN TITLE"))
     }
 
     @Test

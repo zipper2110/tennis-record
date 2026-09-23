@@ -25,8 +25,7 @@ class ScoreboardComponentTest {
             )
         )
 
-        assertEquals("ALEXANDRIA VERY LON...", display.player1Name)
-        assertEquals("ALEXANDRIA ...", display.player1PreviewName)
+        assertEquals("ALEXANDRIA VERY LON…", display.player1Name)
         assertEquals("BOB", display.player2Name)
         assertEquals(0x112233, display.player1Rgb)
         assertEquals(0x445566, display.player2Rgb)
@@ -34,6 +33,7 @@ class ScoreboardComponentTest {
         assertEquals("40", display.player2PointText)
         assertEquals(listOf(3 to 6, 7 to 5), display.completedSets)
         assertTrue(display.player1Leading)
+        assertEquals(1, display.pointLeader)
     }
 
     @Test
@@ -51,5 +51,23 @@ class ScoreboardComponentTest {
         assertEquals("40", display.player1PointText)
         assertEquals("40", display.player2PointText)
         assertFalse(display.player1Leading)
+        assertEquals(0, display.pointLeader)
+    }
+
+    @Test
+    fun advantageAfterDeuceLeadsForTheAdvantagePlayer() {
+        val display = ScoreboardComponent.display(
+            OverlaySpan(
+                startMs = 0L,
+                endMs = 1_000L,
+                text = "",
+                p1Pts = 5,
+                p2Pts = 6,
+            )
+        )
+
+        assertEquals("40", display.player1PointText)
+        assertEquals("Ad", display.player2PointText)
+        assertEquals(2, display.pointLeader)
     }
 }

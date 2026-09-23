@@ -3,6 +3,9 @@ package org.litvin
 import org.litvin.scoring.Outcome
 import org.litvin.scoring.ScoreIO
 import org.litvin.scoring.ScoreV1
+import org.litvin.scoring.ScoreboardPosition
+import org.litvin.scoring.ScoreboardSettingsV1
+import org.litvin.scoring.ScoreboardStyleId
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import java.nio.file.Files
@@ -57,5 +60,44 @@ class ScoreIOTest {
         val readBack = ScoreIO.read(f.absolutePath)
         assertEquals(1, readBack.version)
         assertEquals(mapOf("X" to Outcome.P1), readBack.outcomes)
+    }
+
+    @Test
+    fun roundTrip_keepsScoreboardSettings() {
+        val tmpDir: Path = Files.createTempDirectory("score_board_")
+        val scorePath = tmpDir.resolve("score.json").toFile().absolutePath
+        val settings = ScoreboardSettingsV1(
+            style = ScoreboardStyleId.CENTER_COURT,
+            title = "Batumi Raketo League",
+            showTitle = false,
+            position = ScoreboardPosition.BOTTOM_RIGHT,
+            sizePercent = 120,
+            backgroundOpacityPercent = 70,
+            accentColorHex = "#FFCC00",
+        )
+
+        ScoreIO.write(scorePath, ScoreV1(scoreboard = settings))
+
+        assertEquals(settings, ScoreIO.read(scorePath).scoreboard)
+    }
+
+    @Test
+    fun read_oldScoreWithoutScoreboard_usesDefaultSettings() {
+        val tmpDir: Path = Files.createTempDirectory("score_old_")
+        val f = tmpDir.resolve("score.json").toFile()
+        f.writeText("""{ "version": 1, "outcomes": {} }""")
+
+        assertEquals(ScoreboardSettingsV1(), ScoreIO.read(f.absolutePath).scoreboard)
+    }
+
+    @Test
+    fun read_unknownScoreboardStyle_fallsBackToDefaultStyle() {
+        val tmpDir: Path = Files.createTempDirectory("score_future_")
+        val f = tmpDir.resolve("score.json").toFile()
+        f.writeText("""{ "version": 1, "scoreboard": { "style": "FUTURE_STYLE", "position": "TOP_RIGHT" } }""")
+
+        val scoreboard = ScoreIO.read(f.absolutePath).scoreboard
+        assertEquals(ScoreboardStyleId.BROADCAST, scoreboard.style)
+        assertEquals(ScoreboardPosition.TOP_RIGHT, scoreboard.position)
     }
 }

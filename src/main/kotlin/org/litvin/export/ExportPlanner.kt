@@ -214,6 +214,7 @@ object ExportPlanner {
             favoriteOnly = request.favoriteOnly,
             includeScoreboard = request.includeScoreboard,
             overlayTimeline = overlayTimeline,
+            scoreboardSettings = request.score.scoreboard,
             outputPath = request.outputPath,
             includeComments = request.includeComments,
             commentOverlayTimeline = commentOverlayTimeline,

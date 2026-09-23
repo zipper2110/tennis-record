@@ -1,16 +1,23 @@
 package org.litvin
 
+import org.litvin.export.scoreboard.ScoreboardAss
+import org.litvin.export.scoreboard.ScoreboardLayouts
+import org.litvin.scoring.ScoreboardSettingsV1
 import java.io.File
 import java.util.Locale
 
 /**
  * Task 3.19 — Helper to generate an ASS subtitles file for the scoreboard overlay.
  *
- * Generates a styled scoreboard in the top-left safe area, matching the v0.1.0 visual.
- * One Dialogue block per span is emitted with all static/text elements grouped so they
- * switch atomically at point boundaries.
+ * The scoreboard comes from [ScoreboardLayouts] and [ScoreboardAss]. The scoring preview sends the
+ * same ASS events to mpv, so the preview and the export look the same.
+ * Each span writes all board events with the same start and end, so the board changes atomically
+ * at point boundaries. The layer number keeps the drawing order.
  */
 object AssOverlayWriter {
+    /** Comment events use layers above all scoreboard layers. */
+    private const val COMMENT_LAYER = 1000
+
     /**
      * Write an ASS file using the given video resolution and spans.
      * Fonts, sizes, paddings are scaled relative to 1080p.
@@ -20,14 +27,14 @@ object AssOverlayWriter {
         spans: List<OverlaySpan>,
         outWidth: Int,
         outHeight: Int,
-        style: ScoreboardStyle = ScoreboardStyles.default(),
+        settings: ScoreboardSettingsV1 = ScoreboardSettingsV1(),
     ) = write(
         file = file,
         scoreboardSpans = spans,
         commentSpans = emptyList(),
         outWidth = outWidth,
         outHeight = outHeight,
-        style = style,
+        settings = settings,
     )
 
     fun write(
@@ -36,196 +43,54 @@ object AssOverlayWriter {
         commentSpans: List<CommentOverlaySpan>,
         outWidth: Int,
         outHeight: Int,
-        style: ScoreboardStyle = ScoreboardStyles.default(),
+        settings: ScoreboardSettingsV1 = ScoreboardSettingsV1(),
     ) {
-        val spans = scoreboardSpans
         val playResX = outWidth.coerceAtLeast(16)
         val playResY = outHeight.coerceAtLeast(16)
         val scale = (playResY / 1080.0).coerceAtLeast(0.25)
-
-        // Layout metrics per spec (1080p → scale proportionally)
-        val marginTL = (style.layout.marginBase * scale).toInt()
-        val panelW = (style.layout.panelWidthBase * scale).toInt()
-        val panelH = (style.layout.panelHeightBase * scale).toInt()
-        val radius = (12 * scale).toInt() // rounded corners omitted in MVP (ASS limitation)
-
-        // Header
-        val headerH = (style.layout.headerHeightBase * scale).toInt()
-        val dotSize = (16 * scale).toInt()
-        val titleFont = (28 * scale).coerceIn(14.0, 96.0)
-
-        // Rows
-        val rowGap = (28 * scale).toInt()
-        val iconSize = (24 * scale).toInt()
-        val nameFont = (30 * scale).coerceIn(14.0, 96.0)
-        val cellW = (44 * scale).toInt()
-        val cellGap = (22 * scale).toInt()
-        val nameCellGap = (190 * scale).toInt()
-        val bigScoreW = (120 * scale).toInt()
-        val bigScoreFont = (42 * scale).coerceIn(24.0, 160.0)
-        val setFont = (36 * scale).coerceIn(14.0, 96.0)
+        val commentFont = (78 * scale).coerceIn(27.0, 144.0)
+        val fontFamily = "Arial"
 
         file.parentFile?.mkdirs()
         file.bufferedWriter(Charsets.UTF_8).use { w ->
-            // Use per-span colors when provided; fall back to the selected style.
-            val c1Rgb = ScoreboardComponent.parseHexRgbOrDefault(spans.firstOrNull()?.p1ColorHex, style.palette.player1Rgb)
-            val c2Rgb = ScoreboardComponent.parseHexRgbOrDefault(spans.firstOrNull()?.p2ColorHex, style.palette.player2Rgb)
-
-            // Header
             w.appendLine("[Script Info]")
             w.appendLine("ScriptType: v4.00+")
             w.appendLine("PlayResX: $playResX")
             w.appendLine("PlayResY: $playResY")
             w.appendLine("ScaledBorderAndShadow: yes")
+            // Without this header, FFmpeg converts the colors like VSFilter (TV range BT.601).
+            // The mpv preview uses the RGB values as they are, so the export must do the same.
+            w.appendLine("YCbCr Matrix: None")
             w.appendLine()
 
-            // Styles
-            w.appendLine("[V4+ Styles]")
-            w.appendLine("Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding")
             // Colors use &HAABBGGRR (AA: 00 opaque, FF transparent)
-            val neon = assColor(style.palette.accentRgb, 0x00)
-            val textPrimary = assColor(style.palette.textPrimaryRgb, 0x13) // ~92% opacity
-            val textMuted = assColor(style.palette.textMutedRgb, 0x00)
-            val panelBg = assColor(style.palette.panelBgRgb, 0x80) // 50% opacity background
-            val white = assColor(0xFFFFFF, 0x00)
             val black = assColor(0x000000, 0x00)
-            val p1Square = assColor(c1Rgb, 0x30)
-            val p2Square = assColor(c2Rgb, 0x30)
-            val commentFont = (78 * scale).coerceIn(27.0, 144.0)
             val commentBackdrop = assColor(0x000000, 0x80)
             val commentAlpha = 0x80 // 50% transparent text and border
             val commentText = assColor(0xFFFFFF, commentAlpha)
             val commentOutline = assColor(0x000000, commentAlpha)
 
-            // Base styles
-            w.appendLine("Style: Title,${style.fontFamily},${fmt(titleFont)},$neon,&H000000FF,&H00000000,$black,1,0,0,0,100,100,2,0,1,1.5,0,7,0,0,0,0")
-            w.appendLine("Style: Name,${style.fontFamily},${fmt(nameFont)},$textPrimary,&H000000FF,&H00000000,$white,0,0,0,0,100,100,0,0,1,1.2,0,7,0,0,0,0")
-            w.appendLine("Style: Cell,${style.fontFamily},${fmt(setFont)},$textMuted,&H000000FF,&H00000000,$white,0,0,0,0,100,100,0,0,1,0.2,0,7,0,0,0,0")
-            w.appendLine("Style: BigScore,${style.fontFamily},${fmt(bigScoreFont)},$neon,&H000000FF,&H00000000,$white,1,0,0,0,100,100,0,0,1,0.2,0,9,0,0,0,0")
-            w.appendLine("Style: BigScoreDim,${style.fontFamily},${fmt(bigScoreFont)},$neon,&H000000FF,&H00000000,$black,1,0,0,0,100,100,0,0,1,1.2,0,9,0,0,0,0")
-            w.appendLine("Style: Dot,${style.fontFamily},${fmt(nameFont)},$neon,&H000000FF,&H00000000,$black,1,0,0,0,100,100,0,0,1,1.2,0,7,0,0,0,0")
-            w.appendLine("Style: Panel,${style.fontFamily},20,${withAlpha(black, 0x50)},&H000000FF,&H00000000,$black,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,0")
-            w.appendLine("Style: SquareP1,${style.fontFamily},20,${withAlpha(p1Square, 0x30)},&H000000FF,&H00000000,$black,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,0")
-            w.appendLine("Style: SquareP2,${style.fontFamily},20,${withAlpha(p2Square, 0x30)},&H000000FF,&H00000000,$black,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,0")
-            w.appendLine("Style: CommentText,${style.fontFamily},${fmt(commentFont)},$commentText,&H000000FF,$commentOutline,$black,1,0,0,0,100,100,0,0,1,1.2,0,2,0,0,0,0")
-            w.appendLine("Style: CommentBackdrop,${style.fontFamily},20,$commentBackdrop,&H000000FF,&H00000000,$black,0,0,0,0,100,100,0,0,1,0,0,2,0,0,0,0")
+            w.appendLine("[V4+ Styles]")
+            w.appendLine("Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding")
+            // Board events set all of their override tags; this style only supplies neutral values.
+            w.appendLine("Style: Board,$fontFamily,20,${assColor(0xFFFFFF, 0x00)},&H000000FF,$black,$black,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,0")
+            w.appendLine("Style: CommentText,$fontFamily,${fmt(commentFont)},$commentText,&H000000FF,$commentOutline,$black,1,0,0,0,100,100,0,0,1,1.2,0,2,0,0,0,0")
+            w.appendLine("Style: CommentBackdrop,$fontFamily,20,$commentBackdrop,&H000000FF,&H00000000,$black,0,0,0,0,100,100,0,0,1,0,0,2,0,0,0,0")
             w.appendLine()
 
-            // Events
             w.appendLine("[Events]")
             w.appendLine("Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text")
 
-            for (s in spans) {
+            for (s in scoreboardSpans) {
                 if (s.endMs <= s.startMs) continue
                 val start = toAssTs(s.startMs)
                 val end = toAssTs(s.endMs)
-
-                // Prefer structured fields from OverlaySpan (3.21); fallback to text parsing for backward data
-                val st = if (s.isTiebreak || s.p1Pts != 0 || s.p2Pts != 0 || s.gamesP1 != 0 || s.gamesP2 != 0 || s.setsP1 != 0 || s.setsP2 != 0 || s.completedSets.isNotEmpty()) {
-                    State2(
-                        p1Pts = s.p1Pts,
-                        p2Pts = s.p2Pts,
-                        gamesP1 = if (s.isTiebreak) 6 else s.gamesP1,
-                        gamesP2 = if (s.isTiebreak) 6 else s.gamesP2,
-                        setsP1 = s.setsP1,
-                        setsP2 = s.setsP2,
-                        completedSets = s.completedSets,
-                        isTiebreak = s.isTiebreak,
-                        tbP1 = s.tbP1,
-                        tbP2 = s.tbP2,
-                    )
-                } else {
-                    val p = parseState(s.text)
-                    State2(
-                        p1Pts = p.p1Pts,
-                        p2Pts = p.p2Pts,
-                        gamesP1 = p.gamesP1,
-                        gamesP2 = p.gamesP2,
-                        setsP1 = p.setsP1,
-                        setsP2 = p.setsP2,
-                        completedSets = p.completedSets,
-                        isTiebreak = false,
-                        tbP1 = 0,
-                        tbP2 = 0,
-                    )
+                val display = ScoreboardComponent.display(withStructuredState(s))
+                val scene = ScoreboardLayouts.scene(display, settings)
+                val placement = ScoreboardAss.place(scene, settings, 0.0, 0.0, playResX.toDouble(), playResY.toDouble())
+                ScoreboardAss.events(scene, placement).forEachIndexed { layer, text ->
+                    w.appendLine("Dialogue: $layer,$start,$end,Board,,0,0,0,,$text")
                 }
-                val display = ScoreboardComponent.display(
-                    s.copy(
-                        p1Pts = st.p1Pts,
-                        p2Pts = st.p2Pts,
-                        gamesP1 = st.gamesP1,
-                        gamesP2 = st.gamesP2,
-                        setsP1 = st.setsP1,
-                        setsP2 = st.setsP2,
-                        completedSets = st.completedSets,
-                        isTiebreak = st.isTiebreak,
-                        tbP1 = st.tbP1,
-                        tbP2 = st.tbP2,
-                    ),
-                    style,
-                )
-
-                // Panel background (simple rectangle; rounded/shadow omitted in MVP)
-                val px = marginTL
-                val py = marginTL
-                val rect = drawRect(px, py, px + panelW, py + panelH)
-                w.appendLine("Dialogue: 0,$start,$end,Panel,,0,0,0,,{\\p1}\\1c$panelBg$rect{\\p0}")
-
-                // Header: dot + title
-                val dotX = px + (20 * scale).toInt()
-                val dotY = py + headerH / 2
-                // Using bullet as dot (approximate circle)
-                w.appendLine("Dialogue: 1,$start,$end,Dot,,0,0,0,,{\\pos(${dotX},${dotY})}•")
-                val titleX = dotX + dotSize + (12 * scale).toInt()
-                val titleY = py + (headerH * 0.5).toInt()
-                w.appendLine("Dialogue: 1,$start,$end,Title,,0,0,0,,{\\an7} {\\pos(${titleX},${titleY})}${display.style.title}")
-
-                // Player rows positions
-                val row1Y = py + headerH + (15 * scale).toInt()
-                val row2Y = row1Y + (nameFont * 1.2 + rowGap).toInt()
-                val contentX = px + (24 * scale).toInt()
-
-                // Icon squares (drawn as filled rectangles)
-                val icon1 = drawRect(contentX, row1Y, contentX + iconSize, row1Y + iconSize)
-                val icon2 = drawRect(contentX, row2Y - iconSize, contentX + iconSize, row2Y)
-                w.appendLine("Dialogue: 1,$start,$end,SquareP1,,0,0,0,,{\\p1}\\1c${assColor(0x000000, 0x00)}$icon1{\\p0}")
-                w.appendLine("Dialogue: 1,$start,$end,SquareP2,,0,0,0,,{\\p1}\\1c${assColor(0x000000, 0x00)}$icon2{\\p0}")
-
-                val nameX = contentX + iconSize + (12 * scale).toInt()
-                w.appendLine("Dialogue: 2,$start,$end,Name,,0,0,0,,{\\an7} {\\pos(${nameX},${row1Y})}${display.player1Name}")
-                w.appendLine("Dialogue: 2,$start,$end,Name,,0,0,0,,{\\an7} {\\pos(${nameX},${row2Y})}${display.player2Name}")
-
-                // Reserve right side for big score and compute cell block bounds
-                val rightPad = (24 * scale).toInt()
-                val scoreRightX = px + panelW - rightPad
-                val rightLimit = scoreRightX - bigScoreW - (36 * scale).toInt()
-
-                // Set cells (last two sets)
-                val cell1X = nameX + nameCellGap
-                val sets = display.completedSets
-                val totalCells = sets.size + 1 // +1 for current games column
-                val totalCellsW = totalCells * cellW + (totalCells - 1) * cellGap
-                var cx = cell1X
-                sets.forEach { (s1, s2) ->
-                    // top row value for P1, bottom for P2
-                    w.appendLine("Dialogue: 2,$start,$end,Cell,,0,0,0,,{\\an7} {\\pos(${cx},${row1Y})}${s1}")
-                    w.appendLine("Dialogue: 2,$start,$end,Cell,,0,0,0,,{\\an7} {\\pos(${cx},${row2Y})}${s2}")
-                    cx += cellW + cellGap
-                }
-
-                // Current games per set (ongoing set) shown as additional cells; during tiebreak show 6–6 per spec
-                w.appendLine("Dialogue: 2,$start,$end,Cell,,0,0,0,,{\\an7} {\\pos(${cx},${row1Y})}${display.player1Games}")
-                w.appendLine("Dialogue: 2,$start,$end,Cell,,0,0,0,,{\\an7} {\\pos(${cx},${row2Y})}${display.player2Games}")
-                cx += cellW + cellGap
-
-                // Big point score at the right (top-right aligned, anchored to panel right pad)
-                val scoreX = scoreRightX
-                val scoreY1 = row1Y - 4
-                val scoreY2 = row2Y - 4
-                val style1 = if (display.player1Leading) "BigScore" else "BigScoreDim"
-                val style2 = if (display.player1Leading) "BigScoreDim" else "BigScore"
-                w.appendLine("Dialogue: 3,$start,$end,$style1,,0,0,0,,{\\an9} {\\pos(${scoreX},${scoreY1})}${display.player1PointText}")
-                w.appendLine("Dialogue: 3,$start,$end,$style2,,0,0,0,,{\\an9} {\\pos(${scoreX},${scoreY2})}${display.player2PointText}")
             }
 
             for (comment in commentSpans) {
@@ -248,10 +113,30 @@ object AssOverlayWriter {
                 val escapedText = lines.joinToString("\\N") { escapeAssText(it) }
                 val textY = lowerThirdY - verticalPadding
 
-                w.appendLine("Dialogue: 4,$start,$end,CommentBackdrop,,0,0,0,,{\\p1}\\1c$commentBackdrop$box{\\p0}")
-                w.appendLine("Dialogue: 5,$start,$end,CommentText,,0,0,0,,{\\an2\\pos(${playResX / 2},$textY)\\1c${assColor(colorRgb, 0x00)}\\1a${assAlpha(commentAlpha)}\\3a${assAlpha(commentAlpha)}}$escapedText")
+                w.appendLine("Dialogue: $COMMENT_LAYER,$start,$end,CommentBackdrop,,0,0,0,,{\\p1}\\1c$commentBackdrop$box{\\p0}")
+                w.appendLine("Dialogue: ${COMMENT_LAYER + 1},$start,$end,CommentText,,0,0,0,,{\\an2\\pos(${playResX / 2},$textY)\\1c${assColor(colorRgb, 0x00)}\\1a${assAlpha(commentAlpha)}\\3a${assAlpha(commentAlpha)}}$escapedText")
             }
         }
+    }
+
+    /**
+     * Returns the span with structured score fields. Old spans have only the state text,
+     * so the fields come from parsing the text.
+     */
+    private fun withStructuredState(s: OverlaySpan): OverlaySpan {
+        val structured = s.isTiebreak || s.p1Pts != 0 || s.p2Pts != 0 || s.gamesP1 != 0 || s.gamesP2 != 0 ||
+            s.setsP1 != 0 || s.setsP2 != 0 || s.completedSets.isNotEmpty()
+        if (structured) return s
+        val p = parseState(s.text)
+        return s.copy(
+            p1Pts = p.p1Pts,
+            p2Pts = p.p2Pts,
+            gamesP1 = p.gamesP1,
+            gamesP2 = p.gamesP2,
+            setsP1 = p.setsP1,
+            setsP2 = p.setsP2,
+            completedSets = p.completedSets,
+        )
     }
 
     // ----- Parsing helpers -----
@@ -260,20 +145,6 @@ object AssOverlayWriter {
         val gamesP1: Int, val gamesP2: Int,
         val setsP1: Int, val setsP2: Int,
         val completedSets: List<Pair<Int, Int>>,
-    )
-
-    // 3.21 — Structured state for overlay rendering with tiebreak support
-    private data class State2(
-        val p1Pts: Int,
-        val p2Pts: Int,
-        val gamesP1: Int,
-        val gamesP2: Int,
-        val setsP1: Int,
-        val setsP2: Int,
-        val completedSets: List<Pair<Int, Int>>,
-        val isTiebreak: Boolean,
-        val tbP1: Int,
-        val tbP2: Int,
     )
 
     private fun parseState(text: String): State {
@@ -320,23 +191,6 @@ object AssOverlayWriter {
             }
         } catch (_: Throwable) { }
         return State(p1Pts, p2Pts, g1, g2, s1, s2, sets)
-    }
-
-    private fun isP1LeadingLegacy(p1Pts: Int, p2Pts: Int): Boolean {
-        // Legacy mapping consistent with 0/15/30/40/Ad display
-        val pMap = fun(pts: Int): Int = if (pts >= 4) 4 else pts
-        val p1 = pMap(p1Pts)
-        val p2 = pMap(p2Pts)
-        if (p1 != p2) return p1 > p2
-        return false
-    }
-
-    private fun pointsLabel(mine: Int, other: Int): String {
-        val base = arrayOf("0", "15", "30", "40")
-        if (mine < 4 && other < 4) return base[mine.coerceIn(0, 3)]
-        if (mine == other) return "40"
-        if (mine > other) return "Ad"
-        return "40"
     }
 
     private fun maxCommentLineLength(playResX: Int, fontSize: Double): Int =
@@ -405,13 +259,6 @@ object AssOverlayWriter {
 
     /** ASS alpha override, e.g. "&H99&" (00 opaque, FF transparent). */
     private fun assAlpha(aa: Int): String = String.format(Locale.US, "&H%02X&", aa.coerceIn(0, 255))
-
-    private fun withAlpha(col: String, aa: Int): String {
-        // Replace the AA part in &HAABBGGRR
-        return col.replace(Regex("^&H[0-9A-Fa-f]{2}")) { _ ->
-            String.format(Locale.US, "&H%02X", aa.coerceIn(0, 255))
-        }
-    }
 
     private fun fmt(v: Double): String = String.format(Locale.US, "%.1f", v)
 }
