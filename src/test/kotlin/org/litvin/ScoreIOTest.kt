@@ -70,6 +70,7 @@ class ScoreIOTest {
             style = ScoreboardStyleId.CENTER_COURT,
             title = "Batumi Raketo League",
             showTitle = false,
+            showAppCredit = false,
             position = ScoreboardPosition.BOTTOM_RIGHT,
             sizePercent = 120,
             backgroundOpacityPercent = 70,

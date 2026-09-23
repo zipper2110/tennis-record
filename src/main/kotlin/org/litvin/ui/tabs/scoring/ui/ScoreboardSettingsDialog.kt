@@ -52,8 +52,8 @@ import javax.swing.text.AttributeSet
 import javax.swing.text.DocumentFilter
 
 /**
- * Modal dialog that sets up the scoreboard: style, title, position, size, background opacity
- * and accent color.
+ * Modal dialog that sets up the scoreboard: style, title, app credit line, position, size,
+ * background opacity and accent color.
  *
  * The dialog shows the result in a 16:9 frame. It also sends each change to the `onPreview` callback,
  * so the video preview can show the change at once.
@@ -108,6 +108,11 @@ class ScoreboardSettingsDialog private constructor(
         name = "scoreboard-show-title"
         isOpaque = false
     }
+    private val showAppCredit = JCheckBox("Show \u201C${ScoreboardSettingsV1.APP_CREDIT}\u201D line").apply {
+        name = "scoreboard-show-app-credit"
+        isOpaque = false
+        toolTipText = "Show a line with the app name at the bottom of the scoreboard"
+    }
     private val sizeSlider = slider(ScoreboardSettingsV1.MIN_SIZE_PERCENT, ScoreboardSettingsV1.MAX_SIZE_PERCENT, "scoreboard-size")
     private val sizeValue = valueLabel()
     private val opacitySlider = slider(ScoreboardSettingsV1.MIN_OPACITY_PERCENT, 100, "scoreboard-opacity")
@@ -138,6 +143,9 @@ class ScoreboardSettingsDialog private constructor(
         })
         showTitle.addActionListener {
             update { it.copy(showTitle = showTitle.isSelected) }
+        }
+        showAppCredit.addActionListener {
+            update { it.copy(showAppCredit = showAppCredit.isSelected) }
         }
         sizeSlider.addChangeListener { update { it.copy(sizePercent = sizeSlider.value) } }
         opacitySlider.addChangeListener { update { it.copy(backgroundOpacityPercent = opacitySlider.value) } }
@@ -230,6 +238,7 @@ class ScoreboardSettingsDialog private constructor(
         })
         addRow("Size", inline(sizeSlider, sizeValue))
         addRow("Background", inline(opacitySlider, opacityValue))
+        addRow("Bottom line", showAppCredit)
         addRow("Accent color", JPanel(FlowLayout(FlowLayout.LEFT, 0, 0)).apply {
             isOpaque = false
             add(accentButton)
@@ -269,6 +278,7 @@ class ScoreboardSettingsDialog private constructor(
             if (titleField.text != settings.title) titleField.text = settings.title
             showTitle.isSelected = settings.showTitle
             titleField.isEnabled = settings.showTitle
+            showAppCredit.isSelected = settings.showAppCredit
             sizeSlider.value = settings.sizePercent
             sizeValue.text = "${settings.sizePercent} %"
             val opacity = settings.backgroundOpacityPercent ?: defaults.backgroundOpacityPercent

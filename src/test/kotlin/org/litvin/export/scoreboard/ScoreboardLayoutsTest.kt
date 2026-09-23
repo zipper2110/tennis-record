@@ -70,6 +70,23 @@ class ScoreboardLayoutsTest {
     }
 
     @Test
+    fun everyStyleShowsTheAppCreditLineAtTheBottomUntilTheSettingsHideIt() {
+        ScoreboardStyleId.entries.forEach { style ->
+            val withCredit = ScoreboardLayouts.scene(display, ScoreboardSettingsV1(style = style))
+            val withoutCredit = ScoreboardLayouts.scene(display, ScoreboardSettingsV1(style = style, showAppCredit = false))
+
+            val credit = withCredit.label(ScoreboardSettingsV1.APP_CREDIT)
+            val lowestOtherLabel = withCredit.items.filterIsInstance<SceneItem.Label>()
+                .filter { it.text != ScoreboardSettingsV1.APP_CREDIT }
+                .maxOf { it.y }
+            assertTrue(credit.y > lowestOtherLabel, "$style: the credit line must be the lowest line")
+            assertTrue(credit.y < withCredit.height, "$style")
+            assertFalse(withoutCredit.texts().contains(ScoreboardSettingsV1.APP_CREDIT), "$style")
+            assertTrue(withoutCredit.height < withCredit.height, "$style")
+        }
+    }
+
+    @Test
     fun backgroundOpacityDefaultsToTheStyleValueAndCanBeChanged() {
         val default = ScoreboardLayouts.scene(display, ScoreboardSettingsV1())
         val custom = ScoreboardLayouts.scene(display, ScoreboardSettingsV1(backgroundOpacityPercent = 40))

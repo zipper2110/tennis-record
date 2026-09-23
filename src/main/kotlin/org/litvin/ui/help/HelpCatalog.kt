@@ -155,7 +155,7 @@ object HelpCatalog {
             ),
             actions = listOf(
                 "Star or unstar the current point without returning to Points.",
-                "Use Scoreboard Settings to choose the scoreboard style, title, position, size, background, and accent color. The exported video uses the same scoreboard as the preview.",
+                "Use Scoreboard Settings to choose the scoreboard style, title, bottom app line, position, size, background, and accent color. The exported video uses the same scoreboard as the preview.",
                 "Choose playback speed and optionally enable frame-by-frame arrow-key stepping while paused.",
                 "Scoring, names, colors, and scoreboard settings autosave to the project.",
             ),
