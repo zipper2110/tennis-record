@@ -215,6 +215,7 @@ class ComponentNameContractTest {
             "nav-crop",
             "nav-scoring",
             "nav-export",
+            "nav-help",
             "projects-import-match",
             "projects-current-name",
             "projects-open-$PROJECT_ID",

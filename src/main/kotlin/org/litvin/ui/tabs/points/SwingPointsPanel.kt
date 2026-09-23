@@ -48,15 +48,13 @@ class SwingPointsPanel(
     private val adjustments: AdjustmentsSession,
     autosaveExecutor: ExecutorService,
     private val dialogs: UserDialogService,
-    private val onHelp: () -> Unit = {},
 ) : JPanel(BorderLayout()), AutoCloseable {
 
-    constructor(onHelp: () -> Unit = {}) : this(
+    constructor() : this(
         MpvSwingMediaPlayerAdapter(),
         AdjustmentsStore.legacySession(),
         Executors.newSingleThreadExecutor { runnable -> Thread(runnable, "points-autosave") },
         SwingUserDialogService(),
-        onHelp,
     )
 
     // Geometry viewport wrapper for the video component
@@ -357,19 +355,13 @@ class SwingPointsPanel(
         rightPanel.maximumSize = Dimension(RIGHT_PANEL_WIDTH, Int.MAX_VALUE)
         rightPanel.isOpaque = true
         rightPanel.background = UiStyles.DARK_BG
-        // Header: title + help on the first line, count badge on the second
+        // Header: title on the first line, count badge on the second
         val headerTitleRow = JPanel(BorderLayout())
         headerTitleRow.isOpaque = false
         headerTitleRow.add(JLabel("Points & events").apply {
             foreground = UiStyles.FG_PRIMARY
             font = font.deriveFont(font.style, font.size2D + 3.0f)
         }, BorderLayout.WEST)
-        headerTitleRow.add(JButton("Help [F1]").apply {
-            name = "points-help"
-            toolTipText = "F1 - Help"
-            UiStyles.styleSecondary(this)
-            addActionListener { onHelp() }
-        }, BorderLayout.EAST)
 
         val headerBadgeRow = JPanel()
         headerBadgeRow.layout = BoxLayout(headerBadgeRow, BoxLayout.X_AXIS)

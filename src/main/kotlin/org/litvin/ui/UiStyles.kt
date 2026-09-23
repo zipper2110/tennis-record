@@ -286,6 +286,8 @@ object UiStyles {
     // Tab icon: Crop (prefer Ikonli Feather.CROP with fallback)
     fun pointsIcon(size: Int = 20): Icon = ikon(Material2MZ.SPORTS_TENNIS, size, LIME)
 
+    fun helpIcon(size: Int = 20): Icon = ikon(Material2AL.HELP_OUTLINE, size, LIME)
+
     /** Primary CTA button with gradient; includes a leading circle-plus icon. */
     fun primaryButton(text: String, onClick: () -> Unit): JButton = object : JButton(text) {
         override fun paintComponent(g: Graphics) {

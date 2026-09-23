@@ -20,6 +20,8 @@ import org.litvin.projects.FileProjectsRepository
 import org.litvin.projects.ProjectsRepository
 import org.litvin.ui.commons.FilePicker
 import org.litvin.ui.commons.UserDialogService
+import org.litvin.ui.help.HelpDialog
+import org.litvin.ui.help.HelpPage
 import org.litvin.ui.tabs.projects.SwingProjectsPanel
 import java.awt.Component
 import java.awt.Container
@@ -93,6 +95,38 @@ class SwingApplicationFactoryTest {
                 projectFixture.project.name,
                 checkNotNull(findComponent<JLabel>(opened.frame) { it.name == "projects-current-name" }).text,
             )
+        } finally {
+            handle?.close()
+            Window.getWindows().filterNot(windowsBefore::contains).forEach(Window::dispose)
+        }
+    }
+
+    @Test
+    fun `sidebar Help opens the page for the current tab without a tab change`() {
+        val projectFixture = OpenProjectFixture()
+        val fixture = TestServices(projectsRepository = projectFixture.repository)
+        val windowsBefore = Window.getWindows().toSet()
+        var handle: SwingApplicationHandle? = null
+
+        try {
+            val opened = GuiActionRunner.execute<SwingApplicationHandle> {
+                SwingApplicationFactory.create(fixture.services, show = true)
+            }
+            handle = opened
+            fun clickHelp(): HelpDialog = GuiActionRunner.execute<HelpDialog> {
+                checkNotNull(findComponent<AbstractButton>(opened.frame) { it.name == "nav-help" }).doClick()
+                Window.getWindows().filterIsInstance<HelpDialog>().single { it.isShowing }
+            }
+
+            assertEquals(HelpPage.PROJECTS, clickHelp().selectedPage)
+            assertEquals("Tennis Record — Projects", opened.frame.title)
+
+            GuiActionRunner.execute {
+                checkNotNull(findComponent<AbstractButton>(opened.frame) { it.name == "projects-open-${projectFixture.project.id}" })
+                    .doClick()
+            }
+            assertEquals(HelpPage.POINTS, clickHelp().selectedPage)
+            assertEquals("Tennis Record — Points", opened.frame.title)
         } finally {
             handle?.close()
             Window.getWindows().filterNot(windowsBefore::contains).forEach(Window::dispose)

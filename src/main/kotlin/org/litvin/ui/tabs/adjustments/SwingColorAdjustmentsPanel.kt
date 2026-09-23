@@ -36,13 +36,11 @@ class SwingColorAdjustmentsPanel(
     private val player: SwingMediaPlayer,
     private val adjustments: AdjustmentsSession,
     private val prefs: Preferences,
-    private val onHelp: () -> Unit = {},
 ) : JPanel(BorderLayout()), AutoCloseable {
-    constructor(onHelp: () -> Unit = {}) : this(
+    constructor() : this(
         MpvSwingMediaPlayerAdapter(),
         AdjustmentsStore.legacySession(),
         PreferencesProvider.production().node(PreferencesProvider.COLOR_ADJUSTMENTS),
-        onHelp,
     )
 
     private var projectManifestPath: String? = null
@@ -178,13 +176,6 @@ class SwingColorAdjustmentsPanel(
             isOpaque = true
             background = UiStyles.DARK_BG
         }
-
-        headerRight2.add(JButton("Help [F1]").apply {
-            name = "colors-help"
-            toolTipText = "F1 - Help"
-            UiStyles.styleSecondary(this)
-            addActionListener { onHelp() }
-        })
         headerRight2.add(colorResetBtn)
         sectionHeader.add(sectionTitle, BorderLayout.WEST)
         sectionHeader.add(headerRight2, BorderLayout.EAST)

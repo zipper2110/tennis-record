@@ -40,7 +40,6 @@ import javax.swing.SwingUtilities
 class SwingCropRotatePanel(
     private val player: SwingMediaPlayer,
     private val presenter: CropRotatePresenter = DefaultCropRotatePresenter(),
-    private val onHelp: () -> Unit = {},
 ) : JPanel(BorderLayout()), CropRotateView {
     private val rightPanelWidth = 400
     private val closed = AtomicBoolean(false)
@@ -54,7 +53,6 @@ class SwingCropRotatePanel(
     private val transformControls = CropTransformControls(
         onChanged = { adjustments -> presenter.onIntent(CropRotateIntent.ChangeTransform(adjustments)) },
         onResetTransform = { presenter.onIntent(CropRotateIntent.ResetTransform) },
-        onHelp = { onHelp() },
     )
 
     private val playPauseBtn: JButton = UiStyles.squarePrimaryButton(UiStyles.playIcon(28)) { togglePlayPause() }.apply {

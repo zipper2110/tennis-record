@@ -59,16 +59,14 @@ class SwingExportPanel(
     private val filePicker: FilePicker,
     private val dialogs: UserDialogService,
     encoderCapabilities: EncoderCapabilities,
-    private val onHelp: () -> Unit = {},
 ) : JPanel(BorderLayout()), AutoCloseable {
-    constructor(onHelp: () -> Unit = {}) : this(
+    constructor() : this(
         ExportSettingsPreferences(),
         ProductionRenderService(AdjustmentsStore.legacySession(), ProductionCompletedRendersRepository),
         ProductionCompletedRendersRepository,
         SwingFilePicker(),
         SwingUserDialogService(),
         EncoderCapabilities.production(),
-        onHelp,
     )
 
     private val logger = KotlinLogging.logger {}
@@ -166,12 +164,6 @@ class SwingExportPanel(
             alignmentX = 0f
             maximumSize = Dimension(Int.MAX_VALUE, 36)
             add(title, BorderLayout.WEST)
-            add(JButton("Help [F1]").apply {
-                name = "export-help"
-                toolTipText = "F1 - Help"
-                UiStyles.styleSecondary(this)
-                addActionListener { onHelp() }
-            }, BorderLayout.EAST)
         })
         left.add(Box.createRigidArea(Dimension(0, 8)))
         left.add(JSeparator())

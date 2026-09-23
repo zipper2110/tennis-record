@@ -27,7 +27,6 @@ import kotlin.math.roundToInt
 class CropTransformControls(
     private val onChanged: (AdjustmentsV1) -> Unit,
     private val onResetTransform: () -> Unit,
-    private val onHelp: () -> Unit = {},
 ) : JPanel(BorderLayout()) {
     private val zoomSlider = JSlider(10, 400, 100).apply {
         name = "crop-zoom"
@@ -85,15 +84,8 @@ class CropTransformControls(
                 toolTipText = "Reset Transform"
                 addActionListener { onResetTransform() }
             }
-            val help = JButton("Help [F1]").apply {
-                name = "crop-help"
-                toolTipText = "F1 - Help"
-                UiStyles.styleSecondary(this)
-                addActionListener { onHelp() }
-            }
             val actions = JPanel(FlowLayout(FlowLayout.RIGHT, 8, 4)).apply {
                 isOpaque = false
-                add(help)
                 add(reset)
             }
             add(title, BorderLayout.WEST)

@@ -41,7 +41,6 @@ class SwingProjectsPanel(
     private val presenter: ProjectsPresenter = DefaultProjectsPresenter(),
     private val filePicker: FilePicker = SwingFilePicker(),
     private val dialogs: UserDialogService = SwingUserDialogService(),
-    private val onHelp: () -> Unit = {},
 ) : JPanel(BorderLayout()), ProjectsView {
     private val currentProjectContainer = JPanel(BorderLayout()).apply {
         isOpaque = false
@@ -68,10 +67,7 @@ class SwingProjectsPanel(
         border = BorderFactory.createEmptyBorder(16, 16, 16, 16)
 
         add(
-            ProjectsHeader(
-                onImportNewMatch = { presenter.onIntent(ProjectsIntent.ImportNewMatch) },
-                onHelp = onHelp,
-            ),
+            ProjectsHeader(onImportNewMatch = { presenter.onIntent(ProjectsIntent.ImportNewMatch) }),
             BorderLayout.NORTH,
         )
         add(buildCenterPanel(), BorderLayout.CENTER)

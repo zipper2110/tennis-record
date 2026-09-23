@@ -26,7 +26,6 @@ import javax.swing.border.EmptyBorder
 class ControlsToolbar(
     private val centerContent: JComponent? = null,
     private val centerContentOffsetPx: Int = 0,
-    private val onHelp: (() -> Unit)? = null,
 ) : JPanel(BorderLayout()) {
 
     init {
@@ -53,17 +52,7 @@ class ControlsToolbar(
         btnSettings.name = "toolbar-scoreboard-settings"
         btnSettings.toolTipText = "Temporarily disabled"
 
-        // Help button (right-aligned)
-        val btnHelp = JButton("Help [F1]")
-        UiStyles.styleSecondary(btnHelp)
-
-        btnHelp.name = "toolbar-help"
-        btnHelp.toolTipText = "F1 — Help"
-
-        btnHelp.addActionListener { onHelp?.invoke() }
-
         right.add(btnSettings)
-        right.add(btnHelp)
 
         add(left, BorderLayout.WEST)
         add(center, BorderLayout.CENTER)

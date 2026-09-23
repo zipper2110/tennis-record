@@ -52,7 +52,6 @@ import javax.swing.border.EmptyBorder
  * - entry/ScoreEntryPanel — primary scoring inputs (points, undo/redo)
  * - toolbar/ControlsToolbar — top-level actions (reset/save/settings)
  * - timeline/TimelineSection — wraps existing PointsListPanel
- * - app-level contextual Help opened from the toolbar
  * - video/VideoSyncPanel — basic video/timecode sync controls for scoring
  *
  * Shared contracts for wiring (defined in `org.litvin.ui.tabs.scoring`):
@@ -66,13 +65,11 @@ class SwingScoringPanel(
     private val player: SwingMediaPlayer,
     private val adjustments: AdjustmentsSession,
     private val dialogs: UserDialogService,
-    private val onHelp: () -> Unit = {},
 ) : JPanel(BorderLayout()), AutoCloseable {
-    constructor(onHelp: () -> Unit = {}) : this(
+    constructor() : this(
         MpvSwingMediaPlayerAdapter(),
         AdjustmentsStore.legacySession(),
         SwingUserDialogService(),
-        onHelp,
     )
 
     private val videoPlayerActions = object : VideoPlayerActions {
@@ -333,7 +330,6 @@ class SwingScoringPanel(
         val toolbar = ControlsToolbar(
             centerContent = pointHeaderPanel(),
             centerContentOffsetPx = 270,
-            onHelp = onHelp,
         )
         add(toolbar, BorderLayout.NORTH)
 

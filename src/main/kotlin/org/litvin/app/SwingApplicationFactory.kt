@@ -102,27 +102,27 @@ object SwingApplicationFactory {
                 services.adjustments,
                 services.executors.createExecutor("points-autosave"),
                 services.dialogs,
-            ) { showHelp(HelpPage.POINTS) }
+            )
             closeActions += pointsPanel::close
 
             val colorsPanel = SwingColorAdjustmentsPanel(
                 services.mediaPlayers.create(MediaScreen.COLORS),
                 services.adjustments,
                 services.preferences.node(PreferencesProvider.COLOR_ADJUSTMENTS),
-            ) { showHelp(HelpPage.COLORS) }
+            )
             closeActions += colorsPanel::close
 
             val cropRotatePanel = SwingCropRotatePanel(
                 services.mediaPlayers.create(MediaScreen.CROP),
                 DefaultCropRotatePresenter(services.adjustments),
-            ) { showHelp(HelpPage.CROP) }
+            )
             closeActions += cropRotatePanel::dispose
 
             val scoringPanel = SwingScoringPanel(
                 services.mediaPlayers.create(MediaScreen.SCORING),
                 services.adjustments,
                 services.dialogs,
-            ) { showHelp(HelpPage.SCORING) }
+            )
             closeActions += scoringPanel::close
 
             val exportPanel = SwingExportPanel(
@@ -132,7 +132,7 @@ object SwingApplicationFactory {
                 services.filePicker,
                 services.dialogs,
                 services.encoderCapabilities,
-            ) { showHelp(HelpPage.EXPORT) }
+            )
             closeActions += exportPanel::close
 
             val testEnabled = System.getProperty("test") == "true"
@@ -190,7 +190,7 @@ object SwingApplicationFactory {
                 projectsPresenter,
                 services.filePicker,
                 services.dialogs,
-            ) { showHelp(HelpPage.PROJECTS) }.apply {
+            ).apply {
                 onProjectOpened = { path ->
                     pointsPanel.setProjectManifest(path)
                     colorsPanel.setProjectManifest(path)
@@ -264,6 +264,15 @@ object SwingApplicationFactory {
                 }
                 addItem(btnTest!!)
             }
+            sidebar.add(Box.createVerticalGlue())
+            sidebar.add(UiStyles.sidebarButton("Help", UiStyles.helpIcon()) {
+                showHelp(currentHelpPage())
+            }.apply {
+                name = "nav-help"
+                toolTipText = "F1 - Help"
+                alignmentX = 0f
+                maximumSize = Dimension(Int.MAX_VALUE, 64)
+            })
 
             btnPoints.isVisible = false
             btnColors.isVisible = false
