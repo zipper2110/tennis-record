@@ -15,16 +15,21 @@ data class ScoreboardStyleDefaults(
 
 /** Builds the [ScoreboardScene] of each scoreboard style. */
 object ScoreboardLayouts {
-    private const val SEGOE = "Segoe UI"
-    private const val ARIAL = "Arial"
-    private const val WHITE = 0xFFFFFF
-    private const val BLACK = 0x000000
-
     fun defaults(style: ScoreboardStyleId): ScoreboardStyleDefaults = when (style) {
         ScoreboardStyleId.BROADCAST -> ScoreboardStyleDefaults(accentRgb = 0xC4FF4D, backgroundOpacityPercent = 84)
         ScoreboardStyleId.CLASSIC -> ScoreboardStyleDefaults(accentRgb = 0xC4FF4D, backgroundOpacityPercent = 69)
         ScoreboardStyleId.CENTER_COURT -> ScoreboardStyleDefaults(accentRgb = 0xD7FF3F, backgroundOpacityPercent = 96)
         ScoreboardStyleId.COMPACT -> ScoreboardStyleDefaults(accentRgb = 0xC4FF4D, backgroundOpacityPercent = 72)
+        ScoreboardStyleId.GRASS_COURT -> ScoreboardStyleDefaults(accentRgb = 0xD9C27A, backgroundOpacityPercent = 92)
+        ScoreboardStyleId.CLAY_COURT -> ScoreboardStyleDefaults(accentRgb = 0xFFE0A3, backgroundOpacityPercent = 94)
+        ScoreboardStyleId.HARD_COURT -> ScoreboardStyleDefaults(accentRgb = 0xE9F24A, backgroundOpacityPercent = 92)
+        ScoreboardStyleId.NIGHT_SESSION -> ScoreboardStyleDefaults(accentRgb = 0x2FE6FF, backgroundOpacityPercent = 88)
+        ScoreboardStyleId.LED_BOARD -> ScoreboardStyleDefaults(accentRgb = 0xFFB000, backgroundOpacityPercent = 95)
+        ScoreboardStyleId.MINIMAL -> ScoreboardStyleDefaults(accentRgb = 0xC4FF4D, backgroundOpacityPercent = 30)
+        ScoreboardStyleId.TILES -> ScoreboardStyleDefaults(accentRgb = 0xC4FF4D, backgroundOpacityPercent = 88)
+        ScoreboardStyleId.TICKER -> ScoreboardStyleDefaults(accentRgb = 0xC4FF4D, backgroundOpacityPercent = 88)
+        ScoreboardStyleId.RETRO -> ScoreboardStyleDefaults(accentRgb = 0xF2C14E, backgroundOpacityPercent = 94)
+        ScoreboardStyleId.BOLD_BLOCK -> ScoreboardStyleDefaults(accentRgb = 0xFFD000, backgroundOpacityPercent = 97)
     }
 
     fun scene(display: ScoreboardDisplay, settings: ScoreboardSettingsV1): ScoreboardScene {
@@ -41,76 +46,18 @@ object ScoreboardLayouts {
             ScoreboardStyleId.CLASSIC -> classic(display, look)
             ScoreboardStyleId.CENTER_COURT -> centerCourt(display, look)
             ScoreboardStyleId.COMPACT -> compact(display, look)
+            ScoreboardStyleId.GRASS_COURT -> ScoreboardMoreLayouts.grassCourt(display, look)
+            ScoreboardStyleId.CLAY_COURT -> ScoreboardMoreLayouts.clayCourt(display, look)
+            ScoreboardStyleId.HARD_COURT -> ScoreboardMoreLayouts.hardCourt(display, look)
+            ScoreboardStyleId.NIGHT_SESSION -> ScoreboardMoreLayouts.nightSession(display, look)
+            ScoreboardStyleId.LED_BOARD -> ScoreboardMoreLayouts.ledBoard(display, look)
+            ScoreboardStyleId.MINIMAL -> ScoreboardMoreLayouts.minimal(display, look)
+            ScoreboardStyleId.TILES -> ScoreboardMoreLayouts.tiles(display, look)
+            ScoreboardStyleId.TICKER -> ScoreboardMoreLayouts.ticker(display, look)
+            ScoreboardStyleId.RETRO -> ScoreboardMoreLayouts.retro(display, look)
+            ScoreboardStyleId.BOLD_BLOCK -> ScoreboardMoreLayouts.boldBlock(display, look)
         }
     }
-
-    /** [credit] is the text of the line at the bottom of the board, or null when the line is hidden. */
-    private data class Look(val title: String?, val accentRgb: Int, val opacity: Double, val credit: String?)
-
-    /** [wonSets] tells, for each completed set, if this player won it. */
-    private class Row(
-        val name: String,
-        val rgb: Int,
-        val sets: List<Int>,
-        val wonSets: List<Boolean>,
-        val games: Int,
-        val points: String,
-        val leading: Boolean,
-        val trailing: Boolean,
-    )
-
-    private fun rows(display: ScoreboardDisplay): List<Row> = listOf(
-        Row(
-            name = display.player1Name,
-            rgb = display.player1Rgb,
-            sets = display.completedSets.map { it.first },
-            wonSets = display.completedSets.map { it.first > it.second },
-            games = display.player1Games,
-            points = display.player1PointText,
-            leading = display.pointLeader == 1,
-            trailing = display.pointLeader == 2,
-        ),
-        Row(
-            name = display.player2Name,
-            rgb = display.player2Rgb,
-            sets = display.completedSets.map { it.second },
-            wonSets = display.completedSets.map { it.second > it.first },
-            games = display.player2Games,
-            points = display.player2PointText,
-            leading = display.pointLeader == 2,
-            trailing = display.pointLeader == 1,
-        ),
-    )
-
-    /** A label whose capital letters and digits are centered on [capCenterY]. */
-    private fun centered(
-        x: Double,
-        capCenterY: Double,
-        text: String,
-        font: String,
-        size: Double,
-        rgb: Int,
-        anchor: TextAnchor,
-        bold: Boolean = true,
-        opacity: Double = 1.0,
-        spacing: Double = 0.0,
-        outline: Double = 0.0,
-    ) = SceneItem.Label(
-        x = x,
-        y = ScoreboardFonts.middleYForCapCenter(capCenterY, font, bold, size),
-        text = text,
-        font = font,
-        size = size,
-        rgb = rgb,
-        bold = bold,
-        anchor = anchor,
-        opacity = opacity,
-        spacing = spacing,
-        outline = outline,
-    )
-
-    private fun nameWidth(rows: List<Row>, font: String, size: Double, minimum: Double): Double =
-        max(minimum, rows.maxOf { ScoreboardFonts.textWidth(it.name, font, true, size) })
 
     /**
      * Broadcast: a dark glass panel with a title bar, set columns with thin rules

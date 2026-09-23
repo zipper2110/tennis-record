@@ -9,6 +9,16 @@ enum class ScoreboardStyleId(val title: String) {
     CLASSIC("Classic"),
     CENTER_COURT("Center Court"),
     COMPACT("Compact"),
+    GRASS_COURT("Grass Court"),
+    CLAY_COURT("Clay Court"),
+    HARD_COURT("Hard Court"),
+    NIGHT_SESSION("Night Session"),
+    LED_BOARD("LED Board"),
+    MINIMAL("Minimal"),
+    TILES("Tiles"),
+    TICKER("Ticker"),
+    RETRO("Retro"),
+    BOLD_BLOCK("Bold Block"),
 }
 
 /** The corner of the video that shows the scoreboard. */

@@ -114,6 +114,20 @@ class ScoreboardLayoutsTest {
     }
 
     @Test
+    fun tickerShowsPlayer2OnTheRightWithTheSetsInMirrorOrder() {
+        val twoSets = display.copy(completedSets = listOf(6 to 3, 5 to 7))
+        val scene = ScoreboardLayouts.scene(twoSets, ScoreboardSettingsV1(style = ScoreboardStyleId.TICKER))
+
+        assertTrue(scene.label("ALICE").x < scene.label("40").x)
+        assertTrue(scene.label("40").x < scene.label("15").x)
+        assertTrue(scene.label("15").x < scene.label("BOB").x)
+        // The first set of player 2 (3) is farther from the middle than the second set (7).
+        assertTrue(scene.label("7").x < scene.label("3").x)
+        // The first set of player 1 (6) is farther from the middle than the second set (5).
+        assertTrue(scene.label("6").x < scene.label("5").x)
+    }
+
+    @Test
     fun backgroundOpacityDefaultsToTheStyleValueAndCanBeChanged() {
         val default = ScoreboardLayouts.scene(display, ScoreboardSettingsV1())
         val custom = ScoreboardLayouts.scene(display, ScoreboardSettingsV1(backgroundOpacityPercent = 40))

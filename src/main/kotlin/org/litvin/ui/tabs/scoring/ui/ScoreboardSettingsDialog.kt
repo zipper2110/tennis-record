@@ -23,6 +23,7 @@ import java.awt.GridBagConstraints
 import java.awt.GridBagLayout
 import java.awt.GridLayout
 import java.awt.Insets
+import java.awt.Rectangle
 import java.awt.RenderingHints
 import java.awt.Window
 import java.awt.event.ActionEvent
@@ -39,6 +40,7 @@ import javax.swing.JComponent
 import javax.swing.JDialog
 import javax.swing.JLabel
 import javax.swing.JPanel
+import javax.swing.JScrollPane
 import javax.swing.JSlider
 import javax.swing.JTextField
 import javax.swing.JToggleButton
@@ -67,6 +69,12 @@ class ScoreboardSettingsDialog private constructor(
 
     companion object {
         private const val THUMBNAIL_SCALE = 0.42
+        private const val THUMBNAIL_MAX_WIDTH = 212.0
+        private const val THUMBNAIL_MAX_HEIGHT = 84.0
+        private const val STYLE_COLUMNS = 2
+        private const val STYLE_CARD_WIDTH = 236
+        private const val STYLE_CARD_HEIGHT = 128
+        private const val STYLE_LIST_HEIGHT = 560
         private const val FRAME_WIDTH = 576
         private const val FRAME_HEIGHT = 324
 
@@ -169,14 +177,24 @@ class ScoreboardSettingsDialog private constructor(
             addActionListener { update { ScoreboardSettingsV1() } }
         }
 
-        val styles = JPanel(GridLayout(0, 1, 0, 8)).apply {
+        val styles = JPanel(GridLayout(0, STYLE_COLUMNS, 8, 8)).apply {
             isOpaque = false
             ScoreboardStyleId.entries.forEach { add(styleButtons.getValue(it)) }
+        }
+        val styleScroll = JScrollPane(styles).apply {
+            name = "scoreboard-style-list"
+            border = BorderFactory.createEmptyBorder()
+            isOpaque = false
+            viewport.isOpaque = false
+            horizontalScrollBarPolicy = JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
+            verticalScrollBar.unitIncrement = STYLE_CARD_HEIGHT / 4
+            val scrollBarW = verticalScrollBar.preferredSize.width
+            preferredSize = Dimension(STYLE_COLUMNS * STYLE_CARD_WIDTH + (STYLE_COLUMNS - 1) * 8 + scrollBarW + 4, STYLE_LIST_HEIGHT)
         }
         val left = JPanel(BorderLayout(0, 8)).apply {
             isOpaque = false
             add(sectionLabel("Style"), BorderLayout.NORTH)
-            add(styles, BorderLayout.CENTER)
+            add(styleScroll, BorderLayout.CENTER)
         }
         val right = JPanel(BorderLayout(0, 12)).apply {
             isOpaque = false
@@ -211,6 +229,10 @@ class ScoreboardSettingsDialog private constructor(
         syncControls()
         pack()
         minimumSize = size
+        // Show the selected style when the list is longer than the visible part.
+        SwingUtilities.invokeLater {
+            styleButtons[settings.style]?.let { it.scrollRectToVisible(Rectangle(0, 0, it.width, it.height)) }
+        }
     }
 
     private fun form(): JPanel {
@@ -289,7 +311,10 @@ class ScoreboardSettingsDialog private constructor(
             styleButtons.forEach { (style, button) ->
                 // A style card shows that style with the other current settings.
                 val cardSettings = settings.copy(style = style, backgroundOpacityPercent = null, sizePercent = 100)
-                button.icon = ImageIcon(ScoreboardSceneImage.render(ScoreboardLayouts.scene(sample, cardSettings), THUMBNAIL_SCALE))
+                val scene = ScoreboardLayouts.scene(sample, cardSettings)
+                // Wide or tall styles get a smaller thumbnail, so that every card has the same size.
+                val scale = minOf(THUMBNAIL_SCALE, THUMBNAIL_MAX_WIDTH / scene.width, THUMBNAIL_MAX_HEIGHT / scene.height)
+                button.icon = ImageIcon(ScoreboardSceneImage.render(scene, scale))
             }
             framePreview.repaint()
         } finally {
@@ -331,7 +356,7 @@ class ScoreboardSettingsDialog private constructor(
         font = font.deriveFont(Font.BOLD)
         border = BorderFactory.createEmptyBorder(10, 12, 8, 12)
         cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
-        preferredSize = Dimension(250, 112)
+        preferredSize = Dimension(STYLE_CARD_WIDTH, STYLE_CARD_HEIGHT)
         addActionListener { update { it.copy(style = style) } }
     }
 
