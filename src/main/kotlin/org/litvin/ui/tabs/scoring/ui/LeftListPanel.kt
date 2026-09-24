@@ -46,8 +46,9 @@ class LeftListPanel(
         footer.border = EmptyBorder(6, 6, 6, 6)
         footer.isOpaque = false
 
-        fun fullButton(text: String): JButton {
-            val b = JButton(text)
+        fun fullButton(text: String, icon: Icon? = null): JButton {
+            val b = JButton(text, icon)
+            b.iconTextGap = 8
             b.isFocusPainted = false
             b.background = Color(0x26, 0x26, 0x26)
             b.foreground = Color(0xDD, 0xFF, 0xB0)
@@ -95,13 +96,13 @@ class LeftListPanel(
         prevPointBtn.addActionListener { actions.goToPreviousPoint() }
         prevPointBtn.isEnabled = false
 
-        val scoreSettingsBtn = fullButton("Score Settings")
+        val scoreSettingsBtn = fullButton("Score Settings", UiStyles.scoreSettingsIcon())
         scoreSettingsBtn.name = "score-settings"
         scoreSettingsBtn.foreground = Color(0xFF, 0xFF, 0xFF)
         scoreSettingsBtn.toolTipText = "Set the player names and colors, the match format, and manual scoring"
         scoreSettingsBtn.addActionListener { onScoreSettings() }
 
-        val scoreboardStyleBtn = fullButton("Scoreboard Style")
+        val scoreboardStyleBtn = fullButton("Scoreboard Style", UiStyles.scoreboardStyleIcon())
         scoreboardStyleBtn.name = "scoreboard-style"
         scoreboardStyleBtn.foreground = Color(0xFF, 0xFF, 0xFF)
         scoreboardStyleBtn.toolTipText = "Set the scoreboard style, title, position, and size"

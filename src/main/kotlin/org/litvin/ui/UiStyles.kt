@@ -294,6 +294,11 @@ object UiStyles {
 
     fun trophyIcon(size: Int = 14, color: Color = FG_PRIMARY): Icon = ikon(Material2AL.EMOJI_EVENTS, size, color)
 
+    // Scoring footer buttons: "Score Settings" and "Scoreboard Style"
+    fun scoreSettingsIcon(size: Int = 18): Icon = ikon(Material2MZ.TUNE, size, LIME)
+
+    fun scoreboardStyleIcon(size: Int = 18): Icon = ikon(Material2AL.BRUSH, size, LIME)
+
     /** Primary CTA button with gradient; includes a leading circle-plus icon. */
     fun primaryButton(text: String, onClick: () -> Unit): JButton = object : JButton(text) {
         override fun paintComponent(g: Graphics) {
