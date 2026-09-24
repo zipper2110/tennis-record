@@ -154,7 +154,13 @@ object SwingApplicationFactory {
             }
 
             fun goTo(card: String) {
-                if (card == currentCard) return
+                if (card == currentCard) {
+                    // A click on the open Projects tab reloads the list, for example to show a project
+                    // that was added after the list loaded. Other tabs stay as they are, because a
+                    // reactivation pauses the video and reloads the points.
+                    if (card == CARD_PROJECTS) projectsPanel.onActivated()
+                    return
+                }
                 when (currentCard) {
                     CARD_PROJECTS -> projectsPanel.onDeactivated()
                     CARD_POINTS -> pointsPanel.onDeactivated()
