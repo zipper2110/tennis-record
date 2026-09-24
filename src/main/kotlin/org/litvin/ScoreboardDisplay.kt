@@ -15,6 +15,8 @@ data class ScoreboardDisplay(
     val completedSets: List<Pair<Int, Int>>,
     /** 1 or 2 when that player leads the current game, 0 when the points are equal. */
     val pointLeader: Int,
+    /** 1 or 2 for the player who serves, 0 when the server is not known. */
+    val server: Int = 0,
 ) {
     val player1Leading: Boolean
         get() = pointLeader == 1
@@ -54,6 +56,7 @@ object ScoreboardComponent {
                 leader < 0 -> 2
                 else -> 0
             },
+            server = span.server?.takeIf { it == 1 || it == 2 } ?: 0,
         )
     }
 

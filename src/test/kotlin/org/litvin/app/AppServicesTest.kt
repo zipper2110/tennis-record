@@ -160,7 +160,7 @@ class AppServicesTest {
         override fun getRecents(): List<ProjectSummary> = emptyList()
         override fun readManifest(path: String): ProjectManifestV1 = error("unused")
         override fun summarize(path: String): ProjectSummary = error("unused")
-        override fun createProject(sourceVideoPath: String): ProjectSummary = error("unused")
+        override fun createProject(sourceVideoPath: String, name: String): ProjectSummary = error("unused")
         override fun openProject(path: String, sourceVideoPath: String?): ProjectSummary = error("unused")
     }
 

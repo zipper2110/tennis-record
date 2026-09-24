@@ -645,6 +645,53 @@ object UiStyles {
         }
     }
 
+    /** Tennis ball color of the serve markers. */
+    val BALL = Color(0xD7, 0xF3, 0x4A)
+
+    /**
+     * Tennis racket at 45 degrees, head at the top right: the serve marker.
+     * With [active] true, the racket is in [color] and the head has a light tint: the player serves.
+     * With [active] false, the racket is gray: the player does not serve.
+     */
+    fun serveRacketIcon(size: Int = 16, active: Boolean = true, color: Color = BALL): Icon = object : Icon {
+        override fun getIconWidth(): Int = size
+        override fun getIconHeight(): Int = size
+        override fun paintIcon(c: Component?, g: Graphics?, x: Int, y: Int) {
+            val g2 = (g as? Graphics2D)?.create() as? Graphics2D ?: return
+            try {
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+                g2.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE)
+                val s = size.toDouble()
+                val main = if (active) color else Color(0x6A, 0x6A, 0x6A)
+                // Unit frame along the racket: the head tip is at y = -0.5, the handle end is at y = +0.5.
+                val len = s * 1.3
+                g2.translate(x + s / 2, y + s / 2)
+                g2.rotate(Math.toRadians(45.0))
+                g2.scale(len, len)
+                val head = java.awt.geom.Ellipse2D.Double(-0.2, -0.5, 0.4, 0.56)
+                if (active) {
+                    g2.color = Color(color.red, color.green, color.blue, 0x40)
+                    g2.fill(head)
+                }
+                // Strings: two main strings and three cross strings.
+                val outerClip = g2.clip
+                g2.clip(head)
+                g2.color = if (active) Color(color.red, color.green, color.blue, 0xC0) else main
+                g2.stroke = BasicStroke((maxOf(0.8, s * 0.05) / len).toFloat())
+                for (sx in doubleArrayOf(-0.07, 0.07)) g2.draw(java.awt.geom.Line2D.Double(sx, -0.6, sx, 0.1))
+                for (sy in doubleArrayOf(-0.33, -0.2, -0.07)) g2.draw(java.awt.geom.Line2D.Double(-0.3, sy, 0.3, sy))
+                g2.clip = outerClip
+                g2.color = main
+                g2.stroke = BasicStroke((maxOf(1.4, s * 0.1) / len).toFloat())
+                g2.draw(head)
+                g2.stroke = BasicStroke((maxOf(1.8, s * 0.13) / len).toFloat(), BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
+                g2.draw(java.awt.geom.Line2D.Double(0.0, 0.07, 0.0, 0.46))
+            } finally {
+                g2.dispose()
+            }
+        }
+    }
+
     /**
      * Black or white, whichever has the higher WCAG contrast ratio against [bg].
      * Keeps a letter legible on a player color the user is free to pick.

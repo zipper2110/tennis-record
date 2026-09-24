@@ -7,15 +7,16 @@ import kotlin.math.max
 /**
  * More scoreboard styles. [ScoreboardLayouts] selects the style.
  *
- * All styles show the same data: the optional title, the two players with their optional colors, the completed sets
- * (the set winner is bold), the games of the current set, the points and the optional app credit line.
+ * All styles show the same data: the optional title, the two players with their optional colors, the optional serve
+ * ball, the completed sets (the set winner is bold), the games of the current set, the points and the optional app
+ * credit line.
  */
 internal object ScoreboardMoreLayouts {
     private const val CREDIT_SIZE = 19.2
 
     /** Grass Court: deep green with a purple top stripe, a serif title and a cream point column. */
     fun grassCourt(display: ScoreboardDisplay, look: Look): ScoreboardScene {
-        val rows = rows(display)
+        val rows = rows(display, look)
         val green = 0x0E3B2A
         val purple = 0x5B2C83
         val cream = 0xF3EBD3
@@ -34,7 +35,8 @@ internal object ScoreboardMoreLayouts {
         val columns = display.completedSets.size + 1
 
         val top = stripeH + headerH
-        val contentW = nameX + nameWidth(rows, GEORGIA, nameSize, 150.0) + 22.0 + columns * setColW + pointColW
+        val serveW = serveColumnWidth(display, look, 28.0)
+        val contentW = nameX + nameWidth(rows, GEORGIA, nameSize, 150.0) + 22.0 + serveW + columns * setColW + pointColW
         val titleW = if (title != null) 20.0 + ScoreboardFonts.textWidth(title, GEORGIA, true, titleSize) + 20.0 else 0.0
         val width = max(contentW, titleW)
         val rowsBottom = top + 2 * rowH
@@ -62,6 +64,7 @@ internal object ScoreboardMoreLayouts {
                 items += SceneItem.Box(0.0, rowTop, 6.0, rowH, row.rgb, 1.0, Corners(bottomLeft = if (index == 1) bottomRadius else 0.0))
             }
             items += centered(nameX, cy, row.name, GEORGIA, nameSize, WHITE, TextAnchor.MIDDLE_LEFT)
+            if (row.serving) items += serveBall(setsX - serveW / 2, cy, 13.0, look.accentRgb)
             row.sets.indices.forEach { setIndex ->
                 items += setGames(setsX + setIndex * setColW + setColW / 2, cy, row, setIndex, SEGOE, setSize, WHITE, 0x7FA08F)
             }
@@ -81,7 +84,7 @@ internal object ScoreboardMoreLayouts {
 
     /** Clay Court: terracotta with a dark title bar, a dark point column and cream leading points. */
     fun clayCourt(display: ScoreboardDisplay, look: Look): ScoreboardScene {
-        val rows = rows(display)
+        val rows = rows(display, look)
         val clay = 0xB5532D
         val dark = 0x8E3D1F
         val deep = 0x6E2E16
@@ -99,7 +102,8 @@ internal object ScoreboardMoreLayouts {
         val pointColW = 82.0
         val columns = display.completedSets.size + 1
 
-        val contentW = nameX + nameWidth(rows, TREBUCHET, nameSize, 150.0) + 20.0 + columns * setColW + pointColW
+        val serveW = serveColumnWidth(display, look, 28.0)
+        val contentW = nameX + nameWidth(rows, TREBUCHET, nameSize, 150.0) + 20.0 + serveW + columns * setColW + pointColW
         val titleW = if (title != null) 18.0 + ScoreboardFonts.textWidth(title, TREBUCHET, true, titleSize, titleSpacing) + 18.0 else 0.0
         val width = max(contentW, titleW)
         val rowsBottom = headerH + 2 * rowH
@@ -124,6 +128,7 @@ internal object ScoreboardMoreLayouts {
             val cy = headerH + index * rowH + rowH / 2
             if (look.playerColors) items += SceneItem.Box(18.0, cy - 7.0, 14.0, 14.0, row.rgb, 1.0, Corners.all(2.0))
             items += centered(nameX, cy, row.name, TREBUCHET, nameSize, WHITE, TextAnchor.MIDDLE_LEFT)
+            if (row.serving) items += serveBall(setsX - serveW / 2, cy, 13.0, look.accentRgb)
             row.sets.indices.forEach { setIndex ->
                 items += setGames(setsX + setIndex * setColW + setColW / 2, cy, row, setIndex, TREBUCHET, setSize, WHITE, 0xF2C9B5, lostOpacity = 0.75)
             }
@@ -140,7 +145,7 @@ internal object ScoreboardMoreLayouts {
 
     /** Hard Court: a blue court with a green title bar, white court lines and ball-yellow leading points. */
     fun hardCourt(display: ScoreboardDisplay, look: Look): ScoreboardScene {
-        val rows = rows(display)
+        val rows = rows(display, look)
         val blue = 0x1C4E96
         val green = 0x2E7A4E
         val title = look.title?.uppercase(Locale.US)
@@ -157,7 +162,8 @@ internal object ScoreboardMoreLayouts {
         val pointColW = 82.0
         val columns = display.completedSets.size + 1
 
-        val contentW = nameX + nameWidth(rows, TAHOMA, nameSize, 150.0) + 20.0 + columns * setColW + pointColW
+        val serveW = serveColumnWidth(display, look, 28.0)
+        val contentW = nameX + nameWidth(rows, TAHOMA, nameSize, 150.0) + 20.0 + serveW + columns * setColW + pointColW
         val titleW = if (title != null) 18.0 + ScoreboardFonts.textWidth(title, TAHOMA, true, titleSize, titleSpacing) + 18.0 else 0.0
         val width = max(contentW, titleW)
         val rowsBottom = headerH + 2 * rowH
@@ -181,6 +187,7 @@ internal object ScoreboardMoreLayouts {
             val cy = headerH + index * rowH + rowH / 2
             if (look.playerColors) items += SceneItem.Box(20.0, cy - 6.0, 12.0, 12.0, row.rgb, 1.0, Corners.all(6.0))
             items += centered(nameX, cy, row.name, TAHOMA, nameSize, WHITE, TextAnchor.MIDDLE_LEFT)
+            if (row.serving) items += serveBall(setsX - serveW / 2, cy, 13.0, look.accentRgb)
             row.sets.indices.forEach { setIndex ->
                 items += setGames(setsX + setIndex * setColW + setColW / 2, cy, row, setIndex, TAHOMA, setSize, WHITE, 0x8FB0D9)
             }
@@ -198,7 +205,7 @@ internal object ScoreboardMoreLayouts {
 
     /** Night Session: a near-black board with a thin accent frame and bright accent points. */
     fun nightSession(display: ScoreboardDisplay, look: Look): ScoreboardScene {
-        val rows = rows(display)
+        val rows = rows(display, look)
         val night = 0x06080F
         val muted = 0x566074
         val title = look.title?.uppercase(Locale.US)
@@ -216,7 +223,8 @@ internal object ScoreboardMoreLayouts {
         val pointColW = 90.0
         val columns = display.completedSets.size + 1
 
-        val contentW = nameX + nameWidth(rows, SEGOE, nameSize, 150.0) + 22.0 + columns * setColW + pointColW
+        val serveW = serveColumnWidth(display, look, 28.0)
+        val contentW = nameX + nameWidth(rows, SEGOE, nameSize, 150.0) + 22.0 + serveW + columns * setColW + pointColW
         val titleW = if (title != null) padX + ScoreboardFonts.textWidth(title, SEGOE, true, titleSize, titleSpacing) + padX else 0.0
         val width = max(contentW, titleW)
         val top = if (title != null) headerH else border
@@ -238,6 +246,7 @@ internal object ScoreboardMoreLayouts {
             val cy = top + index * rowH + rowH / 2
             if (look.playerColors) items += SceneItem.Box(padX, cy - 14.0, 4.0, 28.0, row.rgb, 1.0, Corners.all(2.0))
             items += centered(nameX, cy, row.name, SEGOE, nameSize, WHITE, TextAnchor.MIDDLE_LEFT)
+            if (row.serving) items += serveBall(setsX - serveW / 2, cy, 13.0, look.accentRgb)
             row.sets.indices.forEach { setIndex ->
                 items += setGames(setsX + setIndex * setColW + setColW / 2, cy, row, setIndex, SEGOE, setSize, WHITE, muted)
             }
@@ -259,7 +268,7 @@ internal object ScoreboardMoreLayouts {
 
     /** LED Board: a black stadium board with one-color digits in dark tiles. */
     fun ledBoard(display: ScoreboardDisplay, look: Look): ScoreboardScene {
-        val rows = rows(display)
+        val rows = rows(display, look)
         val board = 0x0B0B0B
         val tile = 0x1C1C1C
         val led = look.accentRgb
@@ -279,7 +288,8 @@ internal object ScoreboardMoreLayouts {
         val pointTileW = 72.0
         val columns = display.completedSets.size + 1
 
-        val contentW = nameX + nameWidth(rows, CONSOLAS, nameSize, 140.0) + 16.0 + columns * cellW + 8.0 + pointTileW + padX
+        val serveW = serveColumnWidth(display, look, 26.0)
+        val contentW = nameX + nameWidth(rows, CONSOLAS, nameSize, 140.0) + 16.0 + serveW + columns * cellW + 8.0 + pointTileW + padX
         val titleW = if (title != null) padX + ScoreboardFonts.textWidth(title, CONSOLAS, true, titleSize, titleSpacing) + padX else 0.0
         val width = max(contentW, titleW)
         val top = if (title != null) headerH + 4.0 else 8.0
@@ -300,6 +310,7 @@ internal object ScoreboardMoreLayouts {
             val cy = top + index * rowH + rowH / 2
             if (look.playerColors) items += SceneItem.Box(padX, cy - 6.0, 12.0, 12.0, row.rgb, 1.0)
             items += centered(nameX, cy, row.name, CONSOLAS, nameSize, led, TextAnchor.MIDDLE_LEFT, opacity = 0.95)
+            if (row.serving) items += serveBall(cellsX - serveW / 2, cy, 12.0, led)
             for (cell in 0 until columns) {
                 items += SceneItem.Box(cellsX + cell * cellW + 3.0, cy - tileH / 2, cellW - 6.0, tileH, tile, 1.0, Corners.all(3.0))
             }
@@ -319,7 +330,7 @@ internal object ScoreboardMoreLayouts {
 
     /** Minimal: outlined text on a faint rounded shade. The background opacity sets the shade. */
     fun minimal(display: ScoreboardDisplay, look: Look): ScoreboardScene {
-        val rows = rows(display)
+        val rows = rows(display, look)
         val title = look.title?.uppercase(Locale.US)
         val outline = 1.4
         val radius = 10.0
@@ -336,7 +347,8 @@ internal object ScoreboardMoreLayouts {
         val pointColW = 70.0
         val columns = display.completedSets.size + 1
 
-        val contentW = nameX + nameWidth(rows, SEGOE, nameSize, 130.0) + 18.0 + columns * setColW + pointColW + 8.0
+        val serveW = serveColumnWidth(display, look, 26.0)
+        val contentW = nameX + nameWidth(rows, SEGOE, nameSize, 130.0) + 18.0 + serveW + columns * setColW + pointColW + 8.0
         val titleW = if (title != null) padX + ScoreboardFonts.textWidth(title, SEGOE, true, titleSize, titleSpacing) + padX else 0.0
         val width = max(contentW, titleW)
         val top = if (title != null) headerH else 8.0
@@ -355,6 +367,8 @@ internal object ScoreboardMoreLayouts {
             val cy = top + index * rowH + rowH / 2
             if (look.playerColors) items += SceneItem.Box(padX, cy - 5.0, 10.0, 10.0, row.rgb, 1.0, Corners.all(5.0))
             items += centered(nameX, cy, row.name, SEGOE, nameSize, WHITE, TextAnchor.MIDDLE_LEFT, outline = outline)
+            // A black ring, as the text outline, keeps the ball visible on a light video.
+            if (row.serving) items += serveBall(setsX - serveW / 2, cy, 14.0, look.accentRgb, ringRgb = BLACK)
             row.sets.indices.forEach { setIndex ->
                 items += setGames(setsX + setIndex * setColW + setColW / 2, cy, row, setIndex, SEGOE, setSize, WHITE, WHITE, lostOpacity = 0.6, outline = outline)
             }
@@ -373,7 +387,7 @@ internal object ScoreboardMoreLayouts {
 
     /** Tiles: every part of the board is a separate rounded tile with small gaps. */
     fun tiles(display: ScoreboardDisplay, look: Look): ScoreboardScene {
-        val rows = rows(display)
+        val rows = rows(display, look)
         val tile = 0x15181D
         val tileHigh = 0x262B33
         val light = 0xF2F4F7
@@ -397,7 +411,8 @@ internal object ScoreboardMoreLayouts {
 
         val titleW = if (title != null) 14.0 + ScoreboardFonts.textWidth(title, SEGOE, true, titleSize, titleSpacing) + 14.0 else 0.0
         val cellsW = columns * (setTileW + gap) + pointTileW
-        val nameTileW = max(16.0 + nameWidth(rows, SEGOE, nameSize, 120.0) + 16.0, titleW - nameTileX - gap - cellsW)
+        val serveW = serveColumnWidth(display, look, 24.0)
+        val nameTileW = max(16.0 + nameWidth(rows, SEGOE, nameSize, 120.0) + serveW + 16.0, titleW - nameTileX - gap - cellsW)
         val width = nameTileX + nameTileW + gap + cellsW
         val top = if (title != null) titleH + gap else 0.0
         val rowsBottom = top + 2 * rowH + gap
@@ -417,6 +432,7 @@ internal object ScoreboardMoreLayouts {
             if (look.playerColors) items += SceneItem.Box(0.0, y, colorW, rowH, row.rgb, 1.0, Corners.all(3.0))
             items += SceneItem.Box(nameTileX, y, nameTileW, rowH, tile, look.opacity, Corners.all(radius))
             items += centered(nameTileX + 16.0, cy, row.name, SEGOE, nameSize, WHITE, TextAnchor.MIDDLE_LEFT)
+            if (row.serving) items += serveBall(nameTileX + nameTileW - 12.0 - serveW / 2, cy, 12.0, look.accentRgb)
             for (cell in 0 until columns) {
                 val current = cell == columns - 1
                 items += SceneItem.Box(cellsX + cell * (setTileW + gap), y, setTileW, rowH, if (current) tileHigh else tile, look.opacity, Corners.all(radius))
@@ -442,7 +458,7 @@ internal object ScoreboardMoreLayouts {
      * distance from the middle for both players.
      */
     fun ticker(display: ScoreboardDisplay, look: Look): ScoreboardScene {
-        val rows = rows(display)
+        val rows = rows(display, look)
         val bar = 0x101418
         val ink = 0x0B0F0D
         val title = look.title?.uppercase(Locale.US)
@@ -463,7 +479,8 @@ internal object ScoreboardMoreLayouts {
         val second = rows[1]
 
         val nameW = nameWidth(rows, SEGOE, nameSize, 100.0)
-        val sideW = colorW + padX + nameW + 16.0 + columns * setW
+        val serveW = serveColumnWidth(display, look, 24.0)
+        val sideW = colorW + padX + nameW + 16.0 + serveW + columns * setW
         val width = 2 * sideW + 2 * pointCellW
         val tabW = if (title != null) minOf(width, 10.0 + ScoreboardFonts.textWidth(title, SEGOE, true, titleSize, titleSpacing) + 10.0) else 0.0
         val footerH = if (look.credit != null) 26.0 else 0.0
@@ -489,6 +506,9 @@ internal object ScoreboardMoreLayouts {
         items += SceneItem.Box(rightSetsX, tabH, setW, barH, WHITE, 0.07)
 
         items += centered(colorW + padX, cy, first.name, SEGOE, nameSize, WHITE, TextAnchor.MIDDLE_LEFT)
+        // The serve ball of each player is on the outer side of the sets, next to the name.
+        if (first.serving) items += serveBall(leftSetsX - serveW / 2, cy, 12.0, look.accentRgb)
+        if (second.serving) items += serveBall(rightSetsX + columns * setW + serveW / 2, cy, 12.0, look.accentRgb)
         first.sets.indices.forEach { setIndex ->
             items += setGames(leftSetsX + setIndex * setW + setW / 2, cy, first, setIndex, SEGOE, setSize, WHITE, 0x6E7571)
         }
@@ -515,7 +535,7 @@ internal object ScoreboardMoreLayouts {
 
     /** Retro: a brown board with orange and yellow stripes, heavy names and pill-shaped points. */
     fun retro(display: ScoreboardDisplay, look: Look): ScoreboardScene {
-        val rows = rows(display)
+        val rows = rows(display, look)
         val brown = 0x2B1A12
         val cream = 0xF6E7C8
         val stripes = listOf(0xD9502B, 0xE8893B, 0xF2C14E)
@@ -535,7 +555,8 @@ internal object ScoreboardMoreLayouts {
         val pointColW = 84.0
         val columns = display.completedSets.size + 1
 
-        val contentW = nameX + nameWidth(rows, ARIAL_BLACK, nameSize, 150.0, bold = false) + 20.0 + columns * setColW + pointColW + 6.0
+        val serveW = serveColumnWidth(display, look, 28.0)
+        val contentW = nameX + nameWidth(rows, ARIAL_BLACK, nameSize, 150.0, bold = false) + 20.0 + serveW + columns * setColW + pointColW + 6.0
         val titleW = if (title != null) padX + ScoreboardFonts.textWidth(title, ARIAL_BLACK, false, titleSize, titleSpacing) + padX else 0.0
         val width = max(contentW, titleW)
         val stripeTop = if (title != null) headerH - 4.0 else 12.0
@@ -559,6 +580,7 @@ internal object ScoreboardMoreLayouts {
             val cy = rowTop + rowH / 2
             if (look.playerColors) items += SceneItem.Box(padX, cy - 7.0, 14.0, 14.0, row.rgb, 1.0, Corners.all(7.0))
             items += centered(nameX, cy, row.name, ARIAL_BLACK, nameSize, cream, TextAnchor.MIDDLE_LEFT, bold = false)
+            if (row.serving) items += serveBall(setsX - serveW / 2, cy, 13.0, look.accentRgb)
             row.sets.indices.forEach { setIndex ->
                 items += setGames(setsX + setIndex * setColW + setColW / 2, cy, row, setIndex, ARIAL, setSize, cream, 0x9C7B62)
             }
@@ -576,7 +598,7 @@ internal object ScoreboardMoreLayouts {
 
     /** Bold Block: white rows with heavy black names, a black title bar and a black point column. */
     fun boldBlock(display: ScoreboardDisplay, look: Look): ScoreboardScene {
-        val rows = rows(display)
+        val rows = rows(display, look)
         val ink = 0x0A0A0A
         val title = look.title?.uppercase(Locale.US)
         val headerH = if (title != null) 44.0 else 0.0
@@ -593,7 +615,8 @@ internal object ScoreboardMoreLayouts {
         val pointColW = 86.0
         val columns = display.completedSets.size + 1
 
-        val contentW = nameX + nameWidth(rows, SEGOE_BLACK, nameSize, 150.0, bold = false) + 20.0 + columns * setColW + pointColW
+        val serveW = serveColumnWidth(display, look, 28.0)
+        val contentW = nameX + nameWidth(rows, SEGOE_BLACK, nameSize, 150.0, bold = false) + 20.0 + serveW + columns * setColW + pointColW
         val titleW = if (title != null) 18.0 + ScoreboardFonts.textWidth(title, SEGOE_BLACK, false, titleSize, titleSpacing) + 18.0 else 0.0
         val width = max(contentW, titleW)
         val rowsBottom = headerH + 2 * rowH
@@ -619,6 +642,8 @@ internal object ScoreboardMoreLayouts {
             val cy = rowTop + rowH / 2
             if (look.playerColors) items += SceneItem.Box(0.0, rowTop, colorW, rowH, row.rgb, 1.0)
             items += centered(nameX, cy, row.name, SEGOE_BLACK, nameSize, ink, TextAnchor.MIDDLE_LEFT, bold = false)
+            // The accent color is light, so a black ring makes the ball visible on the white rows.
+            if (row.serving) items += serveBall(setsX - serveW / 2, cy, 15.0, look.accentRgb, ringRgb = ink)
             row.sets.indices.forEach { setIndex ->
                 items += setGames(setsX + setIndex * setColW + setColW / 2, cy, row, setIndex, SEGOE, setSize, ink, 0xA3A3A3)
             }

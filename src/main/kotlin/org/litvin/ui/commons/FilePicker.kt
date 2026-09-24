@@ -1,5 +1,6 @@
 package org.litvin.ui.commons
 
+import org.litvin.projects.NewProjectRules
 import java.awt.Component
 import java.io.File
 import javax.swing.JFileChooser
@@ -30,7 +31,7 @@ class SwingFilePicker : FilePicker {
     ): File? = chooser(title, initialDirectory, suggestedFile).apply {
         fileSelectionMode = JFileChooser.FILES_ONLY
         isAcceptAllFileFilterUsed = false
-        fileFilter = FileNameExtensionFilter("Video Files", "mp4", "mov", "mkv", "avi", "m4v", "wmv")
+        fileFilter = FileNameExtensionFilter("Video Files", *NewProjectRules.VIDEO_EXTENSIONS.toTypedArray())
     }.let { chooser ->
         if (chooser.showOpenDialog(parent) == JFileChooser.APPROVE_OPTION) chooser.selectedFile else null
     }

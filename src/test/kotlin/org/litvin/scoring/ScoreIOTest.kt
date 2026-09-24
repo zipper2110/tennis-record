@@ -69,6 +69,7 @@ class ScoreIOTest {
             showTitle = false,
             showAppCredit = false,
             showPlayerColors = false,
+            showServe = false,
             position = ScoreboardPosition.BOTTOM_RIGHT,
             sizePercent = 120,
             backgroundOpacityPercent = 70,
@@ -116,6 +117,7 @@ class ScoreIOTest {
             manualGameWins = mapOf("p1" to Outcome.P2),
             manualSetWins = mapOf("p2" to Outcome.P1),
             scoreSettingsReviewed = true,
+            serverMarks = mapOf("p1" to Outcome.P1, "p3" to Outcome.P2),
         )
 
         ScoreIO.write(scorePath, score)
@@ -134,6 +136,8 @@ class ScoreIOTest {
         assertEquals(MatchRulesV1(deuce = DeuceRule.NO_AD), score.rules)
         assertFalse(score.scoreSettingsReviewed)
         assertEquals(emptyMap(), score.manualGameWins)
+        assertEquals(emptyMap(), score.serverMarks)
+        assertTrue(score.scoreboard.showServe)
     }
 
     @Test

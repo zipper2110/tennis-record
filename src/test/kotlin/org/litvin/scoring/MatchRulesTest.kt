@@ -119,6 +119,38 @@ class MatchRulesTest {
     }
 
     @Test
+    fun plainPointsCountPointsWithoutALimit() {
+        val rules = MatchFormatPreset.PLAIN_POINTS.applyTo(MatchRulesV1())
+        val timeline = Match("1".repeat(30) + "22").timeline(rules)
+
+        assertTrue(timeline.initial.isTiebreak)
+        val afterSeven = timeline.statesAfterPoint[6]
+        assertEquals(7, afterSeven.p1Pts, "Seven points do not win the tiebreak")
+        assertTrue(afterSeven.isTiebreak)
+
+        val last = timeline.statesAfterPoint.last()
+        assertEquals(30, last.p1Pts)
+        assertEquals(2, last.p2Pts)
+        assertTrue(last.isTiebreak)
+        assertEquals(0, last.setsP1)
+        assertNull(last.lastSetWonBy)
+        assertTrue(timeline.setsAfterPoint.last().isEmpty())
+    }
+
+    @Test
+    fun plainPointsIgnoreTheDeuceRuleAndTheTiebreakPoints() {
+        val sequence = "1112221" + "1".repeat(12)
+        val plain = Match(sequence).timeline(MatchRulesV1(structure = MatchStructure.PLAIN_POINTS)).statesAfterPoint.last()
+        val otherRules = Match(sequence).timeline(
+            MatchRulesV1(structure = MatchStructure.PLAIN_POINTS, deuce = DeuceRule.NO_AD, tiebreakPoints = 10),
+        ).statesAfterPoint.last()
+
+        assertEquals(16, plain.p1Pts)
+        assertEquals(3, plain.p2Pts)
+        assertEquals(plain, otherRules)
+    }
+
+    @Test
     fun gamesOnlyCountsGamesWithoutSets() {
         val last = Match(game(1).repeat(7)).timeline(MatchRulesV1(structure = MatchStructure.GAMES_ONLY))
             .statesAfterPoint.last()
@@ -205,6 +237,11 @@ class MatchRulesTest {
         assertEquals(
             MatchFormatPreset.GAMES_ONLY,
             MatchFormatPreset.of(MatchRulesV1(structure = MatchStructure.GAMES_ONLY, bestOfSets = 5, gamesPerSet = 4)),
+        )
+        assertEquals(
+            MatchFormatPreset.PLAIN_POINTS,
+            MatchFormatPreset.of(MatchRulesV1(structure = MatchStructure.PLAIN_POINTS, tiebreakPoints = 10, bestOfSets = 5)),
+            "Plain points use no tiebreak points and no sets",
         )
         assertEquals(MatchFormatPreset.CUSTOM, MatchFormatPreset.of(MatchRulesV1(gamesPerSet = 8)))
 

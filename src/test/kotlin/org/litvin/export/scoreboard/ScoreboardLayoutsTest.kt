@@ -159,4 +159,49 @@ class ScoreboardLayoutsTest {
 
         assertTrue(twoSets.width > oneSet.width)
     }
+
+    @Test
+    fun everyStyleShowsTheServeBallNextToTheServerUntilTheSettingsHideIt() {
+        val serving = display.copy(server = 2)
+        ScoreboardStyleId.entries.forEach { style ->
+            val defaults = ScoreboardLayouts.defaults(style)
+            // Without the title, because some titles have a round accent dot.
+            val settings = ScoreboardSettingsV1(style = style, showTitle = false)
+            val withServe = ScoreboardLayouts.scene(serving, settings)
+            val hidden = ScoreboardLayouts.scene(serving, settings.copy(showServe = false))
+            val unknown = ScoreboardLayouts.scene(display, settings)
+
+            val balls = withServe.items.filterIsInstance<SceneItem.Box>().filter { it.isServeBall(defaults.accentRgb) }
+            assertEquals(1, balls.size, "$style: $balls")
+            val ball = balls.single()
+            // The ball is in the row of player 2 and between the name and the points.
+            val bob = withServe.label("BOB")
+            assertTrue(kotlin.math.abs(ball.y + ball.height / 2 - withServe.label("ALICE").y) >
+                kotlin.math.abs(ball.y + ball.height / 2 - bob.y) || style == ScoreboardStyleId.TICKER, "$style")
+            assertTrue(ball.x >= 0 && ball.x + ball.width <= withServe.width, "$style")
+
+            assertTrue(hidden.items.filterIsInstance<SceneItem.Box>().none { it.isServeBall(defaults.accentRgb) }, "$style")
+            // Without a known server, or with the ball hidden, the board keeps its size.
+            assertEquals(unknown.width, hidden.width, "$style")
+            assertTrue(withServe.width > unknown.width, "$style")
+        }
+    }
+
+    @Test
+    fun theTickerShowsTheServeBallOnTheSideOfTheServer() {
+        val settings = ScoreboardSettingsV1(style = ScoreboardStyleId.TICKER, showTitle = false)
+        val accent = ScoreboardLayouts.defaults(ScoreboardStyleId.TICKER).accentRgb
+        fun ballX(server: Int): Double {
+            val scene = ScoreboardLayouts.scene(display.copy(server = server), settings)
+            return scene.items.filterIsInstance<SceneItem.Box>().single { it.isServeBall(accent) }.x
+        }
+        val scene = ScoreboardLayouts.scene(display.copy(server = 1), settings)
+
+        assertTrue(ballX(1) < scene.label("40").x)
+        assertTrue(ballX(2) > scene.label("15").x)
+    }
+
+    /** A serve ball is a small circle in the accent color (LED Board: the LED color). */
+    private fun SceneItem.Box.isServeBall(accentRgb: Int): Boolean =
+        rgb == accentRgb && width == height && width < 20.0 && corners.topLeft == width / 2
 }

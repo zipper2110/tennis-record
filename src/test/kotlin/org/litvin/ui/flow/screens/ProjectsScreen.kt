@@ -5,9 +5,22 @@ import org.litvin.ui.flow.fakes.FilePickerOutcome
 internal class ProjectsScreen(application: ApplicationScreen) : UserFlowScreen(application) {
     fun open(): ProjectsScreen = apply { open("nav-projects", "projects-import-match") }
 
-    fun importMatch(): ProjectsScreen = apply {
+    /** Imports the fixture video. A [projectName] replaces the suggested name in the New project dialog. */
+    fun importMatch(projectName: String? = null): ProjectsScreen = apply {
+        startImport()
+        projectName?.let { context.driver.setText("new-project-name", it) }
+        context.driver.click("new-project-create")
+    }
+
+    fun cancelNewProjectDialog(): ProjectsScreen = apply {
+        startImport()
+        context.driver.click("new-project-cancel")
+    }
+
+    private fun startImport() {
         context.filePicker.scriptSource(FilePickerOutcome.Selected(context.fixtures.sourceVideo.toFile()))
         context.driver.click("projects-import-match")
+        assertVisible("new-project-create")
     }
 
     fun cancelImport(): ProjectsScreen = apply {

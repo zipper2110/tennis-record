@@ -34,6 +34,8 @@ data class ScoreV1(
     val manualSetWins: Map<String, Outcome> = emptyMap(),
     /** True after the Scoring tab showed the score settings for this project one time. */
     val scoreSettingsReviewed: Boolean = false,
+    /** The server that the user marked on a point. The engine computes the server of the other points from these marks. */
+    val serverMarks: Map<String, Outcome> = emptyMap(),
 ) {
     fun manualMarks(): ManualScoreMarks = ManualScoreMarks(manualGameWins, manualSetWins)
 }

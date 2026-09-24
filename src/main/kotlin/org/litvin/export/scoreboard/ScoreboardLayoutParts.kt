@@ -19,10 +19,21 @@ internal const val BLACK = 0x000000
 /**
  * [credit] is the text of the line at the bottom of the board, or null when the line is hidden.
  * [playerColors] is false when the board does not show the color markers of the players.
+ * [serve] is false when the board does not show the serve ball.
  */
-internal data class Look(val title: String?, val accentRgb: Int, val opacity: Double, val credit: String?, val playerColors: Boolean)
+internal data class Look(
+    val title: String?,
+    val accentRgb: Int,
+    val opacity: Double,
+    val credit: String?,
+    val playerColors: Boolean,
+    val serve: Boolean = true,
+)
 
-/** [wonSets] tells, for each completed set, if this player won it. */
+/**
+ * [wonSets] tells, for each completed set, if this player won it.
+ * [serving] is true when this player serves and the board shows the serve.
+ */
 internal class Row(
     val name: String,
     val rgb: Int,
@@ -32,9 +43,10 @@ internal class Row(
     val points: String,
     val leading: Boolean,
     val trailing: Boolean,
+    val serving: Boolean,
 )
 
-internal fun rows(display: ScoreboardDisplay): List<Row> = listOf(
+internal fun rows(display: ScoreboardDisplay, look: Look): List<Row> = listOf(
     Row(
         name = display.player1Name,
         rgb = display.player1Rgb,
@@ -44,6 +56,7 @@ internal fun rows(display: ScoreboardDisplay): List<Row> = listOf(
         points = display.player1PointText,
         leading = display.pointLeader == 1,
         trailing = display.pointLeader == 2,
+        serving = look.serve && display.server == 1,
     ),
     Row(
         name = display.player2Name,
@@ -54,8 +67,32 @@ internal fun rows(display: ScoreboardDisplay): List<Row> = listOf(
         points = display.player2PointText,
         leading = display.pointLeader == 2,
         trailing = display.pointLeader == 1,
+        serving = look.serve && display.server == 2,
     ),
 )
+
+/**
+ * The width of the serve column. The column is between the names and the sets.
+ * It is 0 when the board does not show the serve or when the server is not known,
+ * so a board without serve marks keeps its size.
+ */
+internal fun serveColumnWidth(display: ScoreboardDisplay, look: Look, width: Double): Double =
+    if (look.serve && display.server != 0) width else 0.0
+
+/**
+ * The serve ball: a circle with the center at ([cx], [cy]). [ringRgb] adds a ring around the ball,
+ * for boards where the ball color does not show well on the background.
+ */
+internal fun serveBall(cx: Double, cy: Double, diameter: Double, rgb: Int, ringRgb: Int? = null): List<SceneItem.Box> {
+    val items = mutableListOf<SceneItem.Box>()
+    var d = diameter
+    if (ringRgb != null) {
+        items += SceneItem.Box(cx - d / 2, cy - d / 2, d, d, ringRgb, 1.0, Corners.all(d / 2))
+        d -= 4.0
+    }
+    items += SceneItem.Box(cx - d / 2, cy - d / 2, d, d, rgb, 1.0, Corners.all(d / 2))
+    return items
+}
 
 /** A label whose capital letters and digits are centered on [capCenterY]. */
 internal fun centered(

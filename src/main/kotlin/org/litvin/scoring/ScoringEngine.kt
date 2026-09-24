@@ -10,6 +10,7 @@ import kotlin.math.max
  * Given the chronological list of points, the outcome of each point and the match rules, it computes:
  * - MatchState snapshot after each point
  * - History of completed sets up to each point
+ * - The server of each point
  *
  * No side effects; suitable for reuse by different UIs.
  */
@@ -33,11 +34,15 @@ object ScoringEngine {
 
     data class SetScore(val p1: Int, val p2: Int, val tiebreak: Boolean)
 
-    /** The state before the first point, the state after each point, and the completed sets after each point. */
+    /**
+     * The state before the first point, the state after each point, and the completed sets after each point.
+     * [serverOfPoint] is the player (1 or 2) who serves each point, or null when the user did not mark a server.
+     */
     data class Timeline(
         val initial: MatchState,
         val statesAfterPoint: List<MatchState>,
         val setsAfterPoint: List<List<SetScore>>,
+        val serverOfPoint: List<Int?> = List(statesAfterPoint.size) { null },
     )
 
     /**
@@ -54,19 +59,39 @@ object ScoringEngine {
         return Pair(timeline.statesAfterPoint.toMutableList(), timeline.setsAfterPoint.toMutableList())
     }
 
-    /** Computes the full [Timeline]. Missing and [Outcome.NONE] outcomes keep the score. */
+    /**
+     * Computes the full [Timeline]. Missing and [Outcome.NONE] outcomes keep the score.
+     *
+     * Serve: [serverMarks] holds the server that the user marked on a point. Without marks, no point has a server.
+     * With marks, every point has a server:
+     * - The server changes after each game. In a tiebreak, the first server serves one point,
+     *   then the players serve two points each. The player who received first in a set tiebreak
+     *   serves the first game of the next set.
+     * - A mark sets the server of its point. The next points of the same game (or tiebreak) continue from the mark.
+     * - The points before the first mark get the servers that lead to the first mark.
+     */
     fun timeline(
         points: List<PointV1>,
         outcomesByPointId: Map<String, Outcome>,
         rules: MatchRulesV1 = MatchRulesV1(),
         manualMarks: ManualScoreMarks = ManualScoreMarks(),
+        serverMarks: Map<String, Outcome> = emptyMap(),
     ): Timeline {
         val match = Match(rules.normalized())
         val initial = match.snapshot()
         val states = ArrayList<MatchState>(points.size)
         val sets = ArrayList<List<SetScore>>(points.size)
+        val servers = ArrayList<Int>(points.size)
+        var marked = false
         for (point in points) {
             match.startPoint()
+            serverMarks[point.id]?.playerNumber()?.let { server ->
+                // Before the first mark, the servers are a guess that starts with player 1. Swap them when the guess is wrong.
+                if (!marked && match.server() != server) servers.replaceAll(::otherPlayer)
+                marked = true
+                match.setServer(server)
+            }
+            servers += match.server()
             when (outcomesByPointId[point.id]) {
                 Outcome.P1 -> match.pointWonBy(1)
                 Outcome.P2 -> match.pointWonBy(2)
@@ -79,8 +104,13 @@ object ScoringEngine {
             states += match.snapshot()
             sets += match.completedSets.toList()
         }
-        return Timeline(initial, states, sets)
+        return Timeline(initial, states, sets, if (marked) servers else servers.map { null })
     }
+
+    /** The tiebreak target of [MatchStructure.PLAIN_POINTS]. No score gets to it, so the tiebreak does not end. */
+    private const val ENDLESS_TIEBREAK_TARGET = Int.MAX_VALUE
+
+    private fun otherPlayer(player: Int): Int = 3 - player
 
     private fun Outcome.playerNumber(): Int? = when (this) {
         Outcome.P1 -> 1
@@ -103,14 +133,21 @@ object ScoringEngine {
 
         /** True for a match tiebreak or a single tiebreak: its winner gets a 1–0 set, not a game. */
         var tiebreakReplacesSet = false
+
+        /** The server of the current game, or the first server of the current tiebreak. */
+        var gameServer = 1
         var matchWonBy: Int? = null
         var gameWonBy: Int? = null
         var setWonBy: Int? = null
         val completedSets = mutableListOf<SetScore>()
 
         init {
-            if (!rules.manualScoring && rules.structure == MatchStructure.SINGLE_TIEBREAK) {
-                startTiebreak(rules.tiebreakPoints, replacesSet = true)
+            if (!rules.manualScoring) {
+                when (rules.structure) {
+                    MatchStructure.SINGLE_TIEBREAK -> startTiebreak(rules.tiebreakPoints, replacesSet = true)
+                    MatchStructure.PLAIN_POINTS -> startTiebreak(ENDLESS_TIEBREAK_TARGET, replacesSet = true)
+                    MatchStructure.SETS, MatchStructure.GAMES_ONLY -> Unit
+                }
             }
         }
 
@@ -130,6 +167,23 @@ object ScoringEngine {
             addGame(player)
             p1Pts = 0; p2Pts = 0
             gameWonBy = player
+            changeServer()
+        }
+
+        /** The server of the next point. */
+        fun server(): Int = if (isTiebreak && tiebreakReceiverServes()) otherPlayer(gameServer) else gameServer
+
+        /** Makes [player] the server of the next point. The rest of the game or tiebreak continues from it. */
+        fun setServer(player: Int) {
+            gameServer = if (isTiebreak && tiebreakReceiverServes()) otherPlayer(player) else player
+        }
+
+        /** Tiebreak: the first server serves point 1, then each player serves two points (2–3, 4–5, ...). */
+        private fun tiebreakReceiverServes(): Boolean = ((p1Pts + p2Pts + 1) / 2) % 2 == 1
+
+        /** After a game, the other player serves. After a tiebreak, the player who received first serves. */
+        private fun changeServer() {
+            gameServer = otherPlayer(gameServer)
         }
 
         fun markSetWon(player: Int) {
@@ -175,6 +229,7 @@ object ScoringEngine {
             if (max(p1Pts, p2Pts) < tiebreakTarget || lead < 2) return
             val player = if (p1Pts > p2Pts) 1 else 2
             if (tiebreakReplacesSet) {
+                changeServer()
                 completeSet(player, if (player == 1) SetScore(1, 0, true) else SetScore(0, 1, true))
             } else {
                 // The tiebreak winner wins the last game of the set, for example 7–6.

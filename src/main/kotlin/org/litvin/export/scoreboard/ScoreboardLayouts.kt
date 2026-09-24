@@ -41,6 +41,7 @@ object ScoreboardLayouts {
             opacity = (normalized.backgroundOpacityPercent ?: defaults.backgroundOpacityPercent) / 100.0,
             credit = ScoreboardSettingsV1.APP_CREDIT.takeIf { normalized.showAppCredit },
             playerColors = normalized.showPlayerColors,
+            serve = normalized.showServe,
         )
         return when (normalized.style) {
             ScoreboardStyleId.BROADCAST -> broadcast(display, look)
@@ -65,7 +66,7 @@ object ScoreboardLayouts {
      * and a highlighted point column. This is the default style.
      */
     private fun broadcast(display: ScoreboardDisplay, look: Look): ScoreboardScene {
-        val rows = rows(display)
+        val rows = rows(display, look)
         val title = look.title?.uppercase(Locale.US)
         val radius = 10.0
         val padX = 22.0
@@ -81,8 +82,9 @@ object ScoreboardLayouts {
         val setColW = 54.0
         val pointColW = 88.0
         val columns = display.completedSets.size + 1
+        val serveW = serveColumnWidth(display, look, 30.0)
 
-        val contentW = nameX + nameWidth(rows, SEGOE, nameSize, 150.0) + 24.0 + columns * setColW + pointColW
+        val contentW = nameX + nameWidth(rows, SEGOE, nameSize, 150.0) + 24.0 + serveW + columns * setColW + pointColW
         val titleW = if (title != null) {
             padX + 10.0 + 12.0 + ScoreboardFonts.textWidth(title, SEGOE, true, titleSize, titleSpacing) + padX
         } else {
@@ -128,6 +130,7 @@ object ScoreboardLayouts {
             val cy = headerH + index * rowH + rowH / 2
             if (look.playerColors) items += SceneItem.Box(padX, cy - square / 2, square, square, row.rgb, 1.0, Corners.all(2.5))
             items += centered(nameX, cy, row.name, SEGOE, nameSize, 0xF4F6F5, TextAnchor.MIDDLE_LEFT)
+            if (row.serving) items += serveBall(setsX - serveW / 2, cy, 13.0, look.accentRgb)
             // The winner of a completed set is bright and bold. The loser is dim.
             row.sets.forEachIndexed { setIndex, games ->
                 val won = row.wonSets[setIndex]
@@ -153,7 +156,7 @@ object ScoreboardLayouts {
 
     /** Classic: the original TennisRecord scoreboard with Arial text and neon points. */
     private fun classic(display: ScoreboardDisplay, look: Look): ScoreboardScene {
-        val rows = rows(display)
+        val rows = rows(display, look)
         val title = look.title
         val headerH = if (title != null) 56.0 else 0.0
         val nameSize = 30.0
@@ -165,7 +168,8 @@ object ScoreboardLayouts {
         val rowTop = headerH + 15.0
         val rowGap = 64.0
 
-        val cellsX = nameX + max(190.0, nameWidth(rows, ARIAL, nameSize, 0.0) + 24.0)
+        val serveW = serveColumnWidth(display, look, 30.0)
+        val cellsX = nameX + max(190.0, nameWidth(rows, ARIAL, nameSize, 0.0) + 24.0) + serveW
         val cellsW = (display.completedSets.size + 1) * cellStep
         val titleW = if (title != null) 48.0 + ScoreboardFonts.textWidth(title, ARIAL, true, 28.0, 2.0) + 24.0 else 0.0
         val width = maxOf(420.0, cellsX + cellsW + pointAreaW, titleW)
@@ -183,6 +187,7 @@ object ScoreboardLayouts {
             val cy = rowTop + index * rowGap + 18.0
             if (look.playerColors) items += SceneItem.Box(24.0, cy - 12.0, 24.0, 24.0, row.rgb, 0.85)
             items += centered(nameX, cy, row.name, ARIAL, nameSize, 0xE7ECEF, TextAnchor.MIDDLE_LEFT, bold = false, opacity = 0.93, outline = 1.2)
+            if (row.serving) items += serveBall(cellsX - serveW / 2, cy, 15.0, look.accentRgb)
             // The winner of a completed set is white and bold. The loser is dim.
             row.sets.forEachIndexed { cell, games ->
                 val won = row.wonSets[cell]
@@ -203,7 +208,7 @@ object ScoreboardLayouts {
 
     /** Center Court: a light card with a navy title bar and a navy point column. */
     private fun centerCourt(display: ScoreboardDisplay, look: Look): ScoreboardScene {
-        val rows = rows(display)
+        val rows = rows(display, look)
         val navy = 0x13233F
         val title = look.title?.uppercase(Locale.US)
         val radius = 8.0
@@ -218,8 +223,9 @@ object ScoreboardLayouts {
         val setColW = 50.0
         val pointColW = 80.0
         val columns = display.completedSets.size + 1
+        val serveW = serveColumnWidth(display, look, 28.0)
 
-        val contentW = nameX + nameWidth(rows, SEGOE, nameSize, 150.0) + 22.0 + columns * setColW + pointColW
+        val contentW = nameX + nameWidth(rows, SEGOE, nameSize, 150.0) + 22.0 + serveW + columns * setColW + pointColW
         val titleW = if (title != null) 18.0 + ScoreboardFonts.textWidth(title, SEGOE, true, titleSize, titleSpacing) + 18.0 else 0.0
         val width = max(contentW, titleW)
         val rowsBottom = headerH + 2 * rowH
@@ -249,6 +255,8 @@ object ScoreboardLayouts {
             )
             if (look.playerColors) items += SceneItem.Box(0.0, top, 7.0, rowH, row.rgb, 1.0, barCorners)
             items += centered(nameX, cy, row.name, SEGOE, nameSize, navy, TextAnchor.MIDDLE_LEFT)
+            // The accent color is light, so a navy ring makes the ball visible on the white board.
+            if (row.serving) items += serveBall(setsX - serveW / 2, cy, 15.0, look.accentRgb, ringRgb = navy)
             // The winner of a completed set is navy and bold. The loser is light gray.
             row.sets.forEachIndexed { setIndex, games ->
                 val won = row.wonSets[setIndex]
@@ -271,7 +279,7 @@ object ScoreboardLayouts {
 
     /** Compact: a slim two-row bar with an accent point column and an optional title tab. */
     private fun compact(display: ScoreboardDisplay, look: Look): ScoreboardScene {
-        val rows = rows(display)
+        val rows = rows(display, look)
         val title = look.title?.uppercase(Locale.US)
         val radius = 6.0
         val tabH = if (title != null) 26.0 else 0.0
@@ -287,7 +295,8 @@ object ScoreboardLayouts {
         val columns = display.completedSets.size + 1
         val dark = 0x0B0F0D
 
-        val width = nameX + nameWidth(rows, SEGOE, nameSize, 110.0) + 18.0 + columns * setColW + pointColW
+        val serveW = serveColumnWidth(display, look, 24.0)
+        val width = nameX + nameWidth(rows, SEGOE, nameSize, 110.0) + 18.0 + serveW + columns * setColW + pointColW
         val tabW = if (title != null) {
             minOf(width, 10.0 + ScoreboardFonts.textWidth(title, SEGOE, true, titleSize, titleSpacing) + 10.0)
         } else {
@@ -315,6 +324,7 @@ object ScoreboardLayouts {
             val cy = tabH + index * rowH + rowH / 2
             if (look.playerColors) items += SceneItem.Box(10.0, cy - 10.0, 4.0, 20.0, row.rgb, 1.0, Corners.all(2.0))
             items += centered(nameX, cy, row.name, SEGOE, nameSize, WHITE, TextAnchor.MIDDLE_LEFT)
+            if (row.serving) items += serveBall(setsX - serveW / 2, cy, 11.0, look.accentRgb)
             // The winner of a completed set is white and bold. The loser is dim.
             row.sets.forEachIndexed { setIndex, games ->
                 val won = row.wonSets[setIndex]

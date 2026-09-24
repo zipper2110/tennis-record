@@ -7,6 +7,9 @@ import org.litvin.ui.commons.SwingFilePicker
 import org.litvin.ui.commons.SwingUserDialogService
 import org.litvin.ui.commons.UserDialogService
 import org.litvin.ui.commons.applyDarkScrollbar
+import org.litvin.ui.tabs.projects.components.NewProjectDialog
+import org.litvin.ui.tabs.projects.components.NewProjectEditor
+import org.litvin.ui.tabs.projects.components.NewProjectRequest
 import org.litvin.ui.tabs.projects.components.ProjectCard
 import org.litvin.ui.tabs.projects.components.ProjectsEmptyListCard
 import org.litvin.ui.tabs.projects.components.ProjectsHeader
@@ -19,6 +22,7 @@ import org.litvin.ui.tabs.projects.presenter.ProjectsView
 import org.litvin.ui.tabs.projects.presenter.ProjectsViewEffect
 import org.litvin.ui.tabs.projects.presenter.ProjectsViewState
 import java.awt.BorderLayout
+import java.awt.Component
 import java.awt.Container
 import java.awt.Dimension
 import java.awt.Font
@@ -41,6 +45,7 @@ class SwingProjectsPanel(
     private val presenter: ProjectsPresenter = DefaultProjectsPresenter(),
     private val filePicker: FilePicker = SwingFilePicker(),
     private val dialogs: UserDialogService = SwingUserDialogService(),
+    private val newProjectEditor: NewProjectEditor = NewProjectDialog,
 ) : JPanel(BorderLayout()), ProjectsView {
     private val currentProjectContainer = JPanel(BorderLayout()).apply {
         isOpaque = false
@@ -105,6 +110,22 @@ class SwingProjectsPanel(
             is ProjectsViewEffect.ChooseSourceVideo -> {
                 chooseSourceVideo("Select Source Video", effect.initialDirectory)?.let { path ->
                     presenter.onIntent(ProjectsIntent.SourceVideoSelected(path))
+                }
+            }
+            is ProjectsViewEffect.ConfirmNewProject -> {
+                newProjectEditor.edit(
+                    parent = this,
+                    initial = NewProjectRequest(effect.name, effect.sourceVideoPath),
+                    chooseVideo = { dialog, current ->
+                        chooseSourceVideo(
+                            "Select Source Video",
+                            File(current).parent ?: File(effect.sourceVideoPath).parent,
+                            suggestedFile = File(current),
+                            parent = dialog,
+                        )
+                    },
+                )?.let { request ->
+                    presenter.onIntent(ProjectsIntent.CreateProject(request.name, request.sourceVideoPath))
                 }
             }
             is ProjectsViewEffect.ChooseMissingSourceVideo -> {
@@ -205,11 +226,17 @@ class SwingProjectsPanel(
         )
     }
 
-    private fun chooseSourceVideo(title: String, initialDirectory: String?): String? =
+    private fun chooseSourceVideo(
+        title: String,
+        initialDirectory: String?,
+        suggestedFile: File? = null,
+        parent: Component = this,
+    ): String? =
         filePicker.chooseSourceVideo(
-            parent = this,
+            parent = parent,
             title = title,
             initialDirectory = initialDirectory?.let(::File),
+            suggestedFile = suggestedFile?.takeIf { it.isFile },
         )?.absolutePath
 
     private fun sectionLabel(text: String): JComponent = JLabel(text).apply {

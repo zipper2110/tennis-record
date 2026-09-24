@@ -224,6 +224,10 @@ class SwingScoringPanel(
     private val manualMarks: ManualScoreMarks
         get() = ManualScoreMarks(LinkedHashMap(manualGameWins), LinkedHashMap(manualSetWins))
 
+    // The servers that the user marked (see ScoringEngine.timeline), and the computed server of each point
+    private val serverMarks: MutableMap<String, Outcome> = LinkedHashMap()
+    private var serverOfPoint: List<Int?> = emptyList()
+
     // False until the score settings open once for this project (see promptScoreSettingsOnFirstVisit)
     private var scoreSettingsReviewed = true
 
@@ -275,6 +279,7 @@ class SwingScoringPanel(
         outcomesByPointId.clear()
         manualGameWins.clear()
         manualSetWins.clear()
+        serverMarks.clear()
 
         val isNewScore = !ScoreIO.existsForProjectDir(projectDir!!)
         val score = ScoreIO.readForProjectDir(projectDir!!)
@@ -294,6 +299,7 @@ class SwingScoringPanel(
         score.outcomes.forEach { (id, out) -> if (id in validIds) outcomesByPointId[id] = out }
         score.manualGameWins.forEach { (id, winner) -> if (id in validIds) manualGameWins[id] = winner }
         score.manualSetWins.forEach { (id, winner) -> if (id in validIds) manualSetWins[id] = winner }
+        score.serverMarks.forEach { (id, server) -> if (id in validIds && server != Outcome.NONE) serverMarks[id] = server }
         // Keep the default style in the project, so that the Export tab uses it too
         if (isNewScore) saveNow()
 
@@ -324,6 +330,7 @@ class SwingScoringPanel(
         outcomesByPointId.keys.retainAll(validIds)
         manualGameWins.keys.retainAll(validIds)
         manualSetWins.keys.retainAll(validIds)
+        serverMarks.keys.retainAll(validIds)
         // Rebuild list UI and restore selection if possible
         rebuildPointsList()
         val newIndex = prevSelectedId?.let { id -> newPoints.indexOfFirst { it.id == id } } ?: -1
@@ -385,7 +392,7 @@ class SwingScoringPanel(
 
     // Rebuild left points list from current 'points' and 'scoredPointIds'
     private fun rebuildPointsList() = uiSafe {
-        leftListPanel.setList(points, outcomesByPointId, player1ColorHex, player2ColorHex, rules, manualMarks)
+        leftListPanel.setList(points, outcomesByPointId, player1ColorHex, player2ColorHex, rules, manualMarks, LinkedHashMap(serverMarks))
         leftListPanel.setNextEnabled(points.isNotEmpty())
         leftListPanel.setPreviousEnabled(selectedPointIndex > 0)
         updateCurrentPointHeader()
@@ -423,7 +430,10 @@ class SwingScoringPanel(
             updateCurrentPointHeader()
             if (::segmentScrub.isInitialized) segmentScrub.reset()
             updateActionButtonsState(enable = false, selectedOutcome = null)
-            if (::controlsPanel.isInitialized) controlsPanel.setManualScoring(rules.manualScoring, enabled = false)
+            if (::controlsPanel.isInitialized) {
+                controlsPanel.setManualScoring(rules.manualScoring, enabled = false)
+                controlsPanel.setServer(null, marked = false)
+            }
             // Disable Next/Previous on no selection or empty list
             if (::leftListPanel.isInitialized) {
                 leftListPanel.setNextEnabled(false)
@@ -591,6 +601,7 @@ class SwingScoringPanel(
             onOutcome = { outcome -> setOutcomeForSelectedPoint(outcome) },
             onManualGameWon = { winner -> toggleManualMark(manualGameWins, winner) },
             onManualSetWon = { winner -> toggleManualMark(manualSetWins, winner) },
+            onServe = { server -> markServerForSelectedPoint(server) },
         )
         controlsPanel.player1.setPlayerName(displayNameP1())
         controlsPanel.player1.setAccentColorHex(player1ColorHex)
@@ -704,6 +715,8 @@ class SwingScoringPanel(
         // Shift+R steps back to the previous point
         bind(AppShortcuts.PREVIOUS_POINT.keyStroke, "previousPoint") { goToPreviousPoint() }
         bind(AppShortcuts.TOGGLE_FAVORITE.keyStroke, "toggleFavorite") { toggleFavoriteSelectedPoint() }
+        // S switches the server of the selected point
+        bind(AppShortcuts.SWITCH_SERVE.keyStroke, "switchServe") { switchServerForSelectedPoint() }
         // Frame-by-frame toggle: F
         bind(AppShortcuts.TOGGLE_FRAME_STEP.keyStroke, "toggleFrameStep") {
             videoPlayerActions.setFrameStepEnabled(!SessionSettings.frameStepWhenPaused)
@@ -776,7 +789,11 @@ class SwingScoringPanel(
         return ScoringViewState(
             player1Name = displayNameP1(),
             player2Name = displayNameP2(),
-            serving = null, // serving side TBD; not tracked yet in container
+            serving = when (serverOfPoint.getOrNull(idx)) {
+                1 -> Side.P1
+                2 -> Side.P2
+                else -> null
+            },
             p1Points = score.p1Pts,
             p2Points = score.p2Pts,
             isTiebreak = score.isTiebreak,
@@ -829,6 +846,40 @@ class SwingScoringPanel(
         EventQueue.invokeLater { player.component.requestFocusInWindow() }
     }
 
+    /**
+     * Marks [server] as the server of the selected point. The next points continue from the mark.
+     * A click on the player with a mark on this point clears the mark. A mark that only repeats
+     * the computed server is not kept.
+     */
+    private fun markServerForSelectedPoint(server: Outcome) = uiSafe {
+        val point = points.getOrNull(selectedPointIndex) ?: return@uiSafe
+        if (server == Outcome.NONE) return@uiSafe
+        val serverNumber = if (server == Outcome.P1) 1 else 2
+        when {
+            serverMarks[point.id] == server -> serverMarks.remove(point.id)
+            serverOfPoint.getOrNull(selectedPointIndex) == serverNumber -> return@uiSafe
+            else -> {
+                serverMarks.remove(point.id)
+                val computed = ScoringEngine.timeline(points, outcomesByPointId, rules, manualMarks, serverMarks)
+                    .serverOfPoint.getOrNull(selectedPointIndex)
+                if (computed != serverNumber) serverMarks[point.id] = server
+            }
+        }
+        rebuildPointsList()
+        leftListPanel.setSelectedIndex(selectedPointIndex, false)
+        scheduleScoreAutosave()
+        updateScore(selectedPointIndex)
+        refreshVideoScoreboardOverlay()
+        EventQueue.invokeLater { player.component.requestFocusInWindow() }
+    }
+
+    /** Makes the other player the server of the selected point. Without a known server, player 1 serves. */
+    private fun switchServerForSelectedPoint() {
+        if (selectedPointIndex !in points.indices || segmentEndMs <= segmentStartMs) return
+        val next = if (serverOfPoint.getOrNull(selectedPointIndex) == 1) Outcome.P2 else Outcome.P1
+        markServerForSelectedPoint(next)
+    }
+
     private fun scheduleScoreAutosave() {
         saveNow()
     }
@@ -853,6 +904,7 @@ class SwingScoringPanel(
                     manualGameWins = LinkedHashMap(manualGameWins),
                     manualSetWins = LinkedHashMap(manualSetWins),
                     scoreSettingsReviewed = scoreSettingsReviewed,
+                    serverMarks = LinkedHashMap(serverMarks),
                 ),
             )
         } catch (t: Throwable) {
@@ -970,6 +1022,7 @@ class SwingScoringPanel(
                 player2ColorHex = player2ColorHex,
                 rules = rules,
                 manualMarks = manualMarks,
+                serverMarks = LinkedHashMap(serverMarks),
             )
             val span = spans.getOrNull(selectedPointIndex)
             if (span == null) {
@@ -991,9 +1044,14 @@ class SwingScoringPanel(
 
     private fun updateScore(index: Int) {
         // Delegate pure computation to ScoringEngine
-        val (states, setsPerPoint) = ScoringEngine.computeTimeline(points, outcomesByPointId, rules, manualMarks)
-        statesAfterPoint = states
-        setHistoryAfterPoint = setsPerPoint
+        val timeline = ScoringEngine.timeline(points, outcomesByPointId, rules, manualMarks, serverMarks)
+        statesAfterPoint = timeline.statesAfterPoint.toMutableList()
+        setHistoryAfterPoint = timeline.setsAfterPoint.toMutableList()
+        serverOfPoint = timeline.serverOfPoint
+        if (::controlsPanel.isInitialized) {
+            val point = points.getOrNull(index)
+            controlsPanel.setServer(serverOfPoint.getOrNull(index), marked = point != null && point.id in serverMarks)
+        }
 
         // Apply side-effects (UI) based on current selection
         if (index in points.indices) {

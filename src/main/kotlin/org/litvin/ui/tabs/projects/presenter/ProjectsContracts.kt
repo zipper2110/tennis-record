@@ -34,6 +34,7 @@ data class ProjectCardState(
 sealed class ProjectsIntent {
     object ImportNewMatch : ProjectsIntent()
     data class SourceVideoSelected(val path: String) : ProjectsIntent()
+    data class CreateProject(val name: String, val sourceVideoPath: String) : ProjectsIntent()
     data class OpenProject(val manifestPath: String) : ProjectsIntent()
     data class MissingSourceVideoSelected(val manifestPath: String, val sourceVideoPath: String) : ProjectsIntent()
     data class GoToPage(val page: Int) : ProjectsIntent()
@@ -41,6 +42,9 @@ sealed class ProjectsIntent {
 
 sealed class ProjectsViewEffect {
     data class ChooseSourceVideo(val initialDirectory: String?) : ProjectsViewEffect()
+
+    /** Asks the user to confirm or change the name and the video of the new project. */
+    data class ConfirmNewProject(val name: String, val sourceVideoPath: String) : ProjectsViewEffect()
     data class ChooseMissingSourceVideo(
         val manifestPath: String,
         val projectName: String,

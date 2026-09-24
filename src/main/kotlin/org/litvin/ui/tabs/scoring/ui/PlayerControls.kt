@@ -6,19 +6,37 @@ import java.awt.*
 import javax.swing.*
 import javax.swing.border.EmptyBorder
 
+/** The racket color of the serve button: a little less bright than [UiStyles.BALL]. */
+private val SERVE_BUTTON_COLOR = Color(0xC2, 0xDB, 0x43)
+
+/** How the serve button of a player shows the server of the selected point. */
+enum class ServeState {
+    /** The player does not serve, or the server is not known. */
+    NOT_SERVING,
+
+    /** The player serves. The app computed it from the marks on other points. */
+    SERVING,
+
+    /** The player serves. The user marked it on this point. */
+    SERVING_MARKED,
+}
+
 /**
  * Scoring controls for one player. [ScoringControlsPanel] puts the two parts in different grid rows:
- * - [header]: the POINTS value and the "Point for <name>" button
+ * - [header]: the POINTS value, the "Point for <name>" button and the serve button
  * - [stats]: the GAMES and SETS cards
  *
  * The Game Won and Set Won markers show the computed score. In manual scoring they are buttons:
  * a click marks (or clears) the game or set win of this player on the current point.
+ *
+ * The serve button shows if this player serves the selected point. A click marks this player as the server.
  */
 class PlayerControls(
     private val isPrimary: Boolean,
     private val onPointClicked: () -> Unit,
     onGameWonClicked: () -> Unit = {},
     onSetWonClicked: () -> Unit = {},
+    onServeClicked: () -> Unit = {},
 ) {
 
     private val pointsVal = JLabel("0")
@@ -26,6 +44,10 @@ class PlayerControls(
     private var accentColor: Color = if (isPrimary) Color(0x4D, 0xA3, 0xFF) else Color(0xFF, 0x6B, 0x6B)
 
     private val pointFill = PlayerColorFill(pointBtn)
+
+    private val serveBtn = JToggleButton()
+    private var playerName: String = if (isPrimary) "Player 1" else "Player 2"
+    private var serveState = ServeState.NOT_SERVING
 
     private val playerPrefix = if (isPrimary) "scoring-player-1" else "scoring-player-2"
     private val gp = SmallStatPanel("GAMES", "Game Won", "$playerPrefix-game-won", onGameWonClicked) { color ->
@@ -66,6 +88,19 @@ class PlayerControls(
         // Border strip, selected fill, and stat icons in the player color
         applyAccentColor()
 
+        serveBtn.name = if (isPrimary) "scoring-player-1-serve" else "scoring-player-2-serve"
+        serveBtn.isFocusPainted = false
+        serveBtn.isFocusable = false
+        serveBtn.background = Color(0x26, 0x26, 0x26)
+        serveBtn.cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
+        serveBtn.putClientProperty(FlatClientProperties.STYLE, "selectedBackground: #3A3F24")
+        // Only setServeState changes the selected state. A click does not toggle it.
+        serveBtn.addActionListener {
+            serveBtn.isSelected = serveState != ServeState.NOT_SERVING
+            onServeClicked()
+        }
+        applyServeState()
+
         header.isOpaque = false
         header.layout = BoxLayout(header, BoxLayout.X_AXIS)
         header.add(pointsLbl)
@@ -73,6 +108,8 @@ class PlayerControls(
         header.add(pointsVal)
         header.add(Box.createHorizontalStrut(12))
         header.add(pointBtn)
+        header.add(Box.createHorizontalStrut(6))
+        header.add(serveBtn)
         header.add(Box.createHorizontalGlue())
 
         stats.isOpaque = false
@@ -81,8 +118,44 @@ class PlayerControls(
     }
 
     fun setPlayerName(name: String) {
+        playerName = name
         pointBtn.text = "Point for $name   " + if (isPrimary) "[Q]" else "[E]"
         pointBtn.toolTipText = (if (isPrimary) "Q" else "E") + " — Point for $name"
+        applyServeState()
+    }
+
+    /** Shows if this player serves the selected point. */
+    fun setServeState(state: ServeState) {
+        serveState = state
+        applyServeState()
+    }
+
+    fun setServeButtonEnabled(enabled: Boolean) {
+        serveBtn.isEnabled = enabled
+    }
+
+    /**
+     * Not serving: a gray racket. Serving: a colored racket.
+     * Marked on this point: a colored racket with a lime border, so that the user can find the marks.
+     */
+    private fun applyServeState() {
+        val serving = serveState != ServeState.NOT_SERVING
+        serveBtn.isSelected = serving
+        serveBtn.icon = UiStyles.serveRacketIcon(16, active = serving, color = SERVE_BUTTON_COLOR)
+        val line = if (serveState == ServeState.SERVING_MARKED) {
+            BorderFactory.createLineBorder(UiStyles.LIME, 2)
+        } else {
+            BorderFactory.createCompoundBorder(
+                EmptyBorder(1, 1, 1, 1),
+                BorderFactory.createLineBorder(Color(0x48, 0x48, 0x47, 0x33), 1),
+            )
+        }
+        serveBtn.border = BorderFactory.createCompoundBorder(line, EmptyBorder(5, 7, 5, 7))
+        serveBtn.toolTipText = when (serveState) {
+            ServeState.NOT_SERVING -> "Click to mark $playerName as the server of this point. S — switch the server"
+            ServeState.SERVING -> "$playerName serves (computed from your serve marks). S — switch the server"
+            ServeState.SERVING_MARKED -> "$playerName serves (marked on this point). Click to clear the mark. S — switch the server"
+        }
     }
 
     fun setAccentColorHex(hex: String?) {

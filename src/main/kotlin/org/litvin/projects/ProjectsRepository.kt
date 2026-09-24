@@ -16,7 +16,8 @@ interface ProjectsRepository {
     fun getRecents(): List<ProjectSummary>
     fun readManifest(path: String): ProjectManifestV1
     fun summarize(path: String): ProjectSummary
-    fun createProject(sourceVideoPath: String): ProjectSummary
+    /** Creates a project with the [name] for the video. A suffix such as " (2)" makes the name unique. */
+    fun createProject(sourceVideoPath: String, name: String): ProjectSummary
     fun openProject(path: String, sourceVideoPath: String? = null): ProjectSummary
 }
 
@@ -40,13 +41,14 @@ class FileProjectsRepository(private val projectsRoot: File) : ProjectsRepositor
         }
     }
 
-    override fun createProject(sourceVideoPath: String): ProjectSummary {
+    override fun createProject(sourceVideoPath: String, name: String): ProjectSummary {
+        NewProjectRules.nameError(name)?.let { throw IllegalArgumentException(it) }
         val selected = File(sourceVideoPath)
         val targetRoot = projectsRoot.apply {
             if (!exists()) mkdirs()
         }
 
-        val baseName = selected.name.substringBeforeLast('.').ifBlank { "Untitled Match" }
+        val baseName = name.trim()
         var projectName = baseName
         var projectDir = File(targetRoot, projectName)
         var suffix = 2

@@ -270,7 +270,7 @@ class SwingApplicationFactoryTest {
         val root = kotlin.io.path.createTempDirectory("swing-project-navigation-").toFile()
         val source = root.resolve("source.mp4").apply { writeText("") }
         val repository = FileProjectsRepository(root.resolve("projects"))
-        val project = repository.createProject(source.absolutePath)
+        val project = repository.createProject(source.absolutePath, "source")
     }
 
     private class RecordingExecutorProvider : ExecutorProvider {
@@ -385,7 +385,7 @@ class SwingApplicationFactoryTest {
         override fun getRecents() = emptyList<ProjectSummary>()
         override fun readManifest(path: String): ProjectManifestV1 = error("unused")
         override fun summarize(path: String): ProjectSummary = error("unused")
-        override fun createProject(sourceVideoPath: String): ProjectSummary = error("unused")
+        override fun createProject(sourceVideoPath: String, name: String): ProjectSummary = error("unused")
         override fun openProject(path: String, sourceVideoPath: String?): ProjectSummary = error("unused")
     }
 

@@ -33,6 +33,8 @@ data class OverlaySpan(
     val setsP1: Int = 0,
     val setsP2: Int = 0,
     val completedSets: List<Pair<Int, Int>> = emptyList(),
+    /** The player (1 or 2) who serves, or null when the server is not known. */
+    val server: Int? = null,
 )
 
 data class CommentOverlaySpan(
@@ -55,6 +57,7 @@ object ScoreboardTimelineBuilder {
         player2ColorHex: String? = null,
         rules: MatchRulesV1 = MatchRulesV1(),
         manualMarks: ManualScoreMarks = ManualScoreMarks(),
+        serverMarks: Map<String, Outcome> = emptyMap(),
     ): List<OverlaySpan> {
         val ordered = points.sortedBy { it.startMs }
         val base = build(
@@ -67,6 +70,7 @@ object ScoreboardTimelineBuilder {
             player2ColorHex = player2ColorHex,
             rules = rules,
             manualMarks = manualMarks,
+            serverMarks = serverMarks,
         )
         return base.mapIndexedNotNull { index, span ->
             val point = ordered.getOrNull(index) ?: return@mapIndexedNotNull null
@@ -90,6 +94,7 @@ object ScoreboardTimelineBuilder {
         exportedPointIds: Set<String>? = null,
         rules: MatchRulesV1 = MatchRulesV1(),
         manualMarks: ManualScoreMarks = ManualScoreMarks(),
+        serverMarks: Map<String, Outcome> = emptyMap(),
     ): List<OverlaySpan> {
         if (points.isEmpty()) return emptyList()
         val ordered = points.sortedBy { it.startMs }
@@ -122,7 +127,7 @@ object ScoreboardTimelineBuilder {
         }
 
         // Produce unified scoring snapshots (Task 3.21 — includes tiebreak support)
-        val snaps = ScoringRules.computeSnapshotsBefore(ordered, outcomes, rules, manualMarks)
+        val snaps = ScoringRules.computeSnapshotsBefore(ordered, outcomes, rules, manualMarks, serverMarks)
 
         fun displayPoints(pMine: Int, pOther: Int): String {
             val base = arrayOf("0", "15", "30", "40")
@@ -177,6 +182,7 @@ object ScoreboardTimelineBuilder {
                 setsP1 = st?.setsP1 ?: 0,
                 setsP2 = st?.setsP2 ?: 0,
                 completedSets = completedSets,
+                server = st?.server,
             )
         }
         return out

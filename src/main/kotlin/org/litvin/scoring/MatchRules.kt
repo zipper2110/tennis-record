@@ -13,6 +13,9 @@ enum class MatchStructure {
 
     /** One tiebreak is the full match. */
     SINGLE_TIEBREAK,
+
+    /** Points are counted 1, 2, 3 like in a tiebreak, without a points limit. The match has no end. */
+    PLAIN_POINTS,
 }
 
 /** What happens when the game score is 40–40. */
@@ -88,6 +91,10 @@ data class MatchRulesV1(
                 structure = rules.structure,
                 tiebreakPoints = rules.tiebreakPoints,
             )
+            MatchStructure.PLAIN_POINTS -> defaults.copy(
+                manualScoring = rules.manualScoring,
+                structure = rules.structure,
+            )
         }
     }
 
@@ -152,6 +159,11 @@ enum class MatchFormatPreset(val title: String, val description: String, private
         "Match tiebreak (10 points)",
         "One tiebreak to 10 points with a two-point lead.",
         MatchRulesV1(structure = MatchStructure.SINGLE_TIEBREAK, tiebreakPoints = 10),
+    ),
+    PLAIN_POINTS(
+        "Plain points (endless tiebreak)",
+        "Count points 1, 2, 3 like in a tiebreak, without a points limit. The match has no end.",
+        MatchRulesV1(structure = MatchStructure.PLAIN_POINTS),
     ),
     CUSTOM(
         "Custom",

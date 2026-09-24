@@ -18,6 +18,8 @@ object ScoringRules {
         val tbP1: Int,
         val tbP2: Int,
         val completedSets: List<Pair<Int, Int>>,
+        /** The player (1 or 2) who serves this point, or null when the server is not known. */
+        val server: Int? = null,
     )
 
     /**
@@ -29,9 +31,10 @@ object ScoringRules {
         outcomes: Map<String, Outcome>,
         rules: MatchRulesV1 = MatchRulesV1(),
         manualMarks: ManualScoreMarks = ManualScoreMarks(),
+        serverMarks: Map<String, Outcome> = emptyMap(),
     ): List<Snapshot> {
         if (points.isEmpty()) return emptyList()
-        val timeline = ScoringEngine.timeline(points, outcomes, rules, manualMarks)
+        val timeline = ScoringEngine.timeline(points, outcomes, rules, manualMarks, serverMarks)
         return points.indices.map { i ->
             val state = if (i == 0) timeline.initial else timeline.statesAfterPoint[i - 1]
             val sets = if (i == 0) emptyList() else timeline.setsAfterPoint[i - 1]
@@ -46,6 +49,7 @@ object ScoringRules {
                 tbP1 = if (state.isTiebreak) state.p1Pts else 0,
                 tbP2 = if (state.isTiebreak) state.p2Pts else 0,
                 completedSets = sets.map { it.p1 to it.p2 },
+                server = timeline.serverOfPoint.getOrNull(i),
             )
         }
     }

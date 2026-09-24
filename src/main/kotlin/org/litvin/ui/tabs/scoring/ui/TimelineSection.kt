@@ -45,8 +45,9 @@ class TimelineSection(
         p2ColorHex: String,
         rules: MatchRulesV1 = MatchRulesV1(),
         manualMarks: ManualScoreMarks = ManualScoreMarks(),
+        serverMarks: Map<String, Outcome> = emptyMap(),
     ) {
-        list.setData(points, outcomesByPointId, p1ColorHex, p2ColorHex, rules, manualMarks)
+        list.setData(points, outcomesByPointId, p1ColorHex, p2ColorHex, rules, manualMarks, serverMarks)
     }
 
     /** Player names used by the milestone tooltips. */

@@ -134,8 +134,9 @@ class LeftListPanel(
         p2ColorHex: String,
         rules: MatchRulesV1 = MatchRulesV1(),
         manualMarks: ManualScoreMarks = ManualScoreMarks(),
+        serverMarks: Map<String, Outcome> = emptyMap(),
     ) {
-        timeline.setList(points, outcomesByPointId, p1ColorHex, p2ColorHex, rules, manualMarks)
+        timeline.setList(points, outcomesByPointId, p1ColorHex, p2ColorHex, rules, manualMarks, serverMarks)
     }
 
     fun setSelectedIndex(index: Int, userInitiated: Boolean) {

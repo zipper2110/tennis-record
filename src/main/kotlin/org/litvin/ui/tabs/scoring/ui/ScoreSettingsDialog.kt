@@ -279,7 +279,8 @@ class ScoreSettingsDialog private constructor(
                 automatic && (rules.structure == MatchStructure.SINGLE_TIEBREAK || (sets && rules.setTiebreak)),
             )
             setRuleEnabled(finalSet, automatic && sets && rules.bestOfSets > 1)
-            setRuleEnabled(deuce, automatic && rules.structure != MatchStructure.SINGLE_TIEBREAK)
+            // Tiebreak points have no deuce.
+            setRuleEnabled(deuce, automatic && (sets || rules.structure == MatchStructure.GAMES_ONLY))
             formatDescription.foreground = if (automatic) UiStyles.FG_SECONDARY else UiStyles.FG_DISABLED
             manualHint.foreground = if (rules.manualScoring) UiStyles.FG_SECONDARY else UiStyles.FG_DISABLED
 

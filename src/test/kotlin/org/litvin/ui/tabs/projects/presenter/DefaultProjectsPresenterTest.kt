@@ -64,6 +64,64 @@ class DefaultProjectsPresenterTest {
     }
 
     @Test
+    fun selectedVideoAsksToConfirmTheSuggestedProjectName() {
+        val view = RecordingProjectsView()
+        val presenter = presenter(FakeProjectsRepository())
+        val video = tempDir.resolve("Club final.mp4").toString()
+
+        presenter.attach(view)
+        presenter.onIntent(ProjectsIntent.SourceVideoSelected(video))
+        drainEdt()
+
+        assertEquals(ProjectsViewEffect.ConfirmNewProject("Club final", video), view.effects.last())
+    }
+
+    @Test
+    fun confirmedProjectIsCreatedWithTheTypedNameAndOpened() {
+        val repository = FakeProjectsRepository()
+        val view = RecordingProjectsView()
+        val presenter = presenter(repository)
+        val video = tempDir.resolve("match.mp4").toFile().apply { writeText("video") }
+
+        presenter.attach(view)
+        presenter.onIntent(ProjectsIntent.CreateProject("  Semi final  ", video.absolutePath))
+        drainEdt()
+
+        assertEquals(listOf("Semi final"), repository.createdNames)
+        assertEquals(ProjectsViewEffect.ProjectOpened("created.trproj"), view.effects.last())
+        assertEquals("Semi final", view.states.last().currentProject?.name)
+    }
+
+    @Test
+    fun incorrectNameOrVideoShowsAnErrorAndCreatesNoProject() {
+        val repository = FakeProjectsRepository()
+        val view = RecordingProjectsView()
+        val presenter = presenter(repository)
+        val video = tempDir.resolve("match.mp4").toFile().apply { writeText("video") }
+
+        presenter.attach(view)
+        presenter.onIntent(ProjectsIntent.CreateProject(" ", video.absolutePath))
+        presenter.onIntent(ProjectsIntent.CreateProject("Match", tempDir.resolve("missing.mp4").toString()))
+        drainEdt()
+
+        assertEquals(emptyList(), repository.createdNames)
+        assertEquals(2, view.effects.filterIsInstance<ProjectsViewEffect.ShowError>().size)
+    }
+
+    @Test
+    fun fileRepositoryUsesTheProjectNameAndMakesItUnique() {
+        val repository = FileProjectsRepository(tempDir.resolve("projects").toFile())
+        val video = tempDir.resolve("match.mp4").toFile().apply { writeText("video") }
+
+        val first = repository.createProject(video.absolutePath, "Club final")
+        val second = repository.createProject(video.absolutePath, "Club final")
+
+        assertEquals("Club final", first.name)
+        assertEquals("Club final (2)", second.name)
+        assertEquals("Club final (2).trproj", java.io.File(second.path).name)
+    }
+
+    @Test
     fun fileRepositoriesKeepProjectsAndRecentsInsideTheirOwnRoots() {
         val firstRoot = tempDir.resolve("first/projects").toFile()
         val secondRoot = tempDir.resolve("second/projects").toFile()
@@ -72,13 +130,13 @@ class DefaultProjectsPresenterTest {
         val firstRepository = FileProjectsRepository(firstRoot)
         val secondRepository = FileProjectsRepository(secondRoot)
 
-        val firstProject = firstRepository.createProject(firstSource.absolutePath)
+        val firstProject = firstRepository.createProject(firstSource.absolutePath, "First")
 
         assertEquals(firstRoot.absolutePath, firstRepository.projectsRootPath())
         assertEquals(listOf(firstProject.path), firstRepository.getRecents().map { it.path })
         assertEquals(emptyList(), secondRepository.getRecents())
 
-        val secondProject = secondRepository.createProject(secondSource.absolutePath)
+        val secondProject = secondRepository.createProject(secondSource.absolutePath, "Second")
 
         assertEquals(secondRoot.absolutePath, secondRepository.projectsRootPath())
         assertEquals(listOf(firstProject.path), firstRepository.getRecents().map { it.path })
@@ -146,8 +204,11 @@ class DefaultProjectsPresenterTest {
             return ProjectSummary(path, manifest.name, manifest.sourceVideo ?: path)
         }
 
-        override fun createProject(sourceVideoPath: String): ProjectSummary {
-            val summary = ProjectSummary("created.trproj", "created", sourceVideoPath)
+        val createdNames = mutableListOf<String>()
+
+        override fun createProject(sourceVideoPath: String, name: String): ProjectSummary {
+            createdNames += name
+            val summary = ProjectSummary("created.trproj", name, sourceVideoPath)
             recents = listOf(summary)
             return summary
         }

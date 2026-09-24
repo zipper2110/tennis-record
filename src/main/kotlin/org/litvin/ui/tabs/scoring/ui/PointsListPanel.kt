@@ -41,6 +41,7 @@ class PointsListPanel : JPanel(BorderLayout()) {
     private var outcomesByPointId: Map<String, Outcome> = emptyMap()
     private var rules: MatchRulesV1 = MatchRulesV1()
     private var manualMarks: ManualScoreMarks = ManualScoreMarks()
+    private var serverMarks: Map<String, Outcome> = emptyMap()
     private var p1Color: Color = Color(0x4D, 0xA3, 0xFF)
     private var p2Color: Color = Color(0xFF, 0x6B, 0x6B)
     private var p1Name: String = "Player 1"
@@ -51,6 +52,9 @@ class PointsListPanel : JPanel(BorderLayout()) {
     private data class MilestoneBadge(val label: JLabel, val kind: String, val player: Int)
 
     private val milestoneBadges = mutableListOf<MilestoneBadge>()
+
+    /** Serve mark icons with the marked player, so that a rename can refresh their tooltips in place. */
+    private val serveMarkBadges = mutableListOf<Pair<JLabel, Int>>()
 
     /** Called when user clicks a row inside the list. Arguments: index, userInitiated=true */
     var onSelect: ((Int, Boolean) -> Unit)? = null
@@ -108,11 +112,13 @@ class PointsListPanel : JPanel(BorderLayout()) {
         p2ColorHex: String,
         rules: MatchRulesV1 = MatchRulesV1(),
         manualMarks: ManualScoreMarks = ManualScoreMarks(),
+        serverMarks: Map<String, Outcome> = emptyMap(),
     ) {
         this.points = points
         this.outcomesByPointId = LinkedHashMap(outcomesByPointId)
         this.rules = rules
         this.manualMarks = manualMarks
+        this.serverMarks = LinkedHashMap(serverMarks)
         this.p1Color = parseHexOrNull(p1ColorHex) ?: this.p1Color
         this.p2Color = parseHexOrNull(p2ColorHex) ?: this.p2Color
         rebuild()
@@ -159,6 +165,7 @@ class PointsListPanel : JPanel(BorderLayout()) {
             listContainer.removeAll()
             rowComponents.clear()
             milestoneBadges.clear()
+            serveMarkBadges.clear()
             headerTotalBadge.text = "${points.size} Total"
             val scoredCount = points.count { outcomesByPointId.containsKey(it.id) }
             headerScoredBadge.text = "$scoredCount Scored"
@@ -192,6 +199,11 @@ class PointsListPanel : JPanel(BorderLayout()) {
                         favorite = p.favorite,
                         gameWonBy = state?.lastGameWonBy,
                         setWonBy = state?.lastSetWonBy,
+                        serverMark = when (serverMarks[p.id]) {
+                            Outcome.P1 -> 1
+                            Outcome.P2 -> 2
+                            else -> null
+                        },
                         onSelectRow = { setSelectedIndex(i, userInitiated = true) },
                     ) {
                         onToggleFavorite?.invoke(i)
@@ -233,6 +245,7 @@ class PointsListPanel : JPanel(BorderLayout()) {
         favorite: Boolean,
         gameWonBy: Int?,
         setWonBy: Int?,
+        serverMark: Int?,
         onSelectRow: () -> Unit,
         onFavorite: () -> Unit,
     ): JComponent {
@@ -256,6 +269,7 @@ class PointsListPanel : JPanel(BorderLayout()) {
         val right = JPanel(FlowLayout(FlowLayout.RIGHT, 4, 0)).apply {
             isOpaque = false
         }
+        serverMark?.let { right.add(serveMarkBadge(it, onSelectRow)) }
         // A set-clinching point also wins a game; the set marker alone says the more interesting thing.
         if (setWonBy == null) {
             gameWonBy?.let { right.add(gameBadge(it, onSelectRow)) }
@@ -311,6 +325,16 @@ class PointsListPanel : JPanel(BorderLayout()) {
         )
     }
 
+    /** A racket in the player color: the user marked this player as the server of this point. */
+    private fun serveMarkBadge(player: Int, onSelectRow: () -> Unit): JLabel =
+        JLabel(UiStyles.serveRacketIcon(14, active = true, color = playerColor(player))).apply {
+            name = "serve-marked"
+            addMouseListener(object : MouseAdapter() {
+                override fun mouseClicked(e: MouseEvent) = onSelectRow()
+            })
+            serveMarkBadges.add(this to player)
+        }
+
     /** Check mark for a scored point, empty ring for an unscored one. Clicks select the row, as for the milestone badges. */
     private fun scoredStatus(scored: Boolean, onSelectRow: () -> Unit): JLabel =
         JLabel(if (scored) UiStyles.scoredIcon(18) else UiStyles.unscoredIcon(18)).apply {
@@ -343,6 +367,9 @@ class PointsListPanel : JPanel(BorderLayout()) {
     private fun applyMilestoneTooltips() {
         milestoneBadges.forEach { badge ->
             badge.label.toolTipText = "${badge.kind} won by ${playerName(badge.player)}"
+        }
+        serveMarkBadges.forEach { (label, player) ->
+            label.toolTipText = "Serve marked: ${playerName(player)} serves"
         }
     }
 

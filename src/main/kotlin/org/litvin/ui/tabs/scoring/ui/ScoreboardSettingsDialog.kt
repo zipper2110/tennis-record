@@ -52,7 +52,7 @@ import javax.swing.event.DocumentListener
 import javax.swing.text.AbstractDocument
 
 /**
- * Modal "Scoreboard style" dialog. It sets up the scoreboard: style, title, player colors, app credit line,
+ * Modal "Scoreboard style" dialog. It sets up the scoreboard: style, title, player colors, serve ball, app credit line,
  * position, size, background opacity and accent color.
  *
  * The dialog shows the result in a 16:9 frame. It also sends each change to the `onPreview` callback,
@@ -78,7 +78,8 @@ class ScoreboardSettingsDialog private constructor(
 
         /**
          * Shows the dialog and waits until it closes. Returns the new settings after Save,
-         * or null after Cancel. [sample] is the score that the previews show.
+         * or null after Cancel. [sample] is the score that the previews show. When the sample has no server,
+         * the previews show player 1 as the server, so that the "Show serve" option has a visible result.
          */
         fun show(
             parent: Component,
@@ -86,7 +87,8 @@ class ScoreboardSettingsDialog private constructor(
             sample: ScoreboardDisplay,
             onPreview: (ScoreboardSettingsV1) -> Unit = {},
         ): ScoreboardSettingsV1? {
-            val dialog = ScoreboardSettingsDialog(SwingUtilities.getWindowAncestor(parent), initial.normalized(), sample, onPreview)
+            val previewSample = if (sample.server == 0) sample.copy(server = 1) else sample
+            val dialog = ScoreboardSettingsDialog(SwingUtilities.getWindowAncestor(parent), initial.normalized(), previewSample, onPreview)
             dialog.setLocationRelativeTo(parent)
             dialog.isVisible = true
             return dialog.result
@@ -124,6 +126,11 @@ class ScoreboardSettingsDialog private constructor(
         isOpaque = false
         toolTipText = "Show the color of each player next to the name"
     }
+    private val showServe = JCheckBox("Show serve").apply {
+        name = "scoreboard-show-serve"
+        isOpaque = false
+        toolTipText = "Show a ball next to the player who serves. Mark the server on the Scoring tab"
+    }
     private val sizeSlider = slider(ScoreboardSettingsV1.MIN_SIZE_PERCENT, ScoreboardSettingsV1.MAX_SIZE_PERCENT, "scoreboard-size")
     private val sizeValue = valueLabel()
     private val opacitySlider = slider(ScoreboardSettingsV1.MIN_OPACITY_PERCENT, 100, "scoreboard-opacity")
@@ -160,6 +167,9 @@ class ScoreboardSettingsDialog private constructor(
         }
         showPlayerColors.addActionListener {
             update { it.copy(showPlayerColors = showPlayerColors.isSelected) }
+        }
+        showServe.addActionListener {
+            update { it.copy(showServe = showServe.isSelected) }
         }
         sizeSlider.addChangeListener { update { it.copy(sizePercent = sizeSlider.value) } }
         opacitySlider.addChangeListener { update { it.copy(backgroundOpacityPercent = opacitySlider.value) } }
@@ -260,7 +270,12 @@ class ScoreboardSettingsDialog private constructor(
             row++
         }
         addRow("Title", inline(titleField, showTitle))
-        addRow("Players", showPlayerColors)
+        addRow("Players", JPanel(FlowLayout(FlowLayout.LEFT, 0, 0)).apply {
+            isOpaque = false
+            add(showPlayerColors)
+            add(Box.createHorizontalStrut(16))
+            add(showServe)
+        })
         addRow("Position", JPanel(GridLayout(1, 0, 4, 0)).apply {
             isOpaque = false
             ScoreboardPosition.entries.forEach { add(positionButtons.getValue(it)) }
@@ -309,6 +324,7 @@ class ScoreboardSettingsDialog private constructor(
             titleField.isEnabled = settings.showTitle
             showAppCredit.isSelected = settings.showAppCredit
             showPlayerColors.isSelected = settings.showPlayerColors
+            showServe.isSelected = settings.showServe
             sizeSlider.value = settings.sizePercent
             sizeValue.text = "${settings.sizePercent} %"
             val opacity = settings.backgroundOpacityPercent ?: defaults.backgroundOpacityPercent

@@ -53,6 +53,7 @@ object HelpCatalog {
             summary = "Create a project from a video or reopen a match you worked on earlier.",
             workflow = listOf(
                 "Choose Import New Match and select a supported video file.",
+                "In the New project dialog, change the project name or the video if necessary, then choose Create project.",
                 "Use Open Project on a recent match to continue working.",
                 "The opened project becomes the current project, unlocks the editing tabs, and opens the Points tab.",
             ),
@@ -155,9 +156,10 @@ object HelpCatalog {
             ),
             actions = listOf(
                 "Star or unstar the current point without returning to Points.",
-                "Use Scoring Settings to change the player names and colors, the match format (for example best of 3 sets, match tiebreak, pro set, games only), the deuce rule, or to turn on fully manual scoring.",
+                "Use Scoring Settings to change the player names and colors, the match format (for example best of 3 sets, match tiebreak, pro set, games only, plain points), the deuce rule, or to turn on fully manual scoring.",
                 "In fully manual scoring, the app counts points only. Click Game Won or Set Won to mark a win on the current point.",
-                "Use Scoreboard Style to choose the scoreboard style, title, bottom app line, position, size, background, and accent color. The exported video uses the same scoreboard as the preview. New projects start with the last saved style.",
+                "To show the serve, click the racket button next to the player who serves (or press S). You can mark the server on any point. The server changes after each game, and in a tiebreak after the first point and then after every two points. A new mark sets the server until the end of that game. Click a marked racket again to clear the mark. If you do not mark a server, the app does not track the serve.",
+                "Use Scoreboard Style to choose the scoreboard style, title, player colors, serve ball, bottom app line, position, size, background, and accent color. The exported video uses the same scoreboard as the preview. New projects start with the last saved style.",
                 "Choose playback speed and optionally enable frame-by-frame arrow-key stepping while paused.",
                 "Scoring, score settings, and the scoreboard style autosave to the project.",
             ),
@@ -167,6 +169,7 @@ object HelpCatalog {
                 HelpShortcut(AppShortcuts.SCORE_PLAYER_2, "Point for Player 2"),
                 HelpShortcut(AppShortcuts.NEXT_POINT, "Advance to the next point and start playback"),
                 HelpShortcut(AppShortcuts.PREVIOUS_POINT, "Go back to the previous point"),
+                HelpShortcut(AppShortcuts.SWITCH_SERVE, "Switch the server of the selected point"),
                 HelpShortcut(AppShortcuts.TOGGLE_FAVORITE, "Toggle favorite on the selected point"),
                 HelpShortcut(AppShortcuts.TOGGLE_FRAME_STEP, "Toggle frame-by-frame stepping"),
                 HelpShortcut(AppShortcuts.PLAY_PAUSE, "Play or pause"),

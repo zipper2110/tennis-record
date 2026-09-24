@@ -24,6 +24,7 @@ object AppShortcuts {
     val SCORE_NO_POINT = AppShortcut("W", "W")
     val SCORE_PLAYER_2 = AppShortcut("E", "E")
     val NEXT_POINT = AppShortcut("R", "R")
+    val SWITCH_SERVE = AppShortcut("S", "S")
     val PREVIOUS_POINT = AppShortcut("shift R", "Shift+R")
     val TOGGLE_FRAME_STEP = AppShortcut("F", "F")
 }

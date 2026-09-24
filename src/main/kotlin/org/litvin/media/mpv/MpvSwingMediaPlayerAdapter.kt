@@ -286,9 +286,18 @@ class MpvSwingMediaPlayerAdapter : SwingMediaPlayer {
 
     override fun play() {
         frameStepCursorMs = null
-        if (!fileLoaded) activatePreview("play")
+        if (!fileLoaded) {
+            if (isAtEnd(lastKnownTimeMs)) lastKnownTimeMs = 0L
+            activatePreview("play")
+        } else if (core?.getProperty("eof-reached") == "yes" || isAtEnd(lastKnownTimeMs)) {
+            // With keep-open, mpv pauses at the end of the file and pauses again on each unpause.
+            // Go back to the start, so that play restarts the video.
+            seekExact(0L)
+        }
         core?.setProperty("pause", "no")
     }
+
+    private fun isAtEnd(timeMs: Long): Boolean = durationMs > 0L && timeMs >= durationMs - frameDurationMs
 
     override fun pause() {
         core?.setProperty("pause", "yes")

@@ -163,7 +163,7 @@ class ComponentNameContractTest {
         override fun getRecents() = listOf(ProjectSummary(PATH, "Match", "match.mp4", PROJECT_ID))
         override fun readManifest(path: String) = PROJECT_MANIFEST
         override fun summarize(path: String) = ProjectSummary(path, "Match", "match.mp4", PROJECT_ID)
-        override fun createProject(sourceVideoPath: String) = error("unused")
+        override fun createProject(sourceVideoPath: String, name: String) = error("unused")
         override fun openProject(path: String, sourceVideoPath: String?) = error("unused")
     }
 
@@ -247,6 +247,8 @@ class ComponentNameContractTest {
             "scoring-player-2-point",
             "scoring-player-1-game-won",
             "scoring-player-2-set-won",
+            "scoring-player-1-serve",
+            "scoring-player-2-serve",
             "current-point-label",
             "current-point-favorite",
             "score-settings",

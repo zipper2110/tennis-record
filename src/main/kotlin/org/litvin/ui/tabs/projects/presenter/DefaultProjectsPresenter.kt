@@ -1,6 +1,7 @@
 package org.litvin.ui.tabs.projects.presenter
 
 import org.litvin.projects.FileProjectsRepository
+import org.litvin.projects.NewProjectRules
 import org.litvin.projects.ProjectSummary
 import org.litvin.projects.ProjectsRepository
 import org.litvin.app.PreferencesProvider
@@ -43,7 +44,8 @@ class DefaultProjectsPresenter(
     override fun onIntent(intent: ProjectsIntent) {
         when (intent) {
             ProjectsIntent.ImportNewMatch -> emitEffect(ProjectsViewEffect.ChooseSourceVideo(lastVideoDir()))
-            is ProjectsIntent.SourceVideoSelected -> createProject(intent.path)
+            is ProjectsIntent.SourceVideoSelected -> confirmNewProject(intent.path)
+            is ProjectsIntent.CreateProject -> createProject(intent.name, intent.sourceVideoPath)
             is ProjectsIntent.OpenProject -> openProject(intent.manifestPath)
             is ProjectsIntent.MissingSourceVideoSelected -> openProject(intent.manifestPath, intent.sourceVideoPath)
             is ProjectsIntent.GoToPage -> goToPage(intent.page)
@@ -61,11 +63,22 @@ class DefaultProjectsPresenter(
         }
     }
 
-    private fun createProject(sourceVideoPath: String) {
+    private fun confirmNewProject(sourceVideoPath: String) {
         if (sourceVideoPath.isBlank()) return
         rememberVideoDir(sourceVideoPath)
+        emitEffect(ProjectsViewEffect.ConfirmNewProject(NewProjectRules.suggestedName(sourceVideoPath), sourceVideoPath))
+    }
+
+    private fun createProject(name: String, sourceVideoPath: String) {
         runIo("Failed to create project") {
-            val created = repository.createProject(sourceVideoPath).toCardState()
+            // The dialog also validates. This check stops a request that skips the dialog.
+            val error = NewProjectRules.nameError(name) ?: NewProjectRules.sourceVideoError(sourceVideoPath)
+            if (error != null) {
+                emitEffect(ProjectsViewEffect.ShowError("Failed to create project", error))
+                return@runIo
+            }
+            rememberVideoDir(sourceVideoPath)
+            val created = repository.createProject(sourceVideoPath.trim(), name.trim()).toCardState()
             val refreshed = repository.getRecents().map { it.toCardState() }
             synchronized(stateLock) {
                 currentProject = created

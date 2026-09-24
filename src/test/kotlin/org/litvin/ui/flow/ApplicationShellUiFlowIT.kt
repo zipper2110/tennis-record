@@ -14,11 +14,12 @@ class ApplicationShellUiFlowIT {
         var application = ApplicationScreen(initial)
         application.assertProjectsOnlyNavigation()
 
-        application.projects.importMatch()
+        application.projects.importMatch(projectName = "Club final")
         application.points.assertReady()
         application.assertProjectNavigation()
 
         val created = initial.fixtures.onlyProject()
+        assertEquals("Club final", created.manifest.name)
         assertEquals(
             initial.fixtures.sourceVideo.toAbsolutePath().normalize(),
             Path.of(requireNotNull(created.manifest.sourceVideo)).toAbsolutePath().normalize(),

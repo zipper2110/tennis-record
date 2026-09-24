@@ -20,6 +20,14 @@ class ValidationRecoveryUiFlowIT {
     }
 
     @Test
+    fun `canceling the new project dialog creates no project`(context: UiFlowContext) {
+        ApplicationScreen(context).projects.open()
+            .cancelNewProjectDialog()
+            .assertUsable()
+        assertEquals(emptyList(), context.services.projectsRepository.getRecents())
+    }
+
+    @Test
     @Disabled("Deferred to packaged/native smoke: Windows foreground focus can swallow the Robot project-card click")
     fun `missing source can be relinked and opens Points`(context: UiFlowContext) {
         val project = context.fixtures.missingSourceProject()

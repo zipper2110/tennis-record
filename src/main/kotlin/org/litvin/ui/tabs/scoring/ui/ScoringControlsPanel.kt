@@ -31,6 +31,7 @@ class ScoringControlsPanel(
     onOutcome: (Outcome) -> Unit,
     onManualGameWon: (Outcome) -> Unit = {},
     onManualSetWon: (Outcome) -> Unit = {},
+    onServe: (Outcome) -> Unit = {},
 ) : JPanel() {
 
     val player1 = PlayerControls(
@@ -38,12 +39,14 @@ class ScoringControlsPanel(
         onPointClicked = { onOutcome(Outcome.P1) },
         onGameWonClicked = { onManualGameWon(Outcome.P1) },
         onSetWonClicked = { onManualSetWon(Outcome.P1) },
+        onServeClicked = { onServe(Outcome.P1) },
     )
     val player2 = PlayerControls(
         isPrimary = false,
         onPointClicked = { onOutcome(Outcome.P2) },
         onGameWonClicked = { onManualGameWon(Outcome.P2) },
         onSetWonClicked = { onManualSetWon(Outcome.P2) },
+        onServeClicked = { onServe(Outcome.P2) },
     )
     val videoSync = VideoSyncPanel(videoActions)
 
@@ -75,11 +78,24 @@ class ScoringControlsPanel(
         grid.components.forEach { add(it) }
     }
 
-    /** Enable or disable the three outcome buttons: P1, No point, P2. */
+    /** Enable or disable the three outcome buttons (P1, No point, P2) and the two serve buttons. */
     fun setOutcomeButtonsEnabled(enabled: Boolean) {
         player1.setPointButtonEnabled(enabled)
         player2.setPointButtonEnabled(enabled)
         noPointBtn.isEnabled = enabled
+        player1.setServeButtonEnabled(enabled)
+        player2.setServeButtonEnabled(enabled)
+    }
+
+    /** Shows the server of the selected point. [server] is 1, 2 or null (not known). [marked] is true for a mark on this point. */
+    fun setServer(server: Int?, marked: Boolean) {
+        fun state(player: Int) = when {
+            server != player -> ServeState.NOT_SERVING
+            marked -> ServeState.SERVING_MARKED
+            else -> ServeState.SERVING
+        }
+        player1.setServeState(state(1))
+        player2.setServeState(state(2))
     }
 
     /** Manual scoring makes the Game Won and Set Won markers clickable. [enabled] is false when no point is selected. */
