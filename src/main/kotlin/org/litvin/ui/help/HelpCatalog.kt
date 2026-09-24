@@ -59,8 +59,11 @@ object HelpCatalog {
             ),
             actions = listOf(
                 "Double-click a recent project card as an alternative to Open Project.",
+                "Use the pencil button on a project card to rename the project.",
+                "Read the video duration, the file size, the scored points of all points, and the favorite points in the columns of each recent project.",
                 "Use Prev and Next when the recent-project list has multiple pages.",
-                "If a source video moved, select it again when prompted.",
+                "Use the trash button on a project card to delete the project. The video file stays on the disk. You cannot delete the open project.",
+                "A red crossed-out video icon shows when the video of a project is not on the disk. Put the video back at the same location to open the project.",
             ),
             shortcuts = listOf(
                 HelpShortcut(AppShortcuts.HELP, "Open Projects help"),

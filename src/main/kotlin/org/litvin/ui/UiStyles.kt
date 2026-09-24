@@ -51,7 +51,12 @@ object UiStyles {
 
     fun pencilIcon(size: Int = 18): Icon = ikon(Material2AL.EDIT, size, LIME)
 
-    fun crossIcon(size: Int = 18): Icon = ikon(Material2AL.BACKSPACE, size, Color(0xCC, 0x46, 0x46))
+    fun crossIcon(size: Int = 18): Icon = ikon(Material2AL.BACKSPACE, size, RED)
+
+    fun deleteIcon(size: Int = 18, color: Color = RED): Icon = ikon(Material2AL.DELETE, size, color)
+
+    /** A crossed-out video camera. It tells that the video file of a project is not on the disk. */
+    fun videoMissingIcon(size: Int = 16): Icon = ikon(Material2MZ.VIDEOCAM_OFF, size, RED)
 
     /** Filled rounded square that shows a comment color next to its action button. */
     fun colorSwatchIcon(color: Color, size: Int = 18): Icon = object : Icon {
@@ -133,6 +138,7 @@ object UiStyles {
     val GREEN: Color = Color(0xAF, 0xF6, 0x25)              // primary-fixed
     val YELLOW: Color = Color(0xFF, 0xD5, 0x4A)            // warning/emphasis
     val BLUE: Color = Color(0x3B, 0x82, 0xF6)              // informational accent
+    val RED: Color = Color(0xCC, 0x46, 0x46)               // errors and destructive actions
 
     // Sidebar specific palette (from mock)
     val SIDEBAR_BG: Color = Color(0x12, 0x12, 0x12)
@@ -298,6 +304,9 @@ object UiStyles {
     fun scoreSettingsIcon(size: Int = 18): Icon = ikon(Material2MZ.TUNE, size, LIME)
 
     fun scoreboardStyleIcon(size: Int = 18): Icon = ikon(Material2AL.BRUSH, size, LIME)
+
+    // Close button of a hint balloon
+    fun closeIcon(size: Int = 14, color: Color = FG_SECONDARY): Icon = ikon(Material2AL.CLOSE, size, color)
 
     /** Primary CTA button with gradient; includes a leading circle-plus icon. */
     fun primaryButton(text: String, onClick: () -> Unit): JButton = object : JButton(text) {
@@ -663,12 +672,24 @@ object UiStyles {
                 g2.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE)
                 val s = size.toDouble()
                 val main = if (active) color else Color(0x6A, 0x6A, 0x6A)
-                // Unit frame along the racket: the head tip is at y = -0.5, the handle end is at y = +0.5.
-                val len = s * 1.3
-                g2.translate(x + s / 2, y + s / 2)
+                val frameWidth = maxOf(1.4, s * 0.1)
+                val handleWidth = maxOf(1.8, s * 0.13)
+                // Unit frame along the racket: the head tip is at y = -0.5, the handle end is at y = 0.46.
+                val headRx = 0.2
+                val headRy = 0.28
+                val headCy = -0.22
+                val handleEnd = 0.46
+                // Reach of the head and of the handle along the screen axes, for one unit of racket length
+                val diag = Math.sqrt(0.5)
+                val headReach = -headCy * diag + Math.sqrt((headRx * headRx + headRy * headRy) / 2)
+                val handleReach = handleEnd * diag
+                // Fit the racket, with its strokes, in the box and keep 0.5 px free on each side for antialiasing
+                val len = (s - 1 - frameWidth / 2 - handleWidth / 2) / (headReach + handleReach)
+                val shift = ((headReach - handleReach) * len + (frameWidth - handleWidth) / 2) / 2
+                g2.translate(x + s / 2 - shift, y + s / 2 + shift)
                 g2.rotate(Math.toRadians(45.0))
                 g2.scale(len, len)
-                val head = java.awt.geom.Ellipse2D.Double(-0.2, -0.5, 0.4, 0.56)
+                val head = java.awt.geom.Ellipse2D.Double(-headRx, headCy - headRy, headRx * 2, headRy * 2)
                 if (active) {
                     g2.color = Color(color.red, color.green, color.blue, 0x40)
                     g2.fill(head)
@@ -682,10 +703,10 @@ object UiStyles {
                 for (sy in doubleArrayOf(-0.33, -0.2, -0.07)) g2.draw(java.awt.geom.Line2D.Double(-0.3, sy, 0.3, sy))
                 g2.clip = outerClip
                 g2.color = main
-                g2.stroke = BasicStroke((maxOf(1.4, s * 0.1) / len).toFloat())
+                g2.stroke = BasicStroke((frameWidth / len).toFloat())
                 g2.draw(head)
-                g2.stroke = BasicStroke((maxOf(1.8, s * 0.13) / len).toFloat(), BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
-                g2.draw(java.awt.geom.Line2D.Double(0.0, 0.07, 0.0, 0.46))
+                g2.stroke = BasicStroke((handleWidth / len).toFloat(), BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
+                g2.draw(java.awt.geom.Line2D.Double(0.0, headCy + headRy + 0.01, 0.0, handleEnd))
             } finally {
                 g2.dispose()
             }

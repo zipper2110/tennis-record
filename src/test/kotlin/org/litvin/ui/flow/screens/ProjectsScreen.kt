@@ -40,6 +40,13 @@ internal class ProjectsScreen(application: ApplicationScreen) : UserFlowScreen(a
         }
     }
 
+    fun renameCurrent(name: String): ProjectsScreen = apply {
+        context.driver.click("projects-current-rename")
+        assertVisible("rename-project-save")
+        context.driver.setText("rename-project-name", name)
+        context.driver.click("rename-project-save")
+    }
+
     fun openRecent(id: String): ProjectsScreen = apply {
         require(id.isNotBlank()) { "project id must not be blank" }
         assertRecent(id)

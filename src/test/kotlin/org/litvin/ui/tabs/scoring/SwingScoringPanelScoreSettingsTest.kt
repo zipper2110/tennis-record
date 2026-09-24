@@ -1,6 +1,7 @@
 package org.litvin.ui.tabs.scoring
 
 import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Assumptions.assumeFalse
 import org.junit.jupiter.api.Test
 import org.litvin.adjustments.AdjustmentsSession
 import org.litvin.adjustments.AdjustmentsV1
@@ -22,13 +23,18 @@ import org.litvin.ui.commons.UserDialogService
 import org.litvin.ui.tabs.scoring.ui.ScoreSettings
 import org.litvin.ui.tabs.scoring.ui.ScoreSettingsEditor
 import java.awt.Component
+import java.awt.Container
+import java.awt.GraphicsEnvironment
 import java.io.File
 import java.nio.file.Files
 import java.util.concurrent.ScheduledThreadPoolExecutor
 import java.util.prefs.AbstractPreferences
+import javax.swing.AbstractButton
+import javax.swing.JFrame
 import javax.swing.JPanel
 import javax.swing.SwingUtilities
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -39,6 +45,7 @@ class SwingScoringPanelScoreSettingsTest {
     private val manifestPath = File(projectDir, "project.trproj").absolutePath
     private val dialogs = RecordingDialogs()
     private var panel: SwingScoringPanel? = null
+    private var frame: JFrame? = null
 
     init {
         ManifestIO.write(
@@ -56,7 +63,10 @@ class SwingScoringPanelScoreSettingsTest {
 
     @AfterEach
     fun tearDown() {
-        SwingUtilities.invokeAndWait { panel?.close() }
+        SwingUtilities.invokeAndWait {
+            panel?.close()
+            frame?.dispose()
+        }
         assertEquals(emptyList(), dialogs.errors)
         scheduler.shutdownNow()
         projectDir.deleteRecursively()
@@ -107,6 +117,55 @@ class SwingScoringPanelScoreSettingsTest {
     }
 
     @Test
+    fun hintShowsAfterEachAutomaticDialogUntilTheUserClosesIt() {
+        assumeFalse(GraphicsEnvironment.isHeadless())
+        val hint = MemoryHint()
+        val editor = RecordingEditor { null }
+        SwingUtilities.invokeAndWait {
+            panel = createPanel(ScoreboardStyleDefaults.NONE, editor, hint).apply { setProjectManifest(manifestPath) }
+            frame = JFrame().apply {
+                contentPane.add(panel!!)
+                setSize(1200, 800)
+                isVisible = true
+            }
+        }
+
+        activateAndFlush()
+        assertEquals(1, editor.calls.size)
+        assertTrue(balloonShown(), "The balloon shows when the automatic dialog closes")
+
+        SwingUtilities.invokeAndWait { panel!!.onDeactivated() }
+        assertFalse(balloonShown(), "Leaving the tab removes the balloon")
+        assertFalse(hint.isDismissed(), "Leaving the tab does not close the hint for good")
+
+        // The next project with no reviewed settings shows the dialog and the balloon again
+        reopenWithUnreviewedSettings()
+        activateAndFlush()
+        assertEquals(2, editor.calls.size)
+        assertTrue(balloonShown())
+
+        SwingUtilities.invokeAndWait { (find(frame!!.layeredPane, "hint-balloon-close") as AbstractButton).doClick() }
+        assertFalse(balloonShown())
+        assertTrue(hint.isDismissed(), "The close button closes the hint for good")
+
+        SwingUtilities.invokeAndWait { panel!!.onDeactivated() }
+        reopenWithUnreviewedSettings()
+        activateAndFlush()
+        assertEquals(3, editor.calls.size)
+        assertFalse(balloonShown(), "A closed hint does not show again")
+    }
+
+    @Test
+    fun preferencesKeepTheClosedHint() {
+        val preferences = MemoryPreferences()
+        assertFalse(PreferencesScoreSettingsHint(preferences).isDismissed())
+
+        PreferencesScoreSettingsHint(preferences).dismiss()
+
+        assertTrue(PreferencesScoreSettingsHint(preferences).isDismissed())
+    }
+
+    @Test
     fun existingProjectKeepsItsOwnStyle() {
         val projectStyle = ScoreboardSettingsV1(style = ScoreboardStyleId.RETRO)
         ScoreIO.writeForProjectDir(projectDir.absolutePath, ScoreV1(scoreboard = projectStyle, scoreSettingsReviewed = true))
@@ -133,8 +192,30 @@ class SwingScoringPanelScoreSettingsTest {
         assertEquals(style, defaults.load())
     }
 
-    private fun createPanel(defaults: ScoreboardStyleDefaults, editor: ScoreSettingsEditor) =
-        SwingScoringPanel(FakePlayer(), adjustments, dialogs, defaults, editor)
+    private fun createPanel(
+        defaults: ScoreboardStyleDefaults,
+        editor: ScoreSettingsEditor,
+        hint: ScoreSettingsHint = ScoreSettingsHint.NONE,
+    ) = SwingScoringPanel(FakePlayer(), adjustments, dialogs, defaults, editor, hint)
+
+    private fun reopenWithUnreviewedSettings() {
+        ScoreIO.writeForProjectDir(projectDir.absolutePath, ScoreV1(scoreSettingsReviewed = false))
+        SwingUtilities.invokeAndWait { panel!!.setProjectManifest(manifestPath) }
+    }
+
+    private fun balloonShown(): Boolean {
+        var shown = false
+        SwingUtilities.invokeAndWait { shown = find(frame!!.layeredPane, "hint-balloon")?.isShowing == true }
+        return shown
+    }
+
+    private fun find(root: Container, name: String): Component? {
+        for (child in root.components) {
+            if (child.name == name) return child
+            if (child is Container) find(child, name)?.let { return it }
+        }
+        return null
+    }
 
     /** Activates the tab, then runs the events that the activation queued (the score settings prompt). */
     private fun activateAndFlush() {
@@ -148,6 +229,14 @@ class SwingScoringPanelScoreSettingsTest {
         override fun edit(parent: Component, current: ScoreSettings): ScoreSettings? {
             calls += current
             return answer(current)
+        }
+    }
+
+    private class MemoryHint : ScoreSettingsHint {
+        private var dismissed = false
+        override fun isDismissed() = dismissed
+        override fun dismiss() {
+            dismissed = true
         }
     }
 

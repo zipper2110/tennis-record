@@ -39,6 +39,7 @@ import org.litvin.ui.commons.SwingFilePicker
 import org.litvin.ui.commons.SwingUserDialogService
 import org.litvin.ui.commons.UserDialogService
 
+import com.formdev.flatlaf.ui.FlatProgressBarUI
 import io.github.oshai.kotlinlogging.KotlinLogging
 import java.awt.*
 import java.io.File
@@ -116,7 +117,15 @@ class SwingExportPanel(
     )
 
     // Right side — Active + Completed
-    private val progressBar = JProgressBar(0, 100).apply { name = "export-progress" }
+    private val progressBar = JProgressBar(0, 100).apply {
+        name = "export-progress"
+        foreground = UiStyles.GREEN
+        // FlatLaf paints the percent text over the fill in selectionForeground, which has no style key.
+        // The default light text is not legible on the green fill, so this UI returns a contrasting color.
+        setUI(object : FlatProgressBarUI() {
+            override fun getSelectionForeground(): Color = UiStyles.contrastingTextColor(UiStyles.GREEN)
+        })
+    }
     private val progressLabel = JLabel("Idle")
     private val cancelButton = JButton("Cancel").apply { name = "export-cancel" }
     private var lastFailureNotifiedJobId: String? = null

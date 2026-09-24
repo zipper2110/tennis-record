@@ -26,6 +26,13 @@ internal class ApplicationScreen(
         assertNavigation(projectNavigationVisible = true)
     }
 
+    fun assertTitle(title: String) {
+        eventually("window title to be '$title'") {
+            val actual = onEdt { Window.getWindows().filterIsInstance<Frame>().single { it.name == "app-frame" }.title }
+            if (actual != title) throw AssertionError("Window title was '$actual'")
+        }
+    }
+
     fun eventually(description: String, assertion: () -> Unit) {
         var lastFailure: Throwable? = null
         try {

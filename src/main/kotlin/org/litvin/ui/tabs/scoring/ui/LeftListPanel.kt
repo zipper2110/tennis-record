@@ -5,6 +5,7 @@ import org.litvin.scoring.ManualScoreMarks
 import org.litvin.scoring.MatchRulesV1
 import org.litvin.scoring.Outcome
 import org.litvin.ui.UiStyles
+import org.litvin.ui.commons.HintBalloon
 import org.litvin.ui.tabs.scoring.NavigationActions
 import java.awt.BorderLayout
 import java.awt.Color
@@ -32,7 +33,9 @@ class LeftListPanel(
     private val prevPointBtn: JButton
     private val currentPointLabel = JLabel("No point selected")
     private val currentPointFavoriteBtn: JButton
+    private val scoreSettingsBtn: JButton
     private var currentPointIndex: Int = -1
+    private var scoreSettingsHint: HintBalloon? = null
 
     init {
         background = Color(0x15, 0x15, 0x15)
@@ -96,7 +99,7 @@ class LeftListPanel(
         prevPointBtn.addActionListener { actions.goToPreviousPoint() }
         prevPointBtn.isEnabled = false
 
-        val scoreSettingsBtn = fullButton("Scoring Settings", UiStyles.scoreSettingsIcon())
+        scoreSettingsBtn = fullButton("Scoring Settings", UiStyles.scoreSettingsIcon())
         scoreSettingsBtn.name = "score-settings"
         scoreSettingsBtn.foreground = Color(0xFF, 0xFF, 0xFF)
         scoreSettingsBtn.toolTipText = "Set the player names and colors, the match format, and manual scoring"
@@ -154,6 +157,29 @@ class LeftListPanel(
     fun setPreviousEnabled(enabled: Boolean) {
         prevPointBtn.isEnabled = enabled
     }
+
+    /**
+     * Shows a balloon at the Scoring Settings button that tells the user that the settings stay available there.
+     * [onClose] runs when the user closes the balloon.
+     */
+    fun showScoreSettingsHint(onClose: () -> Unit) {
+        hideScoreSettingsHint()
+        val balloon = HintBalloon("You can change the scoring settings at any time with this button.") {
+            scoreSettingsHint = null
+            onClose()
+        }
+        scoreSettingsHint = balloon
+        balloon.showAt(scoreSettingsBtn)
+    }
+
+    /** Removes the score settings balloon from the screen. The close callback does not run. */
+    fun hideScoreSettingsHint() {
+        scoreSettingsHint?.hideBalloon()
+        scoreSettingsHint = null
+    }
+
+    val isScoreSettingsHintShown: Boolean
+        get() = scoreSettingsHint?.isShown == true
 
     /** Player names used by the milestone tooltips of the list. */
     fun setPlayerNames(p1: String, p2: String) {

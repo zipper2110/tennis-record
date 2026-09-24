@@ -75,6 +75,7 @@ class SwingScoringPanel(
     private val dialogs: UserDialogService,
     private val styleDefaults: ScoreboardStyleDefaults = ScoreboardStyleDefaults.NONE,
     private val scoreSettingsEditor: ScoreSettingsEditor = ScoreSettingsDialog,
+    private val scoreSettingsHint: ScoreSettingsHint = ScoreSettingsHint.NONE,
 ) : JPanel(BorderLayout()), AutoCloseable {
     constructor() : this(
         MpvSwingMediaPlayerAdapter(),
@@ -152,6 +153,7 @@ class SwingScoringPanel(
 
     fun onDeactivated() = uiSafe {
         isActive = false
+        if (::leftListPanel.isInitialized) leftListPanel.hideScoreSettingsHint()
         player.pause()
         player.deactivatePreview("scoring deactivated")
         // Flush pending autosave when leaving the tab
@@ -924,12 +926,26 @@ class SwingScoringPanel(
         }
     }
 
-    /** Opens the score settings automatically the first time the user opens this tab for a project. */
+    /**
+     * Opens the score settings automatically the first time the user opens this tab for a project.
+     * When the dialog closes, a balloon points at the Scoring Settings button until the user closes the balloon once.
+     */
     private fun promptScoreSettingsOnFirstVisit() {
         if (projectDir == null || scoreSettingsReviewed) return
         EventQueue.invokeLater {
-            if (isActive && projectDir != null && !scoreSettingsReviewed) openScoreSettings()
+            if (isActive && projectDir != null && !scoreSettingsReviewed) {
+                openScoreSettings()
+                showScoreSettingsHint()
+            }
         }
+    }
+
+    private fun showScoreSettingsHint() = uiSafe {
+        if (!isActive || scoreSettingsHint.isDismissed()) return@uiSafe
+        leftListPanel.showScoreSettingsHint(onClose = {
+            uiSafe { scoreSettingsHint.dismiss() }
+            EventQueue.invokeLater { player.component.requestFocusInWindow() }
+        })
     }
 
     /** Opens the score settings: player names and colors, the match format, and manual scoring. */

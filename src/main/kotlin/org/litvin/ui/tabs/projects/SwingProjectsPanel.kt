@@ -13,7 +13,10 @@ import org.litvin.ui.tabs.projects.components.NewProjectRequest
 import org.litvin.ui.tabs.projects.components.ProjectCard
 import org.litvin.ui.tabs.projects.components.ProjectsEmptyListCard
 import org.litvin.ui.tabs.projects.components.ProjectsHeader
+import org.litvin.ui.tabs.projects.components.ProjectNameEditor
 import org.litvin.ui.tabs.projects.components.ProjectsPaginationBar
+import org.litvin.ui.tabs.projects.components.ProjectsTableColumns
+import org.litvin.ui.tabs.projects.components.RenameProjectDialog
 import org.litvin.ui.tabs.projects.presenter.DefaultProjectsPresenter
 import org.litvin.ui.tabs.projects.presenter.ProjectCardState
 import org.litvin.ui.tabs.projects.presenter.ProjectsIntent
@@ -46,6 +49,7 @@ class SwingProjectsPanel(
     private val filePicker: FilePicker = SwingFilePicker(),
     private val dialogs: UserDialogService = SwingUserDialogService(),
     private val newProjectEditor: NewProjectEditor = NewProjectDialog,
+    private val projectNameEditor: ProjectNameEditor = RenameProjectDialog,
 ) : JPanel(BorderLayout()), ProjectsView {
     private val currentProjectContainer = JPanel(BorderLayout()).apply {
         isOpaque = false
@@ -58,6 +62,7 @@ class SwingProjectsPanel(
         isOpaque = false
         alignmentX = 0f
     }
+    private val tableHeader = ProjectsTableColumns.header(ProjectCard.rowActionsWidth())
     private val paginationBar = ProjectsPaginationBar(
         onPrevious = { presenter.onIntent(ProjectsIntent.GoToPage(lastState.currentPage - 1)) },
         onNext = { presenter.onIntent(ProjectsIntent.GoToPage(lastState.currentPage + 1)) },
@@ -65,6 +70,9 @@ class SwingProjectsPanel(
     private var lastState = ProjectsViewState()
 
     var onProjectOpened: ((String) -> Unit)? = null
+
+    /** Receives the name of the current project after an open, a create, or a rename. */
+    var onCurrentProjectNameChanged: ((String?) -> Unit)? = null
 
     init {
         isOpaque = true
@@ -99,7 +107,9 @@ class SwingProjectsPanel(
     }
 
     override fun render(state: ProjectsViewState) {
+        val previousName = lastState.currentProject?.name
         lastState = state
+        if (state.currentProject?.name != previousName) onCurrentProjectNameChanged?.invoke(state.currentProject?.name)
         renderCurrentProject(state.currentProject)
         renderProjectList(state)
         renderPagination(state)
@@ -159,6 +169,9 @@ class SwingProjectsPanel(
             border = BorderFactory.createEmptyBorder()
             isOpaque = false
             viewport.isOpaque = false
+            // The column header stays above the rows and has the same width as the viewport, also with a scroll bar.
+            setColumnHeaderView(tableHeader)
+            columnHeader.isOpaque = false
             verticalScrollBar.unitIncrement = 18
             applyDarkScrollbar(this, background)
         }
@@ -177,7 +190,13 @@ class SwingProjectsPanel(
             if (project == null) {
                 emptyCurrentProjectCard()
             } else {
-                ProjectCard(project.name, project.secondary, titleComponentName = "projects-current-name")
+                ProjectCard(
+                    project.name,
+                    project.secondary,
+                    titleComponentName = "projects-current-name",
+                    renameButtonComponentName = "projects-current-rename",
+                    onRename = { renameProject(project) },
+                )
             },
             BorderLayout.CENTER,
         )
@@ -186,6 +205,7 @@ class SwingProjectsPanel(
 
     private fun renderProjectList(state: ProjectsViewState) {
         listContainer.removeAll()
+        tableHeader.isVisible = state.visibleProjects.isNotEmpty()
         if (state.visibleProjects.isEmpty()) {
             listContainer.add(ProjectsEmptyListCard(state.emptyListMessage))
         } else {
@@ -209,13 +229,40 @@ class SwingProjectsPanel(
     }
 
     private fun buildProjectCard(project: ProjectCardState): JComponent {
+        val isOpen = project.path == lastState.currentProject?.path
         return ProjectCard(
             project.name,
             project.secondary,
             openButtonComponentName = "projects-open-${project.id}",
+            renameButtonComponentName = "projects-rename-${project.id}",
+            deleteButtonComponentName = "projects-delete-${project.id}",
+            videoMissingTooltip = project.stats?.videoMissingMessage,
+            videoMissingComponentName = "projects-video-missing-${project.id}",
+            deleteDisabledReason = if (isOpen) "You cannot delete the open project." else null,
+            figures = project.stats?.let { listOf(it.duration, it.fileSize, it.scoredPoints, it.favoritePoints) }
+                ?: List(ProjectsTableColumns.FIGURE_COLUMNS.size) { "" },
+            figureComponentNames = FIGURE_NAME_PREFIXES.map { "projects-$it-${project.id}" },
+            onRename = { renameProject(project) },
+            onDelete = { deleteProject(project) },
         ) {
             presenter.onIntent(ProjectsIntent.OpenProject(project.path))
         }
+    }
+
+    private fun deleteProject(project: ProjectCardState) {
+        val confirmed = dialogs.confirm(
+            this,
+            "Delete the project \"${project.name}\"?\n\n" +
+                "The app removes the points, the scores, and the settings of the project.\n" +
+                "The video file stays on the disk.",
+            "Delete project",
+        )
+        if (confirmed) presenter.onIntent(ProjectsIntent.DeleteProject(project.path))
+    }
+
+    private fun renameProject(project: ProjectCardState) {
+        val name = projectNameEditor.edit(this, project.name) ?: return
+        if (name != project.name) presenter.onIntent(ProjectsIntent.RenameProject(project.path, name))
     }
 
     private fun emptyCurrentProjectCard(): JComponent {
@@ -248,5 +295,9 @@ class SwingProjectsPanel(
     private fun refresh(container: Container) {
         container.revalidate()
         container.repaint()
+    }
+
+    private companion object {
+        private val FIGURE_NAME_PREFIXES = listOf("duration", "size", "scored", "favorites")
     }
 }

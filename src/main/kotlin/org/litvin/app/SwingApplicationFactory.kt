@@ -17,6 +17,7 @@ import org.litvin.ui.tabs.export.SwingExportPanel
 import org.litvin.ui.tabs.points.SwingPointsPanel
 import org.litvin.ui.tabs.projects.SwingProjectsPanel
 import org.litvin.ui.tabs.projects.presenter.DefaultProjectsPresenter
+import org.litvin.ui.tabs.scoring.PreferencesScoreSettingsHint
 import org.litvin.ui.tabs.scoring.PreferencesScoreboardStyleDefaults
 import org.litvin.ui.tabs.scoring.SwingScoringPanel
 import org.litvin.ui.tabs.test.SwingTestPanel
@@ -119,11 +120,13 @@ object SwingApplicationFactory {
             )
             closeActions += cropRotatePanel::dispose
 
+            val scoringPreferences = services.preferences.node(PreferencesProvider.SCORING)
             val scoringPanel = SwingScoringPanel(
                 services.mediaPlayers.create(MediaScreen.SCORING),
                 services.adjustments,
                 services.dialogs,
-                PreferencesScoreboardStyleDefaults(services.preferences.node(PreferencesProvider.SCORING)),
+                PreferencesScoreboardStyleDefaults(scoringPreferences),
+                scoreSettingsHint = PreferencesScoreSettingsHint(scoringPreferences),
             )
             closeActions += scoringPanel::close
 
@@ -141,6 +144,17 @@ object SwingApplicationFactory {
             val testPanel = if (testEnabled) SwingTestPanel() else null
             if (testPanel != null) closeActions += testPanel::onDeactivated
             lateinit var projectsPanel: SwingProjectsPanel
+
+            var tabTitle = "Projects"
+            var projectName: String? = null
+            fun updateTitle() {
+                frame.title = listOfNotNull("Tennis Record", tabTitle, projectName?.takeIf { it.isNotBlank() })
+                    .joinToString(" — ")
+            }
+            fun showTitle(tab: String) {
+                tabTitle = tab
+                updateTitle()
+            }
 
             var currentCard: String? = null
             fun currentHelpPage(): HelpPage = when (currentCard) {
@@ -214,8 +228,12 @@ object SwingApplicationFactory {
                     btnTest?.isVisible = true
                     sidebar.revalidate()
                     sidebar.repaint()
-                    frame.title = "Tennis Record — Points"
+                    showTitle("Points")
                     goTo(CARD_POINTS)
+                }
+                onCurrentProjectNameChanged = { name ->
+                    projectName = name
+                    updateTitle()
                 }
             }
 
@@ -228,32 +246,32 @@ object SwingApplicationFactory {
             if (testPanel != null) cards.add(testPanel, CARD_TEST)
 
             btnProjects = UiStyles.sidebarButton("Projects", UiStyles.folderIcon()) {
-                frame.title = "Tennis Record — Projects"
+                showTitle("Projects")
                 goTo(CARD_PROJECTS)
             }.apply { name = "nav-projects" }
             addItem(btnProjects)
             btnColors = UiStyles.sidebarButton("Colors", UiStyles.colorsIcon()) {
-                frame.title = "Tennis Record — Color"
+                showTitle("Color")
                 goTo(CARD_ADJ_COLORS)
             }.apply { name = "nav-colors" }
             addItem(btnColors)
             btnCropRotate = UiStyles.sidebarButton("Transform", UiStyles.cropRotateIcon()) {
-                frame.title = "Tennis Record — Transform"
+                showTitle("Transform")
                 goTo(CARD_ADJ_CROP_ROTATE)
             }.apply { name = "nav-crop" }
             addItem(btnCropRotate)
             btnPoints = UiStyles.sidebarButton("Points", UiStyles.pointsIcon()) {
-                frame.title = "Tennis Record — Points"
+                showTitle("Points")
                 goTo(CARD_POINTS)
             }.apply { name = "nav-points" }
             addItem(btnPoints)
             btnScoring = UiStyles.sidebarButton("Scoring", UiStyles.targetIcon()) {
-                frame.title = "Tennis Record — Scoring"
+                showTitle("Scoring")
                 goTo(CARD_SCORING)
             }.apply { name = "nav-scoring" }
             addItem(btnScoring)
             btnExport = UiStyles.sidebarButton("Export", UiStyles.exportIcon()) {
-                frame.title = "Tennis Record — Export"
+                showTitle("Export")
                 goTo(CARD_EXPORT)
             }.apply { name = "nav-export" }
             addItem(btnExport)
@@ -267,7 +285,7 @@ object SwingApplicationFactory {
             }
             if (testEnabled) {
                 btnTest = UiStyles.sidebarButton("Test", UiStyles.targetIcon()) {
-                    frame.title = "Tennis Record — Test"
+                    showTitle("Test")
                     goTo(CARD_TEST)
                 }
                 addItem(btnTest!!)

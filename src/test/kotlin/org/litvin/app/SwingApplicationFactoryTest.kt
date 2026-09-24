@@ -89,7 +89,7 @@ class SwingApplicationFactoryTest {
             GuiActionRunner.execute {
                 checkNotNull(findComponent<AbstractButton>(opened.frame) { it.name == "nav-projects" }).doClick()
             }
-            assertEquals("Tennis Record — Projects", opened.frame.title)
+            assertEquals("Tennis Record — Projects — source", opened.frame.title)
             assertTrue(checkNotNull(findComponent(opened.frame) { it.name == "projects-import-match" }).isShowing)
             assertEquals(
                 projectFixture.project.name,
@@ -126,7 +126,7 @@ class SwingApplicationFactoryTest {
                     .doClick()
             }
             assertEquals(HelpPage.POINTS, clickHelp().selectedPage)
-            assertEquals("Tennis Record — Points", opened.frame.title)
+            assertEquals("Tennis Record — Points — source", opened.frame.title)
         } finally {
             handle?.close()
             Window.getWindows().filterNot(windowsBefore::contains).forEach(Window::dispose)
@@ -387,6 +387,8 @@ class SwingApplicationFactoryTest {
         override fun summarize(path: String): ProjectSummary = error("unused")
         override fun createProject(sourceVideoPath: String, name: String): ProjectSummary = error("unused")
         override fun openProject(path: String, sourceVideoPath: String?): ProjectSummary = error("unused")
+        override fun renameProject(path: String, name: String): ProjectSummary = error("unused")
+        override fun deleteProject(path: String) = error("unused")
     }
 
     private object EmptyCompletedRendersRepository : CompletedRendersRepository {

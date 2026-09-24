@@ -131,6 +131,8 @@ class FeatureBoundaryWiringTest {
         override fun summarize(path: String): ProjectSummary = error("unused")
         override fun createProject(sourceVideoPath: String, name: String): ProjectSummary = error("unused")
         override fun openProject(path: String, sourceVideoPath: String?): ProjectSummary = error("unused")
+        override fun renameProject(path: String, name: String): ProjectSummary = error("unused")
+        override fun deleteProject(path: String) = error("unused")
     }
 
     private object EmptyCompletedRendersRepository : CompletedRendersRepository {

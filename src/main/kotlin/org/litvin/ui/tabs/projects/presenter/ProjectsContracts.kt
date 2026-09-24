@@ -29,6 +29,18 @@ data class ProjectCardState(
     val name: String,
     val secondary: String,
     val id: String = path,
+    /** Null until the presenter loads the figures of the project. */
+    val stats: ProjectStatsState? = null,
+)
+
+/** Display text for the columns of the projects table. */
+data class ProjectStatsState(
+    val duration: String,
+    val fileSize: String,
+    val scoredPoints: String,
+    val favoritePoints: String,
+    /** A message for the user when the video file is not on the disk. Null when the video is available. */
+    val videoMissingMessage: String? = null,
 )
 
 sealed class ProjectsIntent {
@@ -36,6 +48,10 @@ sealed class ProjectsIntent {
     data class SourceVideoSelected(val path: String) : ProjectsIntent()
     data class CreateProject(val name: String, val sourceVideoPath: String) : ProjectsIntent()
     data class OpenProject(val manifestPath: String) : ProjectsIntent()
+    data class RenameProject(val manifestPath: String, val name: String) : ProjectsIntent()
+
+    /** The user confirmed the deletion. */
+    data class DeleteProject(val manifestPath: String) : ProjectsIntent()
     data class MissingSourceVideoSelected(val manifestPath: String, val sourceVideoPath: String) : ProjectsIntent()
     data class GoToPage(val page: Int) : ProjectsIntent()
 }

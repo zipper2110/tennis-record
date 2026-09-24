@@ -2,7 +2,9 @@ package org.litvin.ui
 
 import org.junit.jupiter.api.Test
 import java.awt.Color
+import java.awt.image.BufferedImage
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class UiStylesTest {
     @Test
@@ -21,5 +23,27 @@ class UiStylesTest {
         assertEquals(Color.BLACK, UiStyles.contrastingTextColor(Color(0x00, 0xFF, 0x00)))
         // Pure blue is dark to the eye even at full intensity.
         assertEquals(Color.WHITE, UiStyles.contrastingTextColor(Color(0x00, 0x00, 0xFF)))
+    }
+
+    @Test
+    fun serveRacketIconStaysInsideItsBox() {
+        for (size in listOf(12, 14, 16, 24)) {
+            for (active in listOf(true, false)) {
+                val icon = UiStyles.serveRacketIcon(size, active = active, color = Color.WHITE)
+                val margin = 8
+                val image = BufferedImage(size + margin * 2, size + margin * 2, BufferedImage.TYPE_INT_ARGB)
+                val g = image.createGraphics()
+                icon.paintIcon(null, g, margin, margin)
+                g.dispose()
+                val outside = (0 until image.width).flatMap { px -> (0 until image.height).map { py -> px to py } }
+                    .filter { (px, py) -> px !in margin until margin + size || py !in margin until margin + size }
+                    .count { (px, py) -> (image.getRGB(px, py) ushr 24) > 0 }
+                assertEquals(0, outside, "size $size, active $active: pixels outside the icon box")
+                val inside = (margin until margin + size).sumOf { px ->
+                    (margin until margin + size).count { py -> (image.getRGB(px, py) ushr 24) > 0 }
+                }
+                assertTrue(inside > 0, "size $size, active $active: the icon paints nothing")
+            }
+        }
     }
 }

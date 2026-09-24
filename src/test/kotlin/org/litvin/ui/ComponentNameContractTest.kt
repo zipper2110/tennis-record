@@ -165,6 +165,8 @@ class ComponentNameContractTest {
         override fun summarize(path: String) = ProjectSummary(path, "Match", "match.mp4", PROJECT_ID)
         override fun createProject(sourceVideoPath: String, name: String) = error("unused")
         override fun openProject(path: String, sourceVideoPath: String?) = error("unused")
+        override fun renameProject(path: String, name: String) = error("unused")
+        override fun deleteProject(path: String) = error("unused")
     }
 
     private class MemoryPreferences : AbstractPreferences(null, "") {
@@ -219,6 +221,13 @@ class ComponentNameContractTest {
             "projects-import-match",
             "projects-current-name",
             "projects-open-$PROJECT_ID",
+            "projects-rename-$PROJECT_ID",
+            "projects-delete-$PROJECT_ID",
+            "projects-table-header",
+            "projects-duration-$PROJECT_ID",
+            "projects-size-$PROJECT_ID",
+            "projects-scored-$PROJECT_ID",
+            "projects-favorites-$PROJECT_ID",
             "points-video",
             "points-play-pause",
             "points-seek",
