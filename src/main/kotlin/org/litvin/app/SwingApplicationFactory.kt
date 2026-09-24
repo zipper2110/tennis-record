@@ -17,6 +17,7 @@ import org.litvin.ui.tabs.export.SwingExportPanel
 import org.litvin.ui.tabs.points.SwingPointsPanel
 import org.litvin.ui.tabs.projects.SwingProjectsPanel
 import org.litvin.ui.tabs.projects.presenter.DefaultProjectsPresenter
+import org.litvin.ui.tabs.scoring.PreferencesScoreboardStyleDefaults
 import org.litvin.ui.tabs.scoring.SwingScoringPanel
 import org.litvin.ui.tabs.test.SwingTestPanel
 import org.litvin.analytics.AnalyticsBuildConfig
@@ -122,6 +123,7 @@ object SwingApplicationFactory {
                 services.mediaPlayers.create(MediaScreen.SCORING),
                 services.adjustments,
                 services.dialogs,
+                PreferencesScoreboardStyleDefaults(services.preferences.node(PreferencesProvider.SCORING)),
             )
             closeActions += scoringPanel::close
 

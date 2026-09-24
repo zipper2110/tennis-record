@@ -1,6 +1,8 @@
 package org.litvin.ui.tabs.scoring.ui
 
 import org.litvin.points.PointV1
+import org.litvin.scoring.ManualScoreMarks
+import org.litvin.scoring.MatchRulesV1
 import org.litvin.scoring.Outcome
 import org.litvin.ui.tabs.scoring.NavigationActions
 import java.awt.BorderLayout
@@ -41,8 +43,10 @@ class TimelineSection(
         outcomesByPointId: Map<String, Outcome>,
         p1ColorHex: String,
         p2ColorHex: String,
+        rules: MatchRulesV1 = MatchRulesV1(),
+        manualMarks: ManualScoreMarks = ManualScoreMarks(),
     ) {
-        list.setData(points, outcomesByPointId, p1ColorHex, p2ColorHex)
+        list.setData(points, outcomesByPointId, p1ColorHex, p2ColorHex, rules, manualMarks)
     }
 
     /** Player names used by the milestone tooltips. */

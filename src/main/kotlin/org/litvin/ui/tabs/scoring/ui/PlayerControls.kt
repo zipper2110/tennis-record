@@ -10,10 +10,15 @@ import javax.swing.border.EmptyBorder
  * Scoring controls for one player. [ScoringControlsPanel] puts the two parts in different grid rows:
  * - [header]: the POINTS value and the "Point for <name>" button
  * - [stats]: the GAMES and SETS cards
+ *
+ * The Game Won and Set Won markers show the computed score. In manual scoring they are buttons:
+ * a click marks (or clears) the game or set win of this player on the current point.
  */
 class PlayerControls(
     private val isPrimary: Boolean,
     private val onPointClicked: () -> Unit,
+    onGameWonClicked: () -> Unit = {},
+    onSetWonClicked: () -> Unit = {},
 ) {
 
     private val pointsVal = JLabel("0")
@@ -22,8 +27,13 @@ class PlayerControls(
 
     private val pointFill = PlayerColorFill(pointBtn)
 
-    private val gp = SmallStatPanel("GAMES", "Game Won") { color -> UiStyles.flagIcon(color = color) }
-    private val sp = SmallStatPanel("SETS", "Set Won") { color -> UiStyles.trophyIcon(color = color) }
+    private val playerPrefix = if (isPrimary) "scoring-player-1" else "scoring-player-2"
+    private val gp = SmallStatPanel("GAMES", "Game Won", "$playerPrefix-game-won", onGameWonClicked) { color ->
+        UiStyles.flagIcon(color = color)
+    }
+    private val sp = SmallStatPanel("SETS", "Set Won", "$playerPrefix-set-won", onSetWonClicked) { color ->
+        UiStyles.trophyIcon(color = color)
+    }
 
     /** One row, left-aligned: POINTS label, points value, point button. */
     val header: JPanel = JPanel()
@@ -119,6 +129,12 @@ class PlayerControls(
         sp.setState(sets.toString(), setWon)
     }
 
+    /** In manual scoring, the Game Won and Set Won markers accept clicks. [enabled] is false when no point is selected. */
+    fun setManualScoring(manual: Boolean, enabled: Boolean) {
+        gp.setInteractive(manual, enabled)
+        sp.setInteractive(manual, enabled)
+    }
+
     fun setPointButtonEnabled(enabled: Boolean) {
         pointBtn.isEnabled = enabled
     }
@@ -167,11 +183,13 @@ private class PlayerColorFill(
 private class SmallStatPanel(
     title: String,
     buttonText: String,
+    buttonName: String,
+    private val onClick: () -> Unit,
     icon: (Color) -> Icon,
 ) : JPanel() {
 
     private val valueLabel: JLabel
-    private val toggleButton: JToggleButton
+    private val toggleButton: MarkerButton
     private val fill: PlayerColorFill
 
     init {
@@ -189,7 +207,9 @@ private class SmallStatPanel(
         valueLabel.font = valueLabel.font.deriveFont(Font.BOLD, 24f)
         valueLabel.alignmentX = 0.5f
 
-        toggleButton = readOnlyBtn(buttonText)
+        toggleButton = markerBtn(buttonText)
+        toggleButton.name = buttonName
+        toggleButton.addActionListener { if (toggleButton.interactive) onClick() }
         fill = PlayerColorFill(toggleButton, icon)
 
         add(titleLabel)
@@ -208,11 +228,29 @@ private class SmallStatPanel(
         fill.accent = color
     }
 
-    private fun readOnlyBtn(buttonText: String): JToggleButton {
-        val btn = object : JToggleButton(buttonText) {
-            override fun processMouseEvent(e: java.awt.event.MouseEvent) { /* read-only */ }
-            override fun processKeyEvent(e: java.awt.event.KeyEvent) { /* read-only */ }
+    /** Manual scoring: the button accepts clicks. Automatic scoring: the button only shows the state. */
+    fun setInteractive(manual: Boolean, enabled: Boolean) {
+        toggleButton.interactive = manual && enabled
+        toggleButton.isRolloverEnabled = manual
+        toggleButton.cursor = if (toggleButton.interactive) Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) else Cursor.getDefaultCursor()
+        toggleButton.toolTipText = if (manual) "Click to mark or clear the win on this point" else "Computed automatically"
+    }
+
+    /** A toggle button that ignores the mouse and the keyboard while it is not [interactive]. */
+    private class MarkerButton(text: String) : JToggleButton(text) {
+        var interactive = false
+
+        override fun processMouseEvent(e: java.awt.event.MouseEvent) {
+            if (interactive) super.processMouseEvent(e)
         }
+
+        override fun processKeyEvent(e: java.awt.event.KeyEvent) {
+            if (interactive) super.processKeyEvent(e)
+        }
+    }
+
+    private fun markerBtn(buttonText: String): MarkerButton {
+        val btn = MarkerButton(buttonText)
 
         UiStyles.styleSecondary(btn)
         btn.iconTextGap = 6

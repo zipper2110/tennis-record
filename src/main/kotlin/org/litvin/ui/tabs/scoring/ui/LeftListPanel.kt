@@ -1,61 +1,38 @@
 package org.litvin.ui.tabs.scoring.ui
 
 import org.litvin.points.PointV1
+import org.litvin.scoring.ManualScoreMarks
+import org.litvin.scoring.MatchRulesV1
 import org.litvin.scoring.Outcome
+import org.litvin.ui.UiStyles
 import org.litvin.ui.tabs.scoring.NavigationActions
-import org.litvin.ui.tabs.scoring.ScoringActions
 import java.awt.BorderLayout
 import java.awt.Color
 import java.awt.Dimension
 import java.awt.Font
 import javax.swing.*
 import javax.swing.border.EmptyBorder
-import javax.swing.event.DocumentEvent
-import javax.swing.event.DocumentListener
-import javax.swing.text.AbstractDocument
-import javax.swing.text.AttributeSet
-import javax.swing.text.BadLocationException
-import javax.swing.text.DocumentFilter
 
 /**
  *
  * Responsibilities:
  * - Hosts the timeline list of points (via TimelineSection)
- * - Provides footer actions (Next/Previous Point) and placeholder buttons
- * - Provides player name fields with length limits and change callbacks
+ * - Shows the current point counter ("Point 3 / 8") with its favorite button
+ * - Provides footer actions: Next/Previous Point, Score Settings and Scoreboard Style
  *
  */
 class LeftListPanel(
     private val actions: NavigationActions,
-    private val onNamesChanged: (p1: String, p2: String) -> Unit,
-    private val onColorsChanged: (c1Hex: String, c2Hex: String) -> Unit,
-    private val onScoreboardSettings: () -> Unit = {},
+    private val onScoreSettings: () -> Unit = {},
+    private val onScoreboardStyle: () -> Unit = {},
 ) : JPanel(BorderLayout()) {
-
-    private fun parseHexOrNull(s: String?): Color? {
-        if (s == null) return null
-        val t = s.trim().removePrefix("#")
-        if (t.length != 6) return null
-        return try {
-            val r = t.substring(0, 2).toInt(16)
-            val g = t.substring(2, 4).toInt(16)
-            val b = t.substring(4, 6).toInt(16)
-            Color(r, g, b)
-        } catch (_: Throwable) { null }
-    }
 
     private val timeline = TimelineSection(actions)
     private val nextPointBtn: JButton
     private val prevPointBtn: JButton
-    private val p1NameField: JTextField
-    private val p2NameField: JTextField
-    private lateinit var p1ColorBtn: JButton
-    private lateinit var p2ColorBtn: JButton
-    private lateinit var p1ColorSwatch: JPanel
-    private lateinit var p2ColorSwatch: JPanel
-
-    private var isUpdatingNameFields: Boolean = false
-    private var isUpdatingColors: Boolean = false
+    private val currentPointLabel = JLabel("No point selected")
+    private val currentPointFavoriteBtn: JButton
+    private var currentPointIndex: Int = -1
 
     init {
         background = Color(0x15, 0x15, 0x15)
@@ -85,6 +62,27 @@ class LeftListPanel(
             return b
         }
 
+        currentPointLabel.name = "current-point-label"
+        currentPointLabel.foreground = Color.WHITE
+        currentPointLabel.font = currentPointLabel.font.deriveFont(Font.BOLD, 13f)
+
+        currentPointFavoriteBtn = UiStyles.smallIconButton(UiStyles.favoriteIcon(18, false), "Favorite [A]") {
+            if (currentPointIndex >= 0) actions.toggleFavorite(currentPointIndex)
+        }.apply {
+            text = "[A]"
+            font = font.deriveFont(Font.BOLD, 10f)
+            name = "current-point-favorite"
+        }
+
+        val currentPointRow = JPanel(BorderLayout(8, 0)).apply {
+            isOpaque = false
+            alignmentX = 0f
+            border = EmptyBorder(0, 4, 0, 0)
+            add(currentPointLabel, BorderLayout.CENTER)
+            add(currentPointFavoriteBtn, BorderLayout.EAST)
+            maximumSize = Dimension(Int.MAX_VALUE, preferredSize.height)
+        }
+
         nextPointBtn = fullButton("Next Point  [R]")
         nextPointBtn.name = "next-point"
         nextPointBtn.toolTipText = "R — Next Point"
@@ -97,181 +95,34 @@ class LeftListPanel(
         prevPointBtn.addActionListener { actions.goToPreviousPoint() }
         prevPointBtn.isEnabled = false
 
-        val manualBtn = fullButton("Manual Marker")
-        manualBtn.name = "manual-marker"
-        manualBtn.foreground = Color(0xFF, 0xFF, 0xFF)
-        manualBtn.isEnabled = false
-        manualBtn.toolTipText = "Temporarily disabled"
+        val scoreSettingsBtn = fullButton("Score Settings")
+        scoreSettingsBtn.name = "score-settings"
+        scoreSettingsBtn.foreground = Color(0xFF, 0xFF, 0xFF)
+        scoreSettingsBtn.toolTipText = "Set the player names and colors, the match format, and manual scoring"
+        scoreSettingsBtn.addActionListener { onScoreSettings() }
 
-        val settingsBtn = fullButton("Scoreboard Settings")
-        settingsBtn.name = "scoreboard-settings"
-        settingsBtn.foreground = Color(0xFF, 0xFF, 0xFF)
-        settingsBtn.toolTipText = "Set the scoreboard style, title, position, and size"
-        settingsBtn.addActionListener { onScoreboardSettings() }
+        val scoreboardStyleBtn = fullButton("Scoreboard Style")
+        scoreboardStyleBtn.name = "scoreboard-style"
+        scoreboardStyleBtn.foreground = Color(0xFF, 0xFF, 0xFF)
+        scoreboardStyleBtn.toolTipText = "Set the scoreboard style, title, position, and size"
+        scoreboardStyleBtn.addActionListener { onScoreboardStyle() }
 
-        fun nameField(): JTextField {
-            val tf = JTextField()
-            tf.background = Color(0x26, 0x26, 0x26)
-            tf.foreground = Color(0xFF, 0xFF, 0xFF)
-            tf.caretColor = Color(0xFF, 0xFF, 0xFF)
-            tf.border = BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(Color(0x48, 0x48, 0x47, 0x55), 1),
-                EmptyBorder(6, 6, 6, 6)
-            )
-            tf.maximumSize = Dimension(Int.MAX_VALUE, tf.preferredSize.height)
-            tf.alignmentX = 0f
-            val doc = tf.document
-            if (doc is AbstractDocument) {
-                doc.documentFilter = object : DocumentFilter() {
-                    @Throws(BadLocationException::class)
-                    override fun insertString(fb: FilterBypass, offs: Int, str: String, a: AttributeSet?) {
-                        val newLen = fb.document.length + (str.length)
-                        if (newLen <= 24) super.insertString(fb, offs, str, a) else {
-                            val allowed = 24 - fb.document.length
-                            if (allowed > 0) super.insertString(fb, offs, str.substring(0, allowed), a)
-                        }
-                    }
-
-                    @Throws(BadLocationException::class)
-                    override fun replace(fb: FilterBypass, offs: Int, length: Int, str: String?, a: AttributeSet?) {
-                        val currentLen = fb.document.length
-                        val addLen = str?.length ?: 0
-                        val newLen = currentLen - length + addLen
-                        if (newLen <= 24) super.replace(fb, offs, length, str, a) else {
-                            val allowed = 24 - (currentLen - length)
-                            if (allowed > 0 && str != null) super.replace(
-                                fb, offs, length, str.substring(0, allowed), a
-                            )
-                        }
-                    }
-                }
-            }
-            return tf
-        }
-
-        val p1Label = JLabel("Player 1 name")
-        p1Label.foreground = Color(0xAD, 0xAA, 0xAA)
-        p1Label.font = p1Label.font.deriveFont(Font.BOLD, 10f)
-        p1NameField = nameField()
-        p1NameField.name = "scoring-player-1-name"
-        val p2Label = JLabel("Player 2 name")
-        p2Label.foreground = Color(0xAD, 0xAA, 0xAA)
-        p2Label.font = p2Label.font.deriveFont(Font.BOLD, 10f)
-        p2NameField = nameField()
-        p2NameField.name = "scoring-player-2-name"
-
-        // Color pickers keep the action readable while showing the selected color separately.
-        fun colorButton(): JButton {
-            val b = JButton("Pick color")
-            b.isFocusPainted = false
-            b.background = Color(0x26, 0x26, 0x26)
-            b.foreground = Color(0xFF, 0xFF, 0xFF)
-            b.border = BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(Color(0x48, 0x48, 0x47, 0x55), 1),
-                EmptyBorder(4, 6, 4, 6)
-            )
-            return b
-        }
-
-        fun colorControl(button: JButton, swatch: JPanel): JPanel {
-            val height = button.preferredSize.height
-            swatch.isOpaque = true
-            swatch.border = BorderFactory.createLineBorder(Color(0xAD, 0xAA, 0xAA), 1)
-            swatch.preferredSize = Dimension(38, height)
-            swatch.minimumSize = swatch.preferredSize
-            swatch.maximumSize = swatch.preferredSize
-
-            return JPanel(BorderLayout(6, 0)).apply {
-                isOpaque = false
-                alignmentX = 0f
-                maximumSize = Dimension(Int.MAX_VALUE, height)
-                minimumSize = Dimension(0, height)
-                add(swatch, BorderLayout.WEST)
-                add(button, BorderLayout.CENTER)
-            }
-        }
-
-        p1ColorBtn = colorButton()
-        p2ColorBtn = colorButton()
-        p1ColorSwatch = JPanel()
-        p2ColorSwatch = JPanel()
-        p1ColorBtn.name = "player-1-color-button"
-        p2ColorBtn.name = "player-2-color-button"
-        p1ColorSwatch.name = "player-1-color-swatch"
-        p2ColorSwatch.name = "player-2-color-swatch"
-        p1ColorBtn.toolTipText = "Pick Player 1 color"
-        p2ColorBtn.toolTipText = "Pick Player 2 color"
-        p1ColorSwatch.toolTipText = "Player 1 color"
-        p2ColorSwatch.toolTipText = "Player 2 color"
-        val p1ColorControl = colorControl(p1ColorBtn, p1ColorSwatch)
-        val p2ColorControl = colorControl(p2ColorBtn, p2ColorSwatch)
-
-        fun showPicker(cur: Color?, onSel: (Color) -> Unit) {
-            val initial = cur ?: Color(0x4D, 0xA3, 0xFF)
-            val chosen = JColorChooser.showDialog(this, "Choose Color", initial)
-            if (chosen != null) onSel(chosen)
-        }
-        fun colorHex(c: Color): String = "#%02X%02X%02X".format(c.red, c.green, c.blue)
-        fun notifyNamesChanged() {
-            if (isUpdatingNameFields) return
-            val n1 = p1NameField.text.trim()
-            val n2 = p2NameField.text.trim()
-            timeline.setPlayerNames(n1, n2)
-            onNamesChanged(n1, n2)
-        }
-        fun notifyColorsChanged() {
-            if (isUpdatingColors) return
-            val c1 = p1ColorSwatch.background
-            val c2 = p2ColorSwatch.background
-            onColorsChanged(colorHex(c1), colorHex(c2))
-        }
-        p1NameField.document.addDocumentListener(object : DocumentListener {
-            override fun insertUpdate(e: DocumentEvent) = notifyNamesChanged()
-            override fun removeUpdate(e: DocumentEvent) = notifyNamesChanged()
-            override fun changedUpdate(e: DocumentEvent) = notifyNamesChanged()
-        })
-        p2NameField.document.addDocumentListener(object : DocumentListener {
-            override fun insertUpdate(e: DocumentEvent) = notifyNamesChanged()
-            override fun removeUpdate(e: DocumentEvent) = notifyNamesChanged()
-            override fun changedUpdate(e: DocumentEvent) = notifyNamesChanged()
-        })
-        p1ColorBtn.addActionListener {
-            showPicker(p1ColorSwatch.background) { c ->
-                p1ColorSwatch.background = c
-                notifyColorsChanged()
-            }
-        }
-        p2ColorBtn.addActionListener {
-            showPicker(p2ColorSwatch.background) { c ->
-                p2ColorSwatch.background = c
-                notifyColorsChanged()
-            }
-        }
-
+        footer.add(currentPointRow)
+        footer.add(Box.createVerticalStrut(6))
         footer.add(nextPointBtn)
         footer.add(Box.createVerticalStrut(6))
         footer.add(prevPointBtn)
-        footer.add(Box.createVerticalStrut(6))
-        footer.add(manualBtn)
-        footer.add(Box.createVerticalStrut(6))
-        footer.add(settingsBtn)
         footer.add(Box.createVerticalStrut(10))
-        footer.add(p1Label)
-        footer.add(Box.createVerticalStrut(3))
-        footer.add(p1NameField)
-        footer.add(Box.createVerticalStrut(4))
-        footer.add(p1ColorControl)
+        footer.add(scoreSettingsBtn)
         footer.add(Box.createVerticalStrut(6))
-        footer.add(p2Label)
-        footer.add(Box.createVerticalStrut(3))
-        footer.add(p2NameField)
-        footer.add(Box.createVerticalStrut(4))
-        footer.add(p2ColorControl)
+        footer.add(scoreboardStyleBtn)
 
         val footerWrap = JPanel(BorderLayout())
         footerWrap.isOpaque = false
         footerWrap.add(footer, BorderLayout.NORTH)
         add(footerWrap, BorderLayout.SOUTH)
+
+        setCurrentPoint(-1, 0, favorite = false)
     }
 
     // API
@@ -280,8 +131,10 @@ class LeftListPanel(
         outcomesByPointId: Map<String, Outcome>,
         p1ColorHex: String,
         p2ColorHex: String,
+        rules: MatchRulesV1 = MatchRulesV1(),
+        manualMarks: ManualScoreMarks = ManualScoreMarks(),
     ) {
-        timeline.setList(points, outcomesByPointId, p1ColorHex, p2ColorHex)
+        timeline.setList(points, outcomesByPointId, p1ColorHex, p2ColorHex, rules, manualMarks)
     }
 
     fun setSelectedIndex(index: Int, userInitiated: Boolean) {
@@ -300,24 +153,26 @@ class LeftListPanel(
         prevPointBtn.isEnabled = enabled
     }
 
+    /** Player names used by the milestone tooltips of the list. */
     fun setPlayerNames(p1: String, p2: String) {
-        isUpdatingNameFields = true
-        try {
-            p1NameField.text = p1
-            p2NameField.text = p2
-            timeline.setPlayerNames(p1, p2)
-        } finally {
-            isUpdatingNameFields = false
-        }
+        timeline.setPlayerNames(p1, p2)
     }
 
-    fun setPlayerColors(c1Hex: String, c2Hex: String) {
-        isUpdatingColors = true
-        try {
-            parseHexOrNull(c1Hex)?.let { p1ColorSwatch.background = it }
-            parseHexOrNull(c2Hex)?.let { p2ColorSwatch.background = it }
-        } finally {
-            isUpdatingColors = false
+    /** Shows "Point [index + 1] / [total]" and the favorite state. A negative [index] means no selection. */
+    fun setCurrentPoint(index: Int, total: Int, favorite: Boolean) {
+        currentPointIndex = index
+        if (index < 0) {
+            currentPointLabel.text = "No point selected"
+            currentPointLabel.foreground = Color(0xAD, 0xAA, 0xAA)
+            currentPointFavoriteBtn.isEnabled = false
+            currentPointFavoriteBtn.icon = UiStyles.favoriteIcon(18, false)
+            currentPointFavoriteBtn.foreground = UiStyles.FG_SECONDARY
+            return
         }
+        currentPointLabel.text = "Point ${index + 1} / $total"
+        currentPointLabel.foreground = Color.WHITE
+        currentPointFavoriteBtn.isEnabled = true
+        currentPointFavoriteBtn.icon = UiStyles.favoriteIcon(18, favorite)
+        currentPointFavoriteBtn.foreground = if (favorite) UiStyles.YELLOW else UiStyles.FG_SECONDARY
     }
 }

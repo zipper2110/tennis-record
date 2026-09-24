@@ -5,7 +5,6 @@ import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.SerializationFeature
 import com.fasterxml.jackson.module.kotlin.KotlinModule
-import com.fasterxml.jackson.module.kotlin.readValue
 import java.io.File
 import org.litvin.JsonFileIO
 
@@ -28,7 +27,16 @@ data class ScoreV1(
     val player1ColorHex: String = "#4DA3FF",
     val player2ColorHex: String = "#FF6B6B",
     val scoreboard: ScoreboardSettingsV1 = ScoreboardSettingsV1(),
-)
+    val rules: MatchRulesV1 = MatchRulesV1(),
+    /** Game wins that the user marked by hand. The engine uses them only in manual scoring. */
+    val manualGameWins: Map<String, Outcome> = emptyMap(),
+    /** Set wins that the user marked by hand. The engine uses them only in manual scoring. */
+    val manualSetWins: Map<String, Outcome> = emptyMap(),
+    /** True after the Scoring tab showed the score settings for this project one time. */
+    val scoreSettingsReviewed: Boolean = false,
+) {
+    fun manualMarks(): ManualScoreMarks = ManualScoreMarks(manualGameWins, manualSetWins)
+}
 
 object ScoreIO {
     private val mapper: ObjectMapper = ObjectMapper()
@@ -58,4 +66,18 @@ object ScoreIO {
 
     /** Convenience: write ScoreV1 for a given project directory. */
     fun writeForProjectDir(projectDir: String, score: ScoreV1) = write(scoreFilePath(projectDir), score)
+
+    /** True when the project directory has a score.json file. */
+    fun existsForProjectDir(projectDir: String): Boolean = File(scoreFilePath(projectDir)).isFile
+
+    /** Converts scoreboard settings to JSON text, for example to keep them as a user preference. */
+    fun scoreboardToJson(settings: ScoreboardSettingsV1): String = mapper.writeValueAsString(settings)
+
+    /** Reads scoreboard settings from [scoreboardToJson] text. Returns null if the text is not valid. */
+    fun scoreboardFromJson(json: String): ScoreboardSettingsV1? =
+        try {
+            mapper.readValue(json, ScoreboardSettingsV1::class.java).normalized()
+        } catch (_: Exception) {
+            null
+        }
 }

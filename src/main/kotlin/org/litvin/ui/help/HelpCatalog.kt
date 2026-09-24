@@ -148,16 +148,18 @@ object HelpCatalog {
             page = HelpPage.SCORING,
             summary = "Assign an outcome to each marked point and preview the resulting scoreboard.",
             workflow = listOf(
-                "Enter player names and choose their scoreboard colors.",
+                "The first time you open Scoring for a project, Score Settings opens. Enter the player names and colors, and select the match format.",
                 "Select a marked point, review the video segment, and choose Player 1, No point, or Player 2.",
                 "Advance through the list until every point has the intended outcome.",
                 "On the Export tab, enable Include Scoreboard to burn the score into the rendered video.",
             ),
             actions = listOf(
                 "Star or unstar the current point without returning to Points.",
-                "Use Scoreboard Settings to choose the scoreboard style, title, bottom app line, position, size, background, and accent color. The exported video uses the same scoreboard as the preview.",
+                "Use Score Settings to change the player names and colors, the match format (for example best of 3 sets, match tiebreak, pro set, games only), the deuce rule, or to turn on fully manual scoring.",
+                "In fully manual scoring, the app counts points only. Click Game Won or Set Won to mark a win on the current point.",
+                "Use Scoreboard Style to choose the scoreboard style, title, bottom app line, position, size, background, and accent color. The exported video uses the same scoreboard as the preview. New projects start with the last saved style.",
                 "Choose playback speed and optionally enable frame-by-frame arrow-key stepping while paused.",
-                "Scoring, names, colors, and scoreboard settings autosave to the project.",
+                "Scoring, score settings, and the scoreboard style autosave to the project.",
             ),
             shortcuts = listOf(
                 HelpShortcut(AppShortcuts.SCORE_PLAYER_1, "Point for Player 1"),

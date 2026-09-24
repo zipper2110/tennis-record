@@ -18,6 +18,8 @@ import org.litvin.media.PlayerStatus
 import org.litvin.media.VideoOverlay
 import org.litvin.media.mpv.MpvSwingMediaPlayerAdapter
 import org.litvin.media.SwingMediaPlayer
+import org.litvin.scoring.ManualScoreMarks
+import org.litvin.scoring.MatchRulesV1
 import org.litvin.scoring.Outcome
 import org.litvin.scoring.ScoreIO
 import org.litvin.scoring.ScoreV1
@@ -45,7 +47,8 @@ import javax.swing.border.EmptyBorder
  * v0.1.0 — Scoring tab shell (Task 4.1)
  *
  * UI scaffolding that mirrors the mock in design/scoring.html:
- * - Left points list with header badges and footer buttons
+ * - Left points list with header badges, the current point counter, and footer buttons
+ *   (Next/Previous Point, Score Settings, Scoreboard Style)
  * - Center video area with a scoreboard overlay placeholder
  * - Per-point scrub bar under the video
  * - Bottom area (ScoringControlsPanel): outcome buttons row (P1 / No Point / P2), then games/sets cards
@@ -56,7 +59,6 @@ import javax.swing.border.EmptyBorder
  * v0.3.0 — E-SC-001 (T1): Component map and contracts draft
  * Componentization target (leaves composed by this container):
  * - entry/ScoreEntryPanel — primary scoring inputs (points, undo/redo)
- * - toolbar/ControlsToolbar — top-level actions (reset/save/settings)
  * - timeline/TimelineSection — wraps existing PointsListPanel
  * - video/VideoSyncPanel — basic video/timecode sync controls for scoring
  *
@@ -71,6 +73,8 @@ class SwingScoringPanel(
     private val player: SwingMediaPlayer,
     private val adjustments: AdjustmentsSession,
     private val dialogs: UserDialogService,
+    private val styleDefaults: ScoreboardStyleDefaults = ScoreboardStyleDefaults.NONE,
+    private val scoreSettingsEditor: ScoreSettingsEditor = ScoreSettingsDialog,
 ) : JPanel(BorderLayout()), AutoCloseable {
     constructor() : this(
         MpvSwingMediaPlayerAdapter(),
@@ -126,6 +130,7 @@ class SwingScoringPanel(
 
         override fun toggleFavorite(index: Int) {
             this@SwingScoringPanel.toggleFavorite(index)
+            EventQueue.invokeLater { player.component.requestFocusInWindow() }
         }
     }
 
@@ -142,6 +147,7 @@ class SwingScoringPanel(
         refreshPointsFromProject()
         // Do not auto-play; optionally restore focus
         EventQueue.invokeLater { player.component.requestFocusInWindow() }
+        promptScoreSettingsOnFirstVisit()
     }
 
     fun onDeactivated() = uiSafe {
@@ -156,7 +162,6 @@ class SwingScoringPanel(
     override fun close() {
         if (disposed) return
         disposed = true
-        namesSaveTimer.stop()
         onDeactivated()
         unsubscribeAdjustments?.invoke()
         unsubscribeAdjustments = null
@@ -212,8 +217,15 @@ class SwingScoringPanel(
     // Data
     private var points: List<PointV1> = emptyList()
 
-    // Player colors (hex)
     private var scoreboardSettings = ScoreboardSettingsV1()
+    private var rules = MatchRulesV1()
+    private val manualGameWins: MutableMap<String, Outcome> = LinkedHashMap()
+    private val manualSetWins: MutableMap<String, Outcome> = LinkedHashMap()
+    private val manualMarks: ManualScoreMarks
+        get() = ManualScoreMarks(LinkedHashMap(manualGameWins), LinkedHashMap(manualSetWins))
+
+    // False until the score settings open once for this project (see promptScoreSettingsOnFirstVisit)
+    private var scoreSettingsReviewed = true
 
     // Settings that the open settings dialog shows on the video before the user saves them.
     private var scoreboardPreviewSettings: ScoreboardSettingsV1? = null
@@ -226,9 +238,6 @@ class SwingScoringPanel(
     private val outcomesByPointId: MutableMap<String, Outcome> = LinkedHashMap()
     private val scoredPointIds: Set<String>
         get() = outcomesByPointId.keys
-
-    // Autosave timer for names typing debounce (~300 ms)
-    private val namesSaveTimer = Timer(300) { _ -> saveNow() }.apply { isRepeats = false }
 
     // Left list UI refs
     private var selectedPointIndex: Int = -1
@@ -247,8 +256,6 @@ class SwingScoringPanel(
     private lateinit var segmentScrub: ScrubPanel
     private lateinit var videoFrame: JComponent
     private lateinit var geometryViewport: GeometryViewportPanel
-    private lateinit var currentPointLabel: JLabel
-    private lateinit var currentPointFavoriteBtn: JButton
 
     // Bottom panel: outcome buttons, player points/games/sets, and video controls
     private lateinit var controlsPanel: ScoringControlsPanel
@@ -258,7 +265,6 @@ class SwingScoringPanel(
 
     // Wire project and media
     fun setProjectManifest(path: String) = uiSafe {
-        namesSaveTimer.stop()
         this.projectDir = File(path).parentFile.absolutePath
         // Load adjustments for this project into the central store
         adjustments.load(projectDir!!)
@@ -267,28 +273,29 @@ class SwingScoringPanel(
         points = edl.points.sortedBy { it.startMs }
         // Load outcomes and player names from score.json (ignore orphans)
         outcomesByPointId.clear()
+        manualGameWins.clear()
+        manualSetWins.clear()
 
+        val isNewScore = !ScoreIO.existsForProjectDir(projectDir!!)
         val score = ScoreIO.readForProjectDir(projectDir!!)
         // Names
         player1Name = score.player1Name
         player2Name = score.player2Name
         // Colors
         player1ColorHex = score.player1ColorHex
-        scoreboardSettings = score.scoreboard
         player2ColorHex = score.player2ColorHex
-        if (::leftListPanel.isInitialized) {
-            leftListPanel.setPlayerNames(player1Name, player2Name)
-            leftListPanel.setPlayerColors(player1ColorHex, player2ColorHex)
-        }
-        // Apply colors to point buttons if panels are already created
-        if (::controlsPanel.isInitialized) {
-            controlsPanel.player1.setAccentColorHex(player1ColorHex)
-            controlsPanel.player2.setAccentColorHex(player2ColorHex)
-        }
-        refreshNameDependentUi()
-        // Outcomes
+        // A new project starts with the scoreboard style that the user saved last
+        scoreboardSettings = if (isNewScore) styleDefaults.load() ?: score.scoreboard else score.scoreboard
+        rules = score.rules.normalized()
+        scoreSettingsReviewed = score.scoreSettingsReviewed
+        applyPlayerSettingsToUi()
+        // Outcomes and manual game/set marks
         val validIds = points.map { it.id }.toSet()
         score.outcomes.forEach { (id, out) -> if (id in validIds) outcomesByPointId[id] = out }
+        score.manualGameWins.forEach { (id, winner) -> if (id in validIds) manualGameWins[id] = winner }
+        score.manualSetWins.forEach { (id, winner) -> if (id in validIds) manualSetWins[id] = winner }
+        // Keep the default style in the project, so that the Export tab uses it too
+        if (isNewScore) saveNow()
 
         rebuildPointsList()
         autoSelectInitial()
@@ -314,11 +321,9 @@ class SwingScoringPanel(
         points = newPoints
         // Remove outcomes for orphaned point ids (keep existing outcomes for still-valid ids)
         val validIds = newPoints.map { it.id }.toSet()
-        val itKeys = outcomesByPointId.keys.iterator()
-        while (itKeys.hasNext()) {
-            val k = itKeys.next()
-            if (!validIds.contains(k)) itKeys.remove()
-        }
+        outcomesByPointId.keys.retainAll(validIds)
+        manualGameWins.keys.retainAll(validIds)
+        manualSetWins.keys.retainAll(validIds)
         // Rebuild list UI and restore selection if possible
         rebuildPointsList()
         val newIndex = prevSelectedId?.let { id -> newPoints.indexOfFirst { it.id == id } } ?: -1
@@ -336,36 +341,11 @@ class SwingScoringPanel(
         background = Color(0x1A, 0x1A, 0x1A)
         layout = BorderLayout()
 
-        // Top toolbar with global actions (E-SC-001 T3)
-        val toolbar = ControlsToolbar(
-            centerContent = pointHeaderPanel(),
-            centerContentOffsetPx = 270,
-            onScoreboardSettings = ::openScoreboardSettings,
-        )
-        add(toolbar, BorderLayout.NORTH)
-
         // Root content: left list (fixed width) + center content
-        leftListPanel = LeftListPanel(navigationActions,
-            onScoreboardSettings = ::openScoreboardSettings,
-            onNamesChanged = { p1, p2 ->
-                player1Name = p1
-                player2Name = p2
-                refreshNameDependentUi()
-                refreshVideoScoreboardOverlay()
-                try { namesSaveTimer.restart() } catch (_: Throwable) { saveNow() }
-            },
-            onColorsChanged = { c1, c2 ->
-                player1ColorHex = c1
-                player2ColorHex = c2
-                // Apply immediately to point buttons
-                if (::controlsPanel.isInitialized) {
-                    controlsPanel.player1.setAccentColorHex(player1ColorHex)
-                    controlsPanel.player2.setAccentColorHex(player2ColorHex)
-                }
-                rebuildPointsList()
-                refreshVideoScoreboardOverlay()
-                try { namesSaveTimer.restart() } catch (_: Throwable) { saveNow() }
-            }
+        leftListPanel = LeftListPanel(
+            navigationActions,
+            onScoreSettings = { openScoreSettings() },
+            onScoreboardStyle = { openScoreboardStyle() },
         )
         val centerPanel = buildCenterPanel()
 
@@ -405,7 +385,7 @@ class SwingScoringPanel(
 
     // Rebuild left points list from current 'points' and 'scoredPointIds'
     private fun rebuildPointsList() = uiSafe {
-        leftListPanel.setList(points, outcomesByPointId, player1ColorHex, player2ColorHex)
+        leftListPanel.setList(points, outcomesByPointId, player1ColorHex, player2ColorHex, rules, manualMarks)
         leftListPanel.setNextEnabled(points.isNotEmpty())
         leftListPanel.setPreviousEnabled(selectedPointIndex > 0)
         updateCurrentPointHeader()
@@ -443,6 +423,7 @@ class SwingScoringPanel(
             updateCurrentPointHeader()
             if (::segmentScrub.isInitialized) segmentScrub.reset()
             updateActionButtonsState(enable = false, selectedOutcome = null)
+            if (::controlsPanel.isInitialized) controlsPanel.setManualScoring(rules.manualScoring, enabled = false)
             // Disable Next/Previous on no selection or empty list
             if (::leftListPanel.isInitialized) {
                 leftListPanel.setNextEnabled(false)
@@ -474,6 +455,7 @@ class SwingScoringPanel(
         val valid = segmentEndMs > segmentStartMs
         val existing = outcomesByPointId[p.id]
         updateActionButtonsState(enable = valid, selectedOutcome = existing)
+        if (::controlsPanel.isInitialized) controlsPanel.setManualScoring(rules.manualScoring, enabled = true)
         // Enable/disable Next/Previous based on whether an adjacent point exists
         if (::leftListPanel.isInitialized) {
             leftListPanel.setNextEnabled((selectedPointIndex + 1) in points.indices)
@@ -593,51 +575,23 @@ class SwingScoringPanel(
         return centerWithBottom
     }
 
-    private fun pointHeaderPanel(): JPanel {
-        val header = JPanel(java.awt.FlowLayout(java.awt.FlowLayout.CENTER, 8, 0))
-        header.isOpaque = false
-
-        currentPointLabel = JLabel("No point selected")
-        currentPointLabel.foreground = Color.WHITE
-        currentPointLabel.font = currentPointLabel.font.deriveFont(java.awt.Font.BOLD, 13f)
-        header.add(currentPointLabel)
-
-        currentPointFavoriteBtn = UiStyles.smallIconButton(UiStyles.favoriteIcon(18, false), "Favorite [A]") {
-            toggleFavoriteSelectedPoint()
-            EventQueue.invokeLater { player.component.requestFocusInWindow() }
-        }.apply {
-            text = "[A]"
-            font = font.deriveFont(java.awt.Font.BOLD, 10f)
-            name = "current-point-favorite"
-        }
-        header.add(currentPointFavoriteBtn)
-
-        updateCurrentPointHeader()
-        return header
-    }
-
     private fun updateCurrentPointHeader() = uiSafe {
-        if (!::currentPointLabel.isInitialized || !::currentPointFavoriteBtn.isInitialized) return@uiSafe
-
-        if (selectedPointIndex !in points.indices) {
-            currentPointLabel.text = "No point selected"
-            currentPointLabel.foreground = Color(0xAD, 0xAA, 0xAA)
-            currentPointFavoriteBtn.isEnabled = false
-            currentPointFavoriteBtn.icon = UiStyles.favoriteIcon(18, false)
-            currentPointFavoriteBtn.foreground = UiStyles.FG_SECONDARY
-            return@uiSafe
+        if (!::leftListPanel.isInitialized) return@uiSafe
+        val point = points.getOrNull(selectedPointIndex)
+        if (point == null) {
+            leftListPanel.setCurrentPoint(-1, points.size, favorite = false)
+        } else {
+            leftListPanel.setCurrentPoint(selectedPointIndex, points.size, point.favorite)
         }
-
-        val point = points[selectedPointIndex]
-        currentPointLabel.text = "Point ${selectedPointIndex + 1} / ${points.size}"
-        currentPointLabel.foreground = Color.WHITE
-        currentPointFavoriteBtn.isEnabled = true
-        currentPointFavoriteBtn.icon = UiStyles.favoriteIcon(18, point.favorite)
-        currentPointFavoriteBtn.foreground = if (point.favorite) UiStyles.YELLOW else UiStyles.FG_SECONDARY
     }
 
     fun bottomPanel(): JPanel {
-        controlsPanel = ScoringControlsPanel(videoPlayerActions) { outcome -> setOutcomeForSelectedPoint(outcome) }
+        controlsPanel = ScoringControlsPanel(
+            videoPlayerActions,
+            onOutcome = { outcome -> setOutcomeForSelectedPoint(outcome) },
+            onManualGameWon = { winner -> toggleManualMark(manualGameWins, winner) },
+            onManualSetWon = { winner -> toggleManualMark(manualSetWins, winner) },
+        )
         controlsPanel.player1.setPlayerName(displayNameP1())
         controlsPanel.player1.setAccentColorHex(player1ColorHex)
         controlsPanel.player2.setPlayerName(displayNameP2())
@@ -862,6 +816,19 @@ class SwingScoringPanel(
         }
     }
 
+    /** Manual scoring: marks [winner] in [marks] for the selected point, or clears the mark when it is already there. */
+    private fun toggleManualMark(marks: MutableMap<String, Outcome>, winner: Outcome) = uiSafe {
+        if (!rules.manualScoring) return@uiSafe
+        val point = points.getOrNull(selectedPointIndex) ?: return@uiSafe
+        if (marks[point.id] == winner) marks.remove(point.id) else marks[point.id] = winner
+        rebuildPointsList()
+        leftListPanel.setSelectedIndex(selectedPointIndex, false)
+        scheduleScoreAutosave()
+        updateScore(selectedPointIndex)
+        refreshVideoScoreboardOverlay()
+        EventQueue.invokeLater { player.component.requestFocusInWindow() }
+    }
+
     private fun scheduleScoreAutosave() {
         saveNow()
     }
@@ -882,6 +849,10 @@ class SwingScoringPanel(
                     player1ColorHex = c1,
                     player2ColorHex = c2,
                     scoreboard = scoreboardSettings,
+                    rules = rules,
+                    manualGameWins = LinkedHashMap(manualGameWins),
+                    manualSetWins = LinkedHashMap(manualSetWins),
+                    scoreSettingsReviewed = scoreSettingsReviewed,
                 ),
             )
         } catch (t: Throwable) {
@@ -890,17 +861,62 @@ class SwingScoringPanel(
         }
     }
 
-    private fun refreshNameDependentUi() {
-        val name1 = displayNameP1()
-        val name2 = displayNameP2()
+    /** Shows the player names and colors on the points list and the controls. */
+    private fun applyPlayerSettingsToUi() {
+        if (::leftListPanel.isInitialized) leftListPanel.setPlayerNames(displayNameP1(), displayNameP2())
         if (::controlsPanel.isInitialized) {
-            controlsPanel.player1.setPlayerName(name1)
-            controlsPanel.player2.setPlayerName(name2)
+            controlsPanel.player1.setPlayerName(displayNameP1())
+            controlsPanel.player2.setPlayerName(displayNameP2())
+            controlsPanel.player1.setAccentColorHex(player1ColorHex)
+            controlsPanel.player2.setAccentColorHex(player2ColorHex)
         }
     }
 
-    /** Opens the scoreboard settings. The video shows each change at once; Cancel restores the saved settings. */
-    private fun openScoreboardSettings() = uiSafe {
+    /** Opens the score settings automatically the first time the user opens this tab for a project. */
+    private fun promptScoreSettingsOnFirstVisit() {
+        if (projectDir == null || scoreSettingsReviewed) return
+        EventQueue.invokeLater {
+            if (isActive && projectDir != null && !scoreSettingsReviewed) openScoreSettings()
+        }
+    }
+
+    /** Opens the score settings: player names and colors, the match format, and manual scoring. */
+    private fun openScoreSettings() = uiSafe {
+        if (projectDir == null) return@uiSafe
+        // Set the flag first, so that a second activation does not open the dialog again
+        scoreSettingsReviewed = true
+        val current = ScoreSettings(
+            player1Name = player1Name,
+            player2Name = player2Name,
+            player1ColorHex = player1ColorHex,
+            player2ColorHex = player2ColorHex,
+            rules = rules,
+        )
+        val result = scoreSettingsEditor.edit(this, current)
+        if (result != null) {
+            player1Name = result.player1Name
+            player2Name = result.player2Name
+            player1ColorHex = result.player1ColorHex
+            player2ColorHex = result.player2ColorHex
+            rules = result.rules.normalized()
+            applyPlayerSettingsToUi()
+            rebuildPointsList()
+            leftListPanel.setSelectedIndex(selectedPointIndex, false)
+            if (::controlsPanel.isInitialized) {
+                controlsPanel.setManualScoring(rules.manualScoring, enabled = selectedPointIndex in points.indices)
+            }
+            updateScore(selectedPointIndex)
+            refreshVideoScoreboardOverlay()
+        }
+        saveNow()
+        EventQueue.invokeLater { player.component.requestFocusInWindow() }
+    }
+
+    /**
+     * Opens the scoreboard style. The video shows each change at once; Cancel restores the saved style.
+     * A saved style also becomes the user's default style for new projects.
+     */
+    private fun openScoreboardStyle() = uiSafe {
         val sample = lastScoreboardDisplay ?: ScoreboardComponent.display(
             OverlaySpan(
                 startMs = 0L,
@@ -928,6 +944,11 @@ class SwingScoringPanel(
         if (result != null) {
             scoreboardSettings = result
             saveNow()
+            try {
+                styleDefaults.save(result)
+            } catch (_: Throwable) {
+                // The default style is a convenience; the project keeps its own style.
+            }
         }
         refreshVideoScoreboardOverlay()
         EventQueue.invokeLater { player.component.requestFocusInWindow() }
@@ -947,6 +968,8 @@ class SwingScoringPanel(
                 player2Name = displayNameP2(),
                 player1ColorHex = player1ColorHex,
                 player2ColorHex = player2ColorHex,
+                rules = rules,
+                manualMarks = manualMarks,
             )
             val span = spans.getOrNull(selectedPointIndex)
             if (span == null) {
@@ -968,7 +991,7 @@ class SwingScoringPanel(
 
     private fun updateScore(index: Int) {
         // Delegate pure computation to ScoringEngine
-        val (states, setsPerPoint) = ScoringEngine.computeTimeline(points, outcomesByPointId)
+        val (states, setsPerPoint) = ScoringEngine.computeTimeline(points, outcomesByPointId, rules, manualMarks)
         statesAfterPoint = states
         setHistoryAfterPoint = setsPerPoint
 

@@ -50,11 +50,9 @@ import javax.swing.SwingUtilities
 import javax.swing.event.DocumentEvent
 import javax.swing.event.DocumentListener
 import javax.swing.text.AbstractDocument
-import javax.swing.text.AttributeSet
-import javax.swing.text.DocumentFilter
 
 /**
- * Modal dialog that sets up the scoreboard: style, title, app credit line, position, size,
+ * Modal "Scoreboard style" dialog. It sets up the scoreboard: style, title, app credit line, position, size,
  * background opacity and accent color.
  *
  * The dialog shows the result in a 16:9 frame. It also sends each change to the `onPreview` callback,
@@ -65,7 +63,7 @@ class ScoreboardSettingsDialog private constructor(
     initial: ScoreboardSettingsV1,
     private val sample: ScoreboardDisplay,
     private val onPreview: (ScoreboardSettingsV1) -> Unit,
-) : JDialog(owner, "Scoreboard settings", Dialog.ModalityType.APPLICATION_MODAL) {
+) : JDialog(owner, "Scoreboard style", Dialog.ModalityType.APPLICATION_MODAL) {
 
     companion object {
         private const val THUMBNAIL_SCALE = 0.42
@@ -413,18 +411,6 @@ class ScoreboardSettingsDialog private constructor(
             } finally {
                 g2.dispose()
             }
-        }
-    }
-
-    private class MaxLengthFilter(private val maxLength: Int) : DocumentFilter() {
-        override fun insertString(fb: FilterBypass, offset: Int, text: String?, attr: AttributeSet?) {
-            replace(fb, offset, 0, text, attr)
-        }
-
-        override fun replace(fb: FilterBypass, offset: Int, length: Int, text: String?, attrs: AttributeSet?) {
-            val allowed = maxLength - (fb.document.length - length)
-            val clipped = text.orEmpty().take(allowed.coerceAtLeast(0))
-            super.replace(fb, offset, length, clipped, attrs)
         }
     }
 }

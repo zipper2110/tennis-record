@@ -29,10 +29,22 @@ import javax.swing.border.EmptyBorder
 class ScoringControlsPanel(
     videoActions: VideoPlayerActions,
     onOutcome: (Outcome) -> Unit,
+    onManualGameWon: (Outcome) -> Unit = {},
+    onManualSetWon: (Outcome) -> Unit = {},
 ) : JPanel() {
 
-    val player1 = PlayerControls(isPrimary = true) { onOutcome(Outcome.P1) }
-    val player2 = PlayerControls(isPrimary = false) { onOutcome(Outcome.P2) }
+    val player1 = PlayerControls(
+        isPrimary = true,
+        onPointClicked = { onOutcome(Outcome.P1) },
+        onGameWonClicked = { onManualGameWon(Outcome.P1) },
+        onSetWonClicked = { onManualSetWon(Outcome.P1) },
+    )
+    val player2 = PlayerControls(
+        isPrimary = false,
+        onPointClicked = { onOutcome(Outcome.P2) },
+        onGameWonClicked = { onManualGameWon(Outcome.P2) },
+        onSetWonClicked = { onManualSetWon(Outcome.P2) },
+    )
     val videoSync = VideoSyncPanel(videoActions)
 
     private val noPointBtn = JToggleButton("No point [W]").apply {
@@ -68,6 +80,12 @@ class ScoringControlsPanel(
         player1.setPointButtonEnabled(enabled)
         player2.setPointButtonEnabled(enabled)
         noPointBtn.isEnabled = enabled
+    }
+
+    /** Manual scoring makes the Game Won and Set Won markers clickable. [enabled] is false when no point is selected. */
+    fun setManualScoring(manual: Boolean, enabled: Boolean) {
+        player1.setManualScoring(manual, enabled)
+        player2.setManualScoring(manual, enabled)
     }
 
     /** Show [outcome] as the selected outcome button; null clears the selection. */

@@ -1,6 +1,8 @@
 package org.litvin
 
 import org.litvin.points.PointV1
+import org.litvin.scoring.ManualScoreMarks
+import org.litvin.scoring.MatchRulesV1
 import org.litvin.scoring.Outcome
 import org.litvin.scoring.ScoringRules
 
@@ -51,6 +53,8 @@ object ScoreboardTimelineBuilder {
         player2Name: String = "Player 2",
         player1ColorHex: String? = null,
         player2ColorHex: String? = null,
+        rules: MatchRulesV1 = MatchRulesV1(),
+        manualMarks: ManualScoreMarks = ManualScoreMarks(),
     ): List<OverlaySpan> {
         val ordered = points.sortedBy { it.startMs }
         val base = build(
@@ -61,6 +65,8 @@ object ScoreboardTimelineBuilder {
             player2Name = player2Name,
             player1ColorHex = player1ColorHex,
             player2ColorHex = player2ColorHex,
+            rules = rules,
+            manualMarks = manualMarks,
         )
         return base.mapIndexedNotNull { index, span ->
             val point = ordered.getOrNull(index) ?: return@mapIndexedNotNull null
@@ -82,6 +88,8 @@ object ScoreboardTimelineBuilder {
         player1ColorHex: String? = null,
         player2ColorHex: String? = null,
         exportedPointIds: Set<String>? = null,
+        rules: MatchRulesV1 = MatchRulesV1(),
+        manualMarks: ManualScoreMarks = ManualScoreMarks(),
     ): List<OverlaySpan> {
         if (points.isEmpty()) return emptyList()
         val ordered = points.sortedBy { it.startMs }
@@ -114,7 +122,7 @@ object ScoreboardTimelineBuilder {
         }
 
         // Produce unified scoring snapshots (Task 3.21 — includes tiebreak support)
-        val snaps = ScoringRules.computeSnapshotsBefore(ordered, outcomes)
+        val snaps = ScoringRules.computeSnapshotsBefore(ordered, outcomes, rules, manualMarks)
 
         fun displayPoints(pMine: Int, pOther: Int): String {
             val base = arrayOf("0", "15", "30", "40")

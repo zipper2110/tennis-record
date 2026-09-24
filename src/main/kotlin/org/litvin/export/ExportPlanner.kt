@@ -295,6 +295,8 @@ object ExportPlanner {
             player2Name = score.player2Name,
             player1ColorHex = score.player1ColorHex,
             player2ColorHex = score.player2ColorHex,
+            rules = score.rules,
+            manualMarks = score.manualMarks(),
             exportedPointIds = if (effectiveIdleTrim && overlayPoints.isNotEmpty()) {
                 overlayPoints.map { it.id }.toSet()
             } else {

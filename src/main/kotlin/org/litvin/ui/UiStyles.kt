@@ -129,6 +129,7 @@ object UiStyles {
     val CARD_BORDER: Color = Color(0x26, 0x26, 0x26)        // surface-variant border
     val FG_PRIMARY: Color = Color(0xD8, 0xD8, 0xD8)         // on-surface
     val FG_SECONDARY: Color = Color(0xAD, 0xAA, 0xAA)       // on-surface-variant
+    val FG_DISABLED: Color = Color(0x6A, 0x6A, 0x6A)        // labels of disabled controls
     val GREEN: Color = Color(0xAF, 0xF6, 0x25)              // primary-fixed
     val YELLOW: Color = Color(0xFF, 0xD5, 0x4A)            // warning/emphasis
     val BLUE: Color = Color(0x3B, 0x82, 0xF6)              // informational accent

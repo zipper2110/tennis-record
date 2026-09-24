@@ -2,51 +2,23 @@ package org.litvin.ui.tabs.scoring.ui
 
 import org.junit.jupiter.api.Test
 import org.litvin.ui.tabs.scoring.NavigationActions
-import java.awt.Color
 import java.awt.Component
 import java.awt.Container
 import javax.swing.JButton
-import javax.swing.JPanel
+import javax.swing.JLabel
 import javax.swing.SwingUtilities
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
-import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class LeftListPanelTest {
-    @Test
-    fun playerColorsUseSeparateSwatchesAndKeepButtonsReadable() {
-        SwingUtilities.invokeAndWait {
-            val panel = LeftListPanel(
-                actions = object : NavigationActions {
-                    override fun navigateToPoint(index: Int) = Unit
-                    override fun advanceToNextPoint() = Unit
-                    override fun goToPreviousPoint() = Unit
-                    override fun toggleFavorite(index: Int) = Unit
-                },
-                onNamesChanged = { _, _ -> },
-                onColorsChanged = { _, _ -> },
-            )
-
-            panel.setPlayerColors("#112233", "#F0E0D0")
-
-            val p1Button = panel.findNamed("player-1-color-button", JButton::class.java)
-            val p2Button = panel.findNamed("player-2-color-button", JButton::class.java)
-            val p1Swatch = panel.findNamed("player-1-color-swatch", JPanel::class.java)
-            val p2Swatch = panel.findNamed("player-2-color-swatch", JPanel::class.java)
-
-            assertNotNull(p1Button)
-            assertNotNull(p2Button)
-            assertNotNull(p1Swatch)
-            assertNotNull(p2Swatch)
-            assertEquals(Color(0x26, 0x26, 0x26), p1Button.background)
-            assertEquals(p1Button.background, p2Button.background)
-            assertEquals(Color.WHITE, p1Button.foreground)
-            assertEquals(Color(0x11, 0x22, 0x33), p1Swatch.background)
-            assertEquals(Color(0xF0, 0xE0, 0xD0), p2Swatch.background)
-            assertNotEquals(p1Swatch.background, p1Button.background)
-        }
+    private open class NoNavigation : NavigationActions {
+        override fun navigateToPoint(index: Int) = Unit
+        override fun advanceToNextPoint() = Unit
+        override fun goToPreviousPoint() = Unit
+        override fun toggleFavorite(index: Int) = Unit
     }
 
     @Test
@@ -54,16 +26,11 @@ class LeftListPanelTest {
         SwingUtilities.invokeAndWait {
             var previousRequests = 0
             val panel = LeftListPanel(
-                actions = object : NavigationActions {
-                    override fun navigateToPoint(index: Int) = Unit
-                    override fun advanceToNextPoint() = Unit
+                actions = object : NoNavigation() {
                     override fun goToPreviousPoint() {
                         previousRequests++
                     }
-                    override fun toggleFavorite(index: Int) = Unit
                 },
-                onNamesChanged = { _, _ -> },
-                onColorsChanged = { _, _ -> },
             )
 
             val next = panel.findNamed("next-point", JButton::class.java)
@@ -86,32 +53,72 @@ class LeftListPanelTest {
     }
 
     @Test
-    fun scoreboardSettingsButtonsAreEnabledAndOpenTheSettings() {
+    fun pointCounterSitsAboveNextPointAndTogglesTheCurrentFavorite() {
         SwingUtilities.invokeAndWait {
-            var requests = 0
+            val favoriteRequests = mutableListOf<Int>()
             val panel = LeftListPanel(
-                actions = object : NavigationActions {
-                    override fun navigateToPoint(index: Int) = Unit
-                    override fun advanceToNextPoint() = Unit
-                    override fun goToPreviousPoint() = Unit
-                    override fun toggleFavorite(index: Int) = Unit
+                actions = object : NoNavigation() {
+                    override fun toggleFavorite(index: Int) {
+                        favoriteRequests += index
+                    }
                 },
-                onNamesChanged = { _, _ -> },
-                onColorsChanged = { _, _ -> },
-                onScoreboardSettings = { requests++ },
             )
-            val toolbar = ControlsToolbar(onScoreboardSettings = { requests++ })
+            val label = panel.findNamed("current-point-label", JLabel::class.java)
+            val favorite = panel.findNamed("current-point-favorite", JButton::class.java)
+            val next = panel.findNamed("next-point", JButton::class.java)
+            assertNotNull(label)
+            assertNotNull(favorite)
+            assertNotNull(next)
 
-            val sideButton = panel.findNamed("scoreboard-settings", JButton::class.java)
-            val toolbarButton = toolbar.findNamed("toolbar-scoreboard-settings", JButton::class.java)
-            assertNotNull(sideButton)
-            assertNotNull(toolbarButton)
-            assertTrue(sideButton.isEnabled)
-            assertTrue(toolbarButton.isEnabled)
+            assertEquals("No point selected", label.text)
+            assertFalse(favorite.isEnabled)
 
-            sideButton.doClick()
-            toolbarButton.doClick()
-            assertEquals(2, requests)
+            panel.setCurrentPoint(2, 8, favorite = true)
+            assertEquals("Point 3 / 8", label.text)
+            assertTrue(favorite.isEnabled)
+            favorite.doClick()
+            assertEquals(listOf(2), favoriteRequests)
+
+            // The counter row is the first item of the footer, above the Next Point button
+            val footer = next.parent
+            val counterRow = footer.components.first { it is Container && label in it.components }
+            assertTrue(footer.components.indexOf(counterRow) < footer.components.indexOf(next))
+        }
+    }
+
+    @Test
+    fun scoreSettingsSitsAboveScoreboardStyleAndBothOpenTheirDialogs() {
+        SwingUtilities.invokeAndWait {
+            val requests = mutableListOf<String>()
+            val panel = LeftListPanel(
+                actions = NoNavigation(),
+                onScoreSettings = { requests += "score" },
+                onScoreboardStyle = { requests += "style" },
+            )
+
+            val scoreSettings = panel.findNamed("score-settings", JButton::class.java)
+            val scoreboardStyle = panel.findNamed("scoreboard-style", JButton::class.java)
+            assertNotNull(scoreSettings)
+            assertNotNull(scoreboardStyle)
+            assertEquals("Score Settings", scoreSettings.text)
+            assertEquals("Scoreboard Style", scoreboardStyle.text)
+            val footer = scoreSettings.parent
+            assertTrue(footer.components.indexOf(scoreSettings) < footer.components.indexOf(scoreboardStyle))
+
+            scoreSettings.doClick()
+            scoreboardStyle.doClick()
+            assertEquals(listOf("score", "style"), requests)
+        }
+    }
+
+    @Test
+    fun manualMarkerAndPlayerFieldsAreGone() {
+        SwingUtilities.invokeAndWait {
+            val panel = LeftListPanel(actions = NoNavigation())
+
+            assertNull(panel.findNamed("manual-marker", JButton::class.java))
+            assertNull(panel.findNamed("scoring-player-1-name", Component::class.java))
+            assertNull(panel.findNamed("player-1-color-button", Component::class.java))
         }
     }
 

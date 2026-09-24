@@ -1,6 +1,8 @@
 package org.litvin.ui.tabs.scoring.ui
 
 import org.litvin.points.PointV1
+import org.litvin.scoring.ManualScoreMarks
+import org.litvin.scoring.MatchRulesV1
 import org.litvin.scoring.Outcome
 import org.litvin.scoring.ScoringEngine
 import org.litvin.shared.util.Timecode
@@ -37,6 +39,8 @@ class PointsListPanel : JPanel(BorderLayout()) {
 
     private var points: List<PointV1> = emptyList()
     private var outcomesByPointId: Map<String, Outcome> = emptyMap()
+    private var rules: MatchRulesV1 = MatchRulesV1()
+    private var manualMarks: ManualScoreMarks = ManualScoreMarks()
     private var p1Color: Color = Color(0x4D, 0xA3, 0xFF)
     private var p2Color: Color = Color(0xFF, 0x6B, 0x6B)
     private var p1Name: String = "Player 1"
@@ -102,9 +106,13 @@ class PointsListPanel : JPanel(BorderLayout()) {
         outcomesByPointId: Map<String, Outcome>,
         p1ColorHex: String,
         p2ColorHex: String,
+        rules: MatchRulesV1 = MatchRulesV1(),
+        manualMarks: ManualScoreMarks = ManualScoreMarks(),
     ) {
         this.points = points
         this.outcomesByPointId = LinkedHashMap(outcomesByPointId)
+        this.rules = rules
+        this.manualMarks = manualMarks
         this.p1Color = parseHexOrNull(p1ColorHex) ?: this.p1Color
         this.p2Color = parseHexOrNull(p2ColorHex) ?: this.p2Color
         rebuild()
@@ -166,7 +174,7 @@ class PointsListPanel : JPanel(BorderLayout()) {
                 empty.add(msg, BorderLayout.NORTH)
                 listContainer.add(empty)
             } else {
-                val states = ScoringEngine.computeTimeline(points, outcomesByPointId).first
+                val states = ScoringEngine.computeTimeline(points, outcomesByPointId, rules, manualMarks).first
                 points.forEachIndexed { i, p ->
                     val label = buildString {
                         append("#${i + 1}")

@@ -39,7 +39,7 @@ class OverlayAssWriterTest {
         assertTrue(text.contains("[Script Info]"))
         assertTrue(text.contains("[V4+ Styles]"))
         assertTrue(text.contains("[Events]"))
-        assertTrue(text.contains("TOURNAMENT OR CLUB NAME"))
+        assertTrue(text.contains(ScoreboardSettingsV1.DEFAULT_TITLE.uppercase(java.util.Locale.US)))
         assertTrue(text.contains("ALICE"))
         assertTrue(text.contains("BOB"))
         assertTrue(text.contains("YCbCr Matrix: None"))

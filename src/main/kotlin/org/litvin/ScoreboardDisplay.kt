@@ -45,8 +45,9 @@ object ScoreboardComponent {
             player2Rgb = parseHexRgbOrDefault(span.p2ColorHex, DEFAULT_PLAYER2_RGB),
             player1PointText = if (span.isTiebreak) span.tbP1.toString() else pointsLabel(span.p1Pts, span.p2Pts),
             player2PointText = if (span.isTiebreak) span.tbP2.toString() else pointsLabel(span.p2Pts, span.p1Pts),
-            player1Games = if (span.isTiebreak) 6 else span.gamesP1,
-            player2Games = if (span.isTiebreak) 6 else span.gamesP2,
+            // A set tiebreak keeps the games (for example 6–6). A match tiebreak starts at 0–0.
+            player1Games = span.gamesP1,
+            player2Games = span.gamesP2,
             completedSets = span.completedSets.takeLast(VISIBLE_COMPLETED_SETS),
             pointLeader = when {
                 leader > 0 -> 1

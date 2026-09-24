@@ -111,7 +111,8 @@ class UiFlowFixtureBuilder(
         ManifestIO.write(manifestFile.toString(), manifest)
         EdlIO.writeForProjectDir(directory.toString(), edl)
         AdjustmentsIO.writeForProjectDir(directory.toString(), adjustments)
-        ScoreIO.writeForProjectDir(directory.toString(), score)
+        // The fixtures skip the score settings that the Scoring tab opens on the first visit.
+        ScoreIO.writeForProjectDir(directory.toString(), score.copy(scoreSettingsReviewed = true))
         return UiFlowProject(directory, manifestFile, manifest)
     }
 

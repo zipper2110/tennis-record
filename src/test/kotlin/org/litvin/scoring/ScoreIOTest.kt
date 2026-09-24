@@ -1,13 +1,10 @@
-package org.litvin
+package org.litvin.scoring
 
-import org.litvin.scoring.Outcome
-import org.litvin.scoring.ScoreIO
-import org.litvin.scoring.ScoreV1
-import org.litvin.scoring.ScoreboardPosition
-import org.litvin.scoring.ScoreboardSettingsV1
-import org.litvin.scoring.ScoreboardStyleId
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import java.nio.file.Files
 import java.nio.file.Path
 import java.io.File
@@ -100,5 +97,63 @@ class ScoreIOTest {
         val scoreboard = ScoreIO.read(f.absolutePath).scoreboard
         assertEquals(ScoreboardStyleId.BROADCAST, scoreboard.style)
         assertEquals(ScoreboardPosition.TOP_RIGHT, scoreboard.position)
+    }
+
+    @Test
+    fun roundTrip_matchRulesManualMarksAndReviewedFlag() {
+        val tmpDir: Path = Files.createTempDirectory("score_rules_")
+        val scorePath = tmpDir.resolve("score.json").toFile().absolutePath
+        val score = ScoreV1(
+            rules = MatchRulesV1(
+                manualScoring = true,
+                bestOfSets = 5,
+                gamesPerSet = 4,
+                setTiebreak = false,
+                finalSet = FinalSetRule.MATCH_TIEBREAK,
+                deuce = DeuceRule.NO_AD,
+            ),
+            manualGameWins = mapOf("p1" to Outcome.P2),
+            manualSetWins = mapOf("p2" to Outcome.P1),
+            scoreSettingsReviewed = true,
+        )
+
+        ScoreIO.write(scorePath, score)
+
+        assertEquals(score, ScoreIO.read(scorePath))
+        assertEquals(ManualScoreMarks(mapOf("p1" to Outcome.P2), mapOf("p2" to Outcome.P1)), score.manualMarks())
+    }
+
+    @Test
+    fun read_oldScoreWithoutRules_usesStandardRulesAndShowsTheSettingsOnce() {
+        val tmpDir: Path = Files.createTempDirectory("score_old_rules_")
+        val f = tmpDir.resolve("score.json").toFile()
+        f.writeText("""{ "version": 1, "outcomes": {}, "rules": { "structure": "FUTURE", "deuce": "NO_AD" } }""")
+
+        val score = ScoreIO.read(f.absolutePath)
+        assertEquals(MatchRulesV1(deuce = DeuceRule.NO_AD), score.rules)
+        assertFalse(score.scoreSettingsReviewed)
+        assertEquals(emptyMap(), score.manualGameWins)
+    }
+
+    @Test
+    fun existsForProjectDir_isTrueOnlyAfterWrite() {
+        val tmpDir = Files.createTempDirectory("score_exists_").toFile().absolutePath
+        assertFalse(ScoreIO.existsForProjectDir(tmpDir))
+        ScoreIO.writeForProjectDir(tmpDir, ScoreV1())
+        assertTrue(ScoreIO.existsForProjectDir(tmpDir))
+    }
+
+    @Test
+    fun scoreboardJson_roundTripsAndRejectsInvalidText() {
+        val settings = ScoreboardSettingsV1(
+            style = ScoreboardStyleId.RETRO,
+            title = "Club final",
+            position = ScoreboardPosition.BOTTOM_RIGHT,
+            sizePercent = 150,
+            accentColorHex = "#112233",
+        )
+
+        assertEquals(settings, ScoreIO.scoreboardFromJson(ScoreIO.scoreboardToJson(settings)))
+        assertNull(ScoreIO.scoreboardFromJson("not json"))
     }
 }
