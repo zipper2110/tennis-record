@@ -16,8 +16,11 @@ internal const val CONSOLAS = "Consolas"
 internal const val WHITE = 0xFFFFFF
 internal const val BLACK = 0x000000
 
-/** [credit] is the text of the line at the bottom of the board, or null when the line is hidden. */
-internal data class Look(val title: String?, val accentRgb: Int, val opacity: Double, val credit: String?)
+/**
+ * [credit] is the text of the line at the bottom of the board, or null when the line is hidden.
+ * [playerColors] is false when the board does not show the color markers of the players.
+ */
+internal data class Look(val title: String?, val accentRgb: Int, val opacity: Double, val credit: String?, val playerColors: Boolean)
 
 /** [wonSets] tells, for each completed set, if this player won it. */
 internal class Row(

@@ -7,7 +7,7 @@ import kotlin.math.max
 /**
  * More scoreboard styles. [ScoreboardLayouts] selects the style.
  *
- * All styles show the same data: the optional title, the two players with their colors, the completed sets
+ * All styles show the same data: the optional title, the two players with their optional colors, the completed sets
  * (the set winner is bold), the games of the current set, the points and the optional app credit line.
  */
 internal object ScoreboardMoreLayouts {
@@ -28,7 +28,7 @@ internal object ScoreboardMoreLayouts {
         val setSize = 27.0
         val pointSize = 34.0
         val titleSize = 24.0
-        val nameX = 26.0
+        val nameX = if (look.playerColors) 26.0 else 20.0
         val setColW = 50.0
         val pointColW = 84.0
         val columns = display.completedSets.size + 1
@@ -58,7 +58,9 @@ internal object ScoreboardMoreLayouts {
         rows.forEachIndexed { index, row ->
             val rowTop = top + index * rowH
             val cy = rowTop + rowH / 2
-            items += SceneItem.Box(0.0, rowTop, 6.0, rowH, row.rgb, 1.0, Corners(bottomLeft = if (index == 1) bottomRadius else 0.0))
+            if (look.playerColors) {
+                items += SceneItem.Box(0.0, rowTop, 6.0, rowH, row.rgb, 1.0, Corners(bottomLeft = if (index == 1) bottomRadius else 0.0))
+            }
             items += centered(nameX, cy, row.name, GEORGIA, nameSize, WHITE, TextAnchor.MIDDLE_LEFT)
             row.sets.indices.forEach { setIndex ->
                 items += setGames(setsX + setIndex * setColW + setColW / 2, cy, row, setIndex, SEGOE, setSize, WHITE, 0x7FA08F)
@@ -92,7 +94,7 @@ internal object ScoreboardMoreLayouts {
         val pointSize = 34.0
         val titleSize = 19.0
         val titleSpacing = 1.4
-        val nameX = 44.0
+        val nameX = if (look.playerColors) 44.0 else 18.0
         val setColW = 50.0
         val pointColW = 82.0
         val columns = display.completedSets.size + 1
@@ -120,7 +122,7 @@ internal object ScoreboardMoreLayouts {
 
         rows.forEachIndexed { index, row ->
             val cy = headerH + index * rowH + rowH / 2
-            items += SceneItem.Box(18.0, cy - 7.0, 14.0, 14.0, row.rgb, 1.0, Corners.all(2.0))
+            if (look.playerColors) items += SceneItem.Box(18.0, cy - 7.0, 14.0, 14.0, row.rgb, 1.0, Corners.all(2.0))
             items += centered(nameX, cy, row.name, TREBUCHET, nameSize, WHITE, TextAnchor.MIDDLE_LEFT)
             row.sets.indices.forEach { setIndex ->
                 items += setGames(setsX + setIndex * setColW + setColW / 2, cy, row, setIndex, TREBUCHET, setSize, WHITE, 0xF2C9B5, lostOpacity = 0.75)
@@ -150,7 +152,7 @@ internal object ScoreboardMoreLayouts {
         val pointSize = 34.0
         val titleSize = 18.0
         val titleSpacing = 1.4
-        val nameX = 44.0
+        val nameX = if (look.playerColors) 44.0 else 18.0
         val setColW = 50.0
         val pointColW = 82.0
         val columns = display.completedSets.size + 1
@@ -177,7 +179,7 @@ internal object ScoreboardMoreLayouts {
 
         rows.forEachIndexed { index, row ->
             val cy = headerH + index * rowH + rowH / 2
-            items += SceneItem.Box(20.0, cy - 6.0, 12.0, 12.0, row.rgb, 1.0, Corners.all(6.0))
+            if (look.playerColors) items += SceneItem.Box(20.0, cy - 6.0, 12.0, 12.0, row.rgb, 1.0, Corners.all(6.0))
             items += centered(nameX, cy, row.name, TAHOMA, nameSize, WHITE, TextAnchor.MIDDLE_LEFT)
             row.sets.indices.forEach { setIndex ->
                 items += setGames(setsX + setIndex * setColW + setColW / 2, cy, row, setIndex, TAHOMA, setSize, WHITE, 0x8FB0D9)
@@ -209,7 +211,7 @@ internal object ScoreboardMoreLayouts {
         val pointSize = 38.0
         val titleSize = 17.0
         val titleSpacing = 3.0
-        val nameX = padX + 4.0 + 14.0
+        val nameX = if (look.playerColors) padX + 4.0 + 14.0 else padX
         val setColW = 50.0
         val pointColW = 90.0
         val columns = display.completedSets.size + 1
@@ -234,7 +236,7 @@ internal object ScoreboardMoreLayouts {
 
         rows.forEachIndexed { index, row ->
             val cy = top + index * rowH + rowH / 2
-            items += SceneItem.Box(padX, cy - 14.0, 4.0, 28.0, row.rgb, 1.0, Corners.all(2.0))
+            if (look.playerColors) items += SceneItem.Box(padX, cy - 14.0, 4.0, 28.0, row.rgb, 1.0, Corners.all(2.0))
             items += centered(nameX, cy, row.name, SEGOE, nameSize, WHITE, TextAnchor.MIDDLE_LEFT)
             row.sets.indices.forEach { setIndex ->
                 items += setGames(setsX + setIndex * setColW + setColW / 2, cy, row, setIndex, SEGOE, setSize, WHITE, muted)
@@ -272,7 +274,7 @@ internal object ScoreboardMoreLayouts {
         val pointSize = 32.0
         val titleSize = 19.0
         val titleSpacing = 2.0
-        val nameX = padX + 12.0 + 12.0
+        val nameX = if (look.playerColors) padX + 12.0 + 12.0 else padX
         val cellW = 42.0
         val pointTileW = 72.0
         val columns = display.completedSets.size + 1
@@ -296,7 +298,7 @@ internal object ScoreboardMoreLayouts {
 
         rows.forEachIndexed { index, row ->
             val cy = top + index * rowH + rowH / 2
-            items += SceneItem.Box(padX, cy - 6.0, 12.0, 12.0, row.rgb, 1.0)
+            if (look.playerColors) items += SceneItem.Box(padX, cy - 6.0, 12.0, 12.0, row.rgb, 1.0)
             items += centered(nameX, cy, row.name, CONSOLAS, nameSize, led, TextAnchor.MIDDLE_LEFT, opacity = 0.95)
             for (cell in 0 until columns) {
                 items += SceneItem.Box(cellsX + cell * cellW + 3.0, cy - tileH / 2, cellW - 6.0, tileH, tile, 1.0, Corners.all(3.0))
@@ -329,7 +331,7 @@ internal object ScoreboardMoreLayouts {
         val pointSize = 32.0
         val titleSize = 18.0
         val titleSpacing = 1.6
-        val nameX = padX + 10.0 + 12.0
+        val nameX = if (look.playerColors) padX + 10.0 + 12.0 else padX
         val setColW = 44.0
         val pointColW = 70.0
         val columns = display.completedSets.size + 1
@@ -351,7 +353,7 @@ internal object ScoreboardMoreLayouts {
         }
         rows.forEachIndexed { index, row ->
             val cy = top + index * rowH + rowH / 2
-            items += SceneItem.Box(padX, cy - 5.0, 10.0, 10.0, row.rgb, 1.0, Corners.all(5.0))
+            if (look.playerColors) items += SceneItem.Box(padX, cy - 5.0, 10.0, 10.0, row.rgb, 1.0, Corners.all(5.0))
             items += centered(nameX, cy, row.name, SEGOE, nameSize, WHITE, TextAnchor.MIDDLE_LEFT, outline = outline)
             row.sets.indices.forEach { setIndex ->
                 items += setGames(setsX + setIndex * setColW + setColW / 2, cy, row, setIndex, SEGOE, setSize, WHITE, WHITE, lostOpacity = 0.6, outline = outline)
@@ -387,19 +389,20 @@ internal object ScoreboardMoreLayouts {
         val titleSize = 16.0
         val titleSpacing = 1.2
         val colorW = 8.0
+        // Without the player colors, the name tile starts at the left edge.
+        val nameTileX = if (look.playerColors) colorW + gap else 0.0
         val setTileW = 42.0
         val pointTileW = 66.0
         val columns = display.completedSets.size + 1
 
         val titleW = if (title != null) 14.0 + ScoreboardFonts.textWidth(title, SEGOE, true, titleSize, titleSpacing) + 14.0 else 0.0
         val cellsW = columns * (setTileW + gap) + pointTileW
-        val nameTileW = max(16.0 + nameWidth(rows, SEGOE, nameSize, 120.0) + 16.0, titleW - colorW - 2 * gap - cellsW)
-        val width = colorW + gap + nameTileW + gap + cellsW
+        val nameTileW = max(16.0 + nameWidth(rows, SEGOE, nameSize, 120.0) + 16.0, titleW - nameTileX - gap - cellsW)
+        val width = nameTileX + nameTileW + gap + cellsW
         val top = if (title != null) titleH + gap else 0.0
         val rowsBottom = top + 2 * rowH + gap
         val creditH = if (look.credit != null) 28.0 else 0.0
         val height = if (look.credit != null) rowsBottom + gap + creditH else rowsBottom
-        val nameTileX = colorW + gap
         val cellsX = nameTileX + nameTileW + gap
         val pointX = width - pointTileW
         val items = mutableListOf<SceneItem>()
@@ -411,7 +414,7 @@ internal object ScoreboardMoreLayouts {
         rows.forEachIndexed { index, row ->
             val y = top + index * (rowH + gap)
             val cy = y + rowH / 2
-            items += SceneItem.Box(0.0, y, colorW, rowH, row.rgb, 1.0, Corners.all(3.0))
+            if (look.playerColors) items += SceneItem.Box(0.0, y, colorW, rowH, row.rgb, 1.0, Corners.all(3.0))
             items += SceneItem.Box(nameTileX, y, nameTileW, rowH, tile, look.opacity, Corners.all(radius))
             items += centered(nameTileX + 16.0, cy, row.name, SEGOE, nameSize, WHITE, TextAnchor.MIDDLE_LEFT)
             for (cell in 0 until columns) {
@@ -451,7 +454,7 @@ internal object ScoreboardMoreLayouts {
         val pointSize = 30.0
         val titleSize = 15.0
         val titleSpacing = 1.2
-        val colorW = 6.0
+        val colorW = if (look.playerColors) 6.0 else 0.0
         val padX = 14.0
         val setW = 40.0
         val pointCellW = 58.0
@@ -478,8 +481,10 @@ internal object ScoreboardMoreLayouts {
         }
         val topLeft = if (title != null) 0.0 else radius
         items += SceneItem.Box(0.0, tabH, width, barH + footerH, bar, look.opacity, Corners(topLeft, radius, radius, radius))
-        items += SceneItem.Box(0.0, tabH, colorW, barH, first.rgb, 1.0, Corners(topLeft = topLeft, bottomLeft = barBottomRadius))
-        items += SceneItem.Box(width - colorW, tabH, colorW, barH, second.rgb, 1.0, Corners(topRight = radius, bottomRight = barBottomRadius))
+        if (look.playerColors) {
+            items += SceneItem.Box(0.0, tabH, colorW, barH, first.rgb, 1.0, Corners(topLeft = topLeft, bottomLeft = barBottomRadius))
+            items += SceneItem.Box(width - colorW, tabH, colorW, barH, second.rgb, 1.0, Corners(topRight = radius, bottomRight = barBottomRadius))
+        }
         items += SceneItem.Box(leftSetsX + first.sets.size * setW, tabH, setW, barH, WHITE, 0.07)
         items += SceneItem.Box(rightSetsX, tabH, setW, barH, WHITE, 0.07)
 
@@ -525,7 +530,7 @@ internal object ScoreboardMoreLayouts {
         val pointSize = 32.0
         val titleSize = 22.0
         val titleSpacing = 1.0
-        val nameX = padX + 14.0 + 12.0
+        val nameX = if (look.playerColors) padX + 14.0 + 12.0 else padX
         val setColW = 48.0
         val pointColW = 84.0
         val columns = display.completedSets.size + 1
@@ -552,7 +557,7 @@ internal object ScoreboardMoreLayouts {
         rows.forEachIndexed { index, row ->
             val rowTop = top + index * rowH
             val cy = rowTop + rowH / 2
-            items += SceneItem.Box(padX, cy - 7.0, 14.0, 14.0, row.rgb, 1.0, Corners.all(7.0))
+            if (look.playerColors) items += SceneItem.Box(padX, cy - 7.0, 14.0, 14.0, row.rgb, 1.0, Corners.all(7.0))
             items += centered(nameX, cy, row.name, ARIAL_BLACK, nameSize, cream, TextAnchor.MIDDLE_LEFT, bold = false)
             row.sets.indices.forEach { setIndex ->
                 items += setGames(setsX + setIndex * setColW + setColW / 2, cy, row, setIndex, ARIAL, setSize, cream, 0x9C7B62)
@@ -583,7 +588,7 @@ internal object ScoreboardMoreLayouts {
         val titleSize = 20.0
         val titleSpacing = 1.0
         val colorW = 10.0
-        val nameX = colorW + 16.0
+        val nameX = if (look.playerColors) colorW + 16.0 else 18.0
         val setColW = 50.0
         val pointColW = 86.0
         val columns = display.completedSets.size + 1
@@ -612,7 +617,7 @@ internal object ScoreboardMoreLayouts {
         rows.forEachIndexed { index, row ->
             val rowTop = headerH + index * rowH
             val cy = rowTop + rowH / 2
-            items += SceneItem.Box(0.0, rowTop, colorW, rowH, row.rgb, 1.0)
+            if (look.playerColors) items += SceneItem.Box(0.0, rowTop, colorW, rowH, row.rgb, 1.0)
             items += centered(nameX, cy, row.name, SEGOE_BLACK, nameSize, ink, TextAnchor.MIDDLE_LEFT, bold = false)
             row.sets.indices.forEach { setIndex ->
                 items += setGames(setsX + setIndex * setColW + setColW / 2, cy, row, setIndex, SEGOE, setSize, ink, 0xA3A3A3)

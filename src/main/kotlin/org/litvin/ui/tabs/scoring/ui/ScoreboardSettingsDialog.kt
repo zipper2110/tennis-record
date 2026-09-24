@@ -52,8 +52,8 @@ import javax.swing.event.DocumentListener
 import javax.swing.text.AbstractDocument
 
 /**
- * Modal "Scoreboard style" dialog. It sets up the scoreboard: style, title, app credit line, position, size,
- * background opacity and accent color.
+ * Modal "Scoreboard style" dialog. It sets up the scoreboard: style, title, player colors, app credit line,
+ * position, size, background opacity and accent color.
  *
  * The dialog shows the result in a 16:9 frame. It also sends each change to the `onPreview` callback,
  * so the video preview can show the change at once.
@@ -119,6 +119,11 @@ class ScoreboardSettingsDialog private constructor(
         isOpaque = false
         toolTipText = "Show a line with the app name at the bottom of the scoreboard"
     }
+    private val showPlayerColors = JCheckBox("Show player colors").apply {
+        name = "scoreboard-show-player-colors"
+        isOpaque = false
+        toolTipText = "Show the color of each player next to the name"
+    }
     private val sizeSlider = slider(ScoreboardSettingsV1.MIN_SIZE_PERCENT, ScoreboardSettingsV1.MAX_SIZE_PERCENT, "scoreboard-size")
     private val sizeValue = valueLabel()
     private val opacitySlider = slider(ScoreboardSettingsV1.MIN_OPACITY_PERCENT, 100, "scoreboard-opacity")
@@ -152,6 +157,9 @@ class ScoreboardSettingsDialog private constructor(
         }
         showAppCredit.addActionListener {
             update { it.copy(showAppCredit = showAppCredit.isSelected) }
+        }
+        showPlayerColors.addActionListener {
+            update { it.copy(showPlayerColors = showPlayerColors.isSelected) }
         }
         sizeSlider.addChangeListener { update { it.copy(sizePercent = sizeSlider.value) } }
         opacitySlider.addChangeListener { update { it.copy(backgroundOpacityPercent = opacitySlider.value) } }
@@ -252,6 +260,7 @@ class ScoreboardSettingsDialog private constructor(
             row++
         }
         addRow("Title", inline(titleField, showTitle))
+        addRow("Players", showPlayerColors)
         addRow("Position", JPanel(GridLayout(1, 0, 4, 0)).apply {
             isOpaque = false
             ScoreboardPosition.entries.forEach { add(positionButtons.getValue(it)) }
@@ -299,6 +308,7 @@ class ScoreboardSettingsDialog private constructor(
             showTitle.isSelected = settings.showTitle
             titleField.isEnabled = settings.showTitle
             showAppCredit.isSelected = settings.showAppCredit
+            showPlayerColors.isSelected = settings.showPlayerColors
             sizeSlider.value = settings.sizePercent
             sizeValue.text = "${settings.sizePercent} %"
             val opacity = settings.backgroundOpacityPercent ?: defaults.backgroundOpacityPercent

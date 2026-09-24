@@ -100,7 +100,7 @@ class LeftListPanelTest {
             val scoreboardStyle = panel.findNamed("scoreboard-style", JButton::class.java)
             assertNotNull(scoreSettings)
             assertNotNull(scoreboardStyle)
-            assertEquals("Score Settings", scoreSettings.text)
+            assertEquals("Scoring Settings", scoreSettings.text)
             assertEquals("Scoreboard Style", scoreboardStyle.text)
             val footer = scoreSettings.parent
             assertTrue(footer.components.indexOf(scoreSettings) < footer.components.indexOf(scoreboardStyle))

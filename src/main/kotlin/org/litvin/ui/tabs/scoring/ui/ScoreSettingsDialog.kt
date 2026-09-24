@@ -32,7 +32,7 @@ import javax.swing.KeyStroke
 import javax.swing.SwingUtilities
 import javax.swing.text.AbstractDocument
 
-/** The values that the "Score settings" dialog edits. */
+/** The values that the "Scoring settings" dialog edits. */
 data class ScoreSettings(
     val player1Name: String,
     val player2Name: String,
@@ -47,7 +47,7 @@ fun interface ScoreSettingsEditor {
 }
 
 /**
- * Modal "Score settings" dialog: player names and colors, the match format (point counting rules),
+ * Modal "Scoring settings" dialog: player names and colors, the match format (point counting rules),
  * and the fully manual scoring option.
  *
  * The format list holds popular formats. The rule fields under it show the rules of the selected format.
@@ -56,7 +56,7 @@ fun interface ScoreSettingsEditor {
 class ScoreSettingsDialog private constructor(
     owner: Window?,
     initial: ScoreSettings,
-) : JDialog(owner, "Score settings", Dialog.ModalityType.APPLICATION_MODAL) {
+) : JDialog(owner, "Scoring settings", Dialog.ModalityType.APPLICATION_MODAL) {
 
     companion object : ScoreSettingsEditor {
         const val MAX_NAME_LENGTH = 24

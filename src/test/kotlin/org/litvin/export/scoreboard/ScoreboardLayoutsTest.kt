@@ -50,6 +50,20 @@ class ScoreboardLayoutsTest {
     }
 
     @Test
+    fun hiddenPlayerColorsRemoveTheColorMarkersAndMoveTheNamesLeft() {
+        ScoreboardStyleId.entries.forEach { style ->
+            val withColors = ScoreboardLayouts.scene(display, ScoreboardSettingsV1(style = style))
+            val withoutColors = ScoreboardLayouts.scene(display, ScoreboardSettingsV1(style = style, showPlayerColors = false))
+
+            val colors = withoutColors.items.filterIsInstance<SceneItem.Box>().map { it.rgb }
+            assertFalse(colors.contains(0x112233) || colors.contains(0x445566), "$style")
+            assertTrue(withoutColors.texts().containsAll(listOf("ALICE", "BOB")), "$style")
+            assertTrue(withoutColors.width <= withColors.width, "$style")
+            assertTrue(withoutColors.label("ALICE").x < withColors.label("ALICE").x, "$style")
+        }
+    }
+
+    @Test
     fun broadcastUsesTheAccentColorForTheLeadingPointsAndTheTitle() {
         val scene = ScoreboardLayouts.scene(display, ScoreboardSettingsV1(title = "Batumi Raketo League", accentColorHex = "#FF8800"))
 

@@ -148,14 +148,14 @@ object HelpCatalog {
             page = HelpPage.SCORING,
             summary = "Assign an outcome to each marked point and preview the resulting scoreboard.",
             workflow = listOf(
-                "The first time you open Scoring for a project, Score Settings opens. Enter the player names and colors, and select the match format.",
+                "The first time you open Scoring for a project, Scoring Settings opens. Enter the player names and colors, and select the match format.",
                 "Select a marked point, review the video segment, and choose Player 1, No point, or Player 2.",
                 "Advance through the list until every point has the intended outcome.",
                 "On the Export tab, enable Include Scoreboard to burn the score into the rendered video.",
             ),
             actions = listOf(
                 "Star or unstar the current point without returning to Points.",
-                "Use Score Settings to change the player names and colors, the match format (for example best of 3 sets, match tiebreak, pro set, games only), the deuce rule, or to turn on fully manual scoring.",
+                "Use Scoring Settings to change the player names and colors, the match format (for example best of 3 sets, match tiebreak, pro set, games only), the deuce rule, or to turn on fully manual scoring.",
                 "In fully manual scoring, the app counts points only. Click Game Won or Set Won to mark a win on the current point.",
                 "Use Scoreboard Style to choose the scoreboard style, title, bottom app line, position, size, background, and accent color. The exported video uses the same scoreboard as the preview. New projects start with the last saved style.",
                 "Choose playback speed and optionally enable frame-by-frame arrow-key stepping while paused.",

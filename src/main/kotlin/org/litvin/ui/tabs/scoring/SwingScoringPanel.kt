@@ -48,7 +48,7 @@ import javax.swing.border.EmptyBorder
  *
  * UI scaffolding that mirrors the mock in design/scoring.html:
  * - Left points list with header badges, the current point counter, and footer buttons
- *   (Next/Previous Point, Score Settings, Scoreboard Style)
+ *   (Next/Previous Point, Scoring Settings, Scoreboard Style)
  * - Center video area with a scoreboard overlay placeholder
  * - Per-point scrub bar under the video
  * - Bottom area (ScoringControlsPanel): outcome buttons row (P1 / No Point / P2), then games/sets cards

@@ -68,6 +68,7 @@ class ScoreIOTest {
             title = "Batumi Raketo League",
             showTitle = false,
             showAppCredit = false,
+            showPlayerColors = false,
             position = ScoreboardPosition.BOTTOM_RIGHT,
             sizePercent = 120,
             backgroundOpacityPercent = 70,

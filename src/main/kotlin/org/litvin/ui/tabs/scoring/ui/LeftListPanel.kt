@@ -18,7 +18,7 @@ import javax.swing.border.EmptyBorder
  * Responsibilities:
  * - Hosts the timeline list of points (via TimelineSection)
  * - Shows the current point counter ("Point 3 / 8") with its favorite button
- * - Provides footer actions: Next/Previous Point, Score Settings and Scoreboard Style
+ * - Provides footer actions: Next/Previous Point, Scoring Settings and Scoreboard Style
  *
  */
 class LeftListPanel(
@@ -96,7 +96,7 @@ class LeftListPanel(
         prevPointBtn.addActionListener { actions.goToPreviousPoint() }
         prevPointBtn.isEnabled = false
 
-        val scoreSettingsBtn = fullButton("Score Settings", UiStyles.scoreSettingsIcon())
+        val scoreSettingsBtn = fullButton("Scoring Settings", UiStyles.scoreSettingsIcon())
         scoreSettingsBtn.name = "score-settings"
         scoreSettingsBtn.foreground = Color(0xFF, 0xFF, 0xFF)
         scoreSettingsBtn.toolTipText = "Set the player names and colors, the match format, and manual scoring"

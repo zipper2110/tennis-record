@@ -41,6 +41,8 @@ data class ScoreboardSettingsV1(
     val showTitle: Boolean = true,
     /** Shows the [APP_CREDIT] line at the bottom of the scoreboard. */
     val showAppCredit: Boolean = true,
+    /** Shows the color marker of each player next to the name. */
+    val showPlayerColors: Boolean = true,
     val position: ScoreboardPosition = ScoreboardPosition.TOP_LEFT,
     val sizePercent: Int = 100,
     val backgroundOpacityPercent: Int? = null,

@@ -40,6 +40,7 @@ object ScoreboardLayouts {
             accentRgb = ScoreboardComponent.parseHexRgbOrDefault(normalized.accentColorHex, defaults.accentRgb),
             opacity = (normalized.backgroundOpacityPercent ?: defaults.backgroundOpacityPercent) / 100.0,
             credit = ScoreboardSettingsV1.APP_CREDIT.takeIf { normalized.showAppCredit },
+            playerColors = normalized.showPlayerColors,
         )
         return when (normalized.style) {
             ScoreboardStyleId.BROADCAST -> broadcast(display, look)
@@ -76,7 +77,7 @@ object ScoreboardLayouts {
         val titleSize = 20.0
         val titleSpacing = 1.6
         val square = 12.0
-        val nameX = padX + square + 14.0
+        val nameX = if (look.playerColors) padX + square + 14.0 else padX
         val setColW = 54.0
         val pointColW = 88.0
         val columns = display.completedSets.size + 1
@@ -125,7 +126,7 @@ object ScoreboardLayouts {
 
         rows.forEachIndexed { index, row ->
             val cy = headerH + index * rowH + rowH / 2
-            items += SceneItem.Box(padX, cy - square / 2, square, square, row.rgb, 1.0, Corners.all(2.5))
+            if (look.playerColors) items += SceneItem.Box(padX, cy - square / 2, square, square, row.rgb, 1.0, Corners.all(2.5))
             items += centered(nameX, cy, row.name, SEGOE, nameSize, 0xF4F6F5, TextAnchor.MIDDLE_LEFT)
             // The winner of a completed set is bright and bold. The loser is dim.
             row.sets.forEachIndexed { setIndex, games ->
@@ -158,7 +159,7 @@ object ScoreboardLayouts {
         val nameSize = 30.0
         val cellSize = 36.0
         val pointSize = 42.0
-        val nameX = 60.0
+        val nameX = if (look.playerColors) 60.0 else 24.0
         val cellStep = 66.0
         val pointAreaW = 110.0
         val rowTop = headerH + 15.0
@@ -180,7 +181,7 @@ object ScoreboardLayouts {
         }
         rows.forEachIndexed { index, row ->
             val cy = rowTop + index * rowGap + 18.0
-            items += SceneItem.Box(24.0, cy - 12.0, 24.0, 24.0, row.rgb, 0.85)
+            if (look.playerColors) items += SceneItem.Box(24.0, cy - 12.0, 24.0, 24.0, row.rgb, 0.85)
             items += centered(nameX, cy, row.name, ARIAL, nameSize, 0xE7ECEF, TextAnchor.MIDDLE_LEFT, bold = false, opacity = 0.93, outline = 1.2)
             // The winner of a completed set is white and bold. The loser is dim.
             row.sets.forEachIndexed { cell, games ->
@@ -213,7 +214,7 @@ object ScoreboardLayouts {
         val pointSize = 34.0
         val titleSize = 18.0
         val titleSpacing = 1.4
-        val nameX = 26.0
+        val nameX = if (look.playerColors) 26.0 else 18.0
         val setColW = 50.0
         val pointColW = 80.0
         val columns = display.completedSets.size + 1
@@ -246,7 +247,7 @@ object ScoreboardLayouts {
                 topLeft = if (index == 0 && title == null) radius else 0.0,
                 bottomLeft = if (index == 1) bottomRadius else 0.0,
             )
-            items += SceneItem.Box(0.0, top, 7.0, rowH, row.rgb, 1.0, barCorners)
+            if (look.playerColors) items += SceneItem.Box(0.0, top, 7.0, rowH, row.rgb, 1.0, barCorners)
             items += centered(nameX, cy, row.name, SEGOE, nameSize, navy, TextAnchor.MIDDLE_LEFT)
             // The winner of a completed set is navy and bold. The loser is light gray.
             row.sets.forEachIndexed { setIndex, games ->
@@ -280,7 +281,7 @@ object ScoreboardLayouts {
         val pointSize = 25.0
         val titleSize = 15.0
         val titleSpacing = 1.2
-        val nameX = 24.0
+        val nameX = if (look.playerColors) 24.0 else 10.0
         val setColW = 38.0
         val pointColW = 60.0
         val columns = display.completedSets.size + 1
@@ -312,7 +313,7 @@ object ScoreboardLayouts {
 
         rows.forEachIndexed { index, row ->
             val cy = tabH + index * rowH + rowH / 2
-            items += SceneItem.Box(10.0, cy - 10.0, 4.0, 20.0, row.rgb, 1.0, Corners.all(2.0))
+            if (look.playerColors) items += SceneItem.Box(10.0, cy - 10.0, 4.0, 20.0, row.rgb, 1.0, Corners.all(2.0))
             items += centered(nameX, cy, row.name, SEGOE, nameSize, WHITE, TextAnchor.MIDDLE_LEFT)
             // The winner of a completed set is white and bold. The loser is dim.
             row.sets.forEachIndexed { setIndex, games ->
