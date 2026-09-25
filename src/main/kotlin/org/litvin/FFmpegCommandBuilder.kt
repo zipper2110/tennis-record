@@ -11,7 +11,7 @@ import org.litvin.points.PointV1
  * Scope (v0.1.0):
  * - H.264 (libx264) MP4 output only.
  * - Applies scale when needed.
- * - Uses CRF and x264 preset from ExportPreset; also uses VBV maxrate/bufsize if provided.
+ * - Uses the target bitrate of the job when set. Otherwise uses CRF and VBV maxrate/bufsize from ExportPreset.
  * - Idle-trim ON → one input-level seek (-ss/-t) per kept segment, joined with the concat filter,
  *   so decoding costs the kept duration rather than the whole source span.
  */
@@ -37,12 +37,117 @@ object FFmpegCommandBuilder {
         val outputTimeOffsetMs: Long = 0,
         // True when this command writes an intermediate chunk that a later pass joins by stream copy.
         val chunkOutput: Boolean = false,
+        // Target video bitrate in kilobits per second. Null uses the CRF and bitrate cap of the preset.
+        val videoBitrateK: Int? = null,
+        // When set, the output is one frozen frame of the source with silent audio, in place of the keeps.
+        val freezeFrame: FreezeFrame? = null,
     )
+
+    /**
+     * A still frame of the source for [durationMs], for example under the statistics card.
+     * [atMs] is the source time just after the frame, or null for the end of the source.
+     * The pass uses the same filters and encoder settings as the other passes, so the join can copy the streams.
+     */
+    data class FreezeFrame(val atMs: Long?, val durationMs: Long)
+
+    /** The length of the source window that the freeze reads. The last frame of the window is the still frame. */
+    private const val FREEZE_WINDOW_SECS = 0.25
 
     data class Result(
         val args: List<String>,
         val preview: String,
     )
+
+    private fun colorFilter(adj: org.litvin.adjustments.AdjustmentsV1?): String? {
+        if (adj == null) return null
+        val values = FfmpegColorAdjustmentStrategy.map(adj)
+        if (!values.hasEqualizerAdjustments && !values.hasHueAdjustments && !values.hasToneAdjustments) return null
+        // Use Locale.US formatting to ensure dot decimal
+        fun fmt(d: Double): String = java.lang.String.format(java.util.Locale.US, "%.4f", d)
+        val filters = mutableListOf<String>()
+        if (values.hasEqualizerAdjustments) {
+            filters += "eq=brightness=${fmt(values.brightness)}:contrast=${fmt(values.contrast)}:saturation=${fmt(values.saturation)}"
+        }
+        if (values.hasHueAdjustments) {
+            filters += "hue=h=${fmt(values.hueDegrees)}"
+        }
+        if (values.hasToneAdjustments) {
+            // Shadows/highlights as a luma lookup table. The cubes are written out as products
+            // because a comma inside pow() would end the filter in the filtergraph syntax, and
+            // u/v are passed through because lutyuv otherwise clips chroma to the legal range.
+            val range = FfmpegColorAdjustmentStrategy.TONE_CODE_RANGE.toInt()
+            val dark = "(($range-val)/$range)"
+            val light = "(val/$range)"
+            filters += "lutyuv=y=val" +
+                "+${fmt(values.shadowsLift)}*$dark*$dark*$dark" +
+                "+${fmt(values.highlightsLift)}*$light*$light*$light" +
+                ":u=val:v=val"
+        }
+        return filters.joinToString(",")
+    }
+
+    // Rotate (clockwise, same frame size, black corners) and crop, before the scale filter.
+    // With a known source size, the crop uses the same even pixels as the preview shader.
+    // Without it, the crop uses fractions of the frame (iw/ih) and the output size gives the aspect.
+    private fun geometryFilter(
+        adj: org.litvin.adjustments.AdjustmentsV1?,
+        knownWidth: Int?,
+        knownHeight: Int?,
+        outWidth: Int,
+        outHeight: Int,
+    ): String? {
+        if (adj == null) return null
+        val sourceWidth = knownWidth?.takeIf { it > 0 }
+        val sourceHeight = knownHeight?.takeIf { it > 0 }
+        val knownSize = sourceWidth != null && sourceHeight != null
+        val plan = org.litvin.adjustments.GeometryPlan.of(adj, sourceWidth ?: outWidth, sourceHeight ?: outHeight)
+        if (plan.isIdentity) return null
+        fun fmt(d: Double): String = java.lang.String.format(java.util.Locale.US, "%.6f", d)
+        val filters = mutableListOf<String>()
+        if (plan.hasRotation) {
+            filters += "rotate=${fmt(Math.toRadians(plan.rotationDeg))}:ow=iw:oh=ih:c=black"
+        }
+        if (plan.hasCrop) {
+            filters += if (knownSize) {
+                val (w, h, x, y) = plan.cropPixels(sourceWidth!!, sourceHeight!!).toList()
+                "crop=$w:$h:$x:$y"
+            } else {
+                val c = plan.crop
+                "crop=w=iw*${fmt(c.width)}:h=ih*${fmt(c.height)}:x=iw*${fmt(c.x)}:y=ih*${fmt(c.y)}"
+            }
+        }
+        return filters.joinToString(",")
+    }
+
+    /**
+     * The arguments that write one frame of the source to an image file, for example a PNG.
+     * The frame gets the crop, rotation and color adjustments of the export, and the width [width].
+     * [atMs] is the source time just after the frame, as in [FreezeFrame.atMs].
+     */
+    fun stillFrameArgs(
+        sourcePath: String,
+        atMs: Long,
+        outputPath: String,
+        width: Int,
+        adjustments: org.litvin.adjustments.AdjustmentsV1? = null,
+        sourceWidth: Int? = null,
+        sourceHeight: Int? = null,
+    ): List<String> {
+        val height = width * 9 / 16
+        val filters = listOfNotNull(
+            geometryFilter(adjustments, sourceWidth, sourceHeight, width, height),
+            "scale=$width:-2",
+            colorFilter(adjustments),
+        )
+        val seekSecs = ((atMs - STILL_FRAME_OFFSET_MS).coerceAtLeast(0) / 1000.0).formatSecs()
+        return listOf(
+            "-y", "-v", "error", "-ss", seekSecs, "-i", sourcePath,
+            "-frames:v", "1", "-vf", filters.joinToString(","), "-update", "1", outputPath,
+        )
+    }
+
+    /** The still frame is this time before [FreezeFrame.atMs], so it is the last frame of the point. */
+    private const val STILL_FRAME_OFFSET_MS = 40L
 
     fun build(params: BuildParams): Result {
         val p = params
@@ -78,8 +183,18 @@ object FFmpegCommandBuilder {
         // a one-hour source cost the same as exporting the hour. `-ss` before the input has been
         // frame-accurate since ffmpeg 2.1 (it decodes and discards up to the exact point), so the
         // segment durations still match what ScoreboardTimelineBuilder assumes.
-        val segmentInputs = p.idleTrim && p.keeps.isNotEmpty()
-        if (segmentInputs) {
+        val freeze = p.freezeFrame
+        val segmentInputs = freeze == null && p.idleTrim && p.keeps.isNotEmpty()
+        if (freeze != null) {
+            val atMs = freeze.atMs
+            if (atMs == null) {
+                args += listOf("-sseof", (-FREEZE_WINDOW_SECS).formatSecs())
+            } else {
+                val startSecs = ((atMs / 1000.0) - FREEZE_WINDOW_SECS).coerceAtLeast(0.0)
+                args += listOf("-ss", startSecs.formatSecs(), "-t", FREEZE_WINDOW_SECS.formatSecs())
+            }
+            args += listOf("-i", p.sourcePath)
+        } else if (segmentInputs) {
             p.keeps.forEach { keep ->
                 val startSecs = keep.startMs / 1000.0
                 val durationSecs = (keep.endMs - keep.startMs).coerceAtLeast(0) / 1000.0
@@ -94,63 +209,33 @@ object FFmpegCommandBuilder {
         var vMap = "[vout]"
         var aMap = "[aout]"
 
-        fun buildColorFilter(adj: org.litvin.adjustments.AdjustmentsV1?): String? {
-            if (adj == null) return null
-            val values = FfmpegColorAdjustmentStrategy.map(adj)
-            if (!values.hasEqualizerAdjustments && !values.hasHueAdjustments && !values.hasToneAdjustments) return null
-            // Use Locale.US formatting to ensure dot decimal
-            fun fmt(d: Double): String = java.lang.String.format(java.util.Locale.US, "%.4f", d)
-            val filters = mutableListOf<String>()
-            if (values.hasEqualizerAdjustments) {
-                filters += "eq=brightness=${fmt(values.brightness)}:contrast=${fmt(values.contrast)}:saturation=${fmt(values.saturation)}"
-            }
-            if (values.hasHueAdjustments) {
-                filters += "hue=h=${fmt(values.hueDegrees)}"
-            }
-            if (values.hasToneAdjustments) {
-                // Shadows/highlights as a luma lookup table. The cubes are written out as products
-                // because a comma inside pow() would end the filter in the filtergraph syntax, and
-                // u/v are passed through because lutyuv otherwise clips chroma to the legal range.
-                val range = FfmpegColorAdjustmentStrategy.TONE_CODE_RANGE.toInt()
-                val dark = "(($range-val)/$range)"
-                val light = "(val/$range)"
-                filters += "lutyuv=y=val" +
-                    "+${fmt(values.shadowsLift)}*$dark*$dark*$dark" +
-                    "+${fmt(values.highlightsLift)}*$light*$light*$light" +
-                    ":u=val:v=val"
-            }
-            return filters.joinToString(",")
-        }
+        fun buildColorFilter(adj: org.litvin.adjustments.AdjustmentsV1?): String? = colorFilter(adj)
+        fun buildGeometryFilter(adj: org.litvin.adjustments.AdjustmentsV1?): String? =
+            geometryFilter(adj, p.sourceWidth, p.sourceHeight, p.outWidth, p.outHeight)
 
-        // Rotate (clockwise, same frame size, black corners) and crop, before the scale filter.
-        // With a known source size, the crop uses the same even pixels as the preview shader.
-        // Without it, the crop uses fractions of the frame (iw/ih) and the output size gives the aspect.
-        fun buildGeometryFilter(adj: org.litvin.adjustments.AdjustmentsV1?): String? {
-            if (adj == null) return null
-            val sourceWidth = p.sourceWidth?.takeIf { it > 0 }
-            val sourceHeight = p.sourceHeight?.takeIf { it > 0 }
-            val knownSize = sourceWidth != null && sourceHeight != null
-            val plan = org.litvin.adjustments.GeometryPlan.of(adj, sourceWidth ?: p.outWidth, sourceHeight ?: p.outHeight)
-            if (plan.isIdentity) return null
-            fun fmt(d: Double): String = java.lang.String.format(java.util.Locale.US, "%.6f", d)
-            val filters = mutableListOf<String>()
-            if (plan.hasRotation) {
-                filters += "rotate=${fmt(Math.toRadians(plan.rotationDeg))}:ow=iw:oh=ih:c=black"
-            }
-            if (plan.hasCrop) {
-                filters += if (knownSize) {
-                    val (w, h, x, y) = plan.cropPixels(sourceWidth!!, sourceHeight!!).toList()
-                    "crop=$w:$h:$x:$y"
-                } else {
-                    val c = plan.crop
-                    "crop=w=iw*${fmt(c.width)}:h=ih*${fmt(c.height)}:x=iw*${fmt(c.x)}:y=ih*${fmt(c.y)}"
-                }
-            }
-            return filters.joinToString(",")
-        }
         val geometry = buildGeometryFilter(p.adjustments)
 
-        if (segmentInputs) {
+        if (freeze != null) {
+            // Repeat the last frame of the window (tpad), then cut the window away, so that only copies of the
+            // last frame stay. This works for any frame rate that has at least one frame in the window.
+            val window = FREEZE_WINDOW_SECS.formatSecs()
+            val duration = (freeze.durationMs / 1000.0).formatSecs()
+            val padding = (freeze.durationMs / 1000.0 + FREEZE_WINDOW_SECS * 2).formatSecs()
+            val video = mutableListOf(
+                "setpts=PTS-STARTPTS",
+                "tpad=stop_mode=clone:stop_duration=$padding",
+                "trim=start=$window",
+                "setpts=PTS-STARTPTS",
+                "trim=duration=$duration",
+            )
+            geometry?.let { video += it }
+            video += "scale=${p.outWidth}:-2"
+            buildColorFilter(p.adjustments)?.let { video += it }
+            p.subtitlesAssPath?.let { video += "subtitles='${escapeForFilterPath(it)}'" }
+            // The source audio keeps its sample rate and channels, so the AAC settings match the other passes.
+            val audio = "asetpts=PTS-STARTPTS,volume=0,apad,atrim=duration=$duration"
+            filterComplex = "[0:v]${video.joinToString(",")}$vMap;[0:a]$audio$aMap"
+        } else if (segmentInputs) {
             // Build the concat graph over the per-segment inputs. Each input was already seeked and
             // length-limited on the command line, so the segment only needs its timestamps rebased.
             val parts = mutableListOf<String>()
@@ -199,10 +284,15 @@ object FFmpegCommandBuilder {
 
         // Video options
         args += listOf("-c:v", videoCodec)
+        val targetBitrateK = p.videoBitrateK?.takeIf { it > 0 }
         if (isNvenc) {
-            // Map CRF to CQ for NVENC; choose a reasonable preset
-            val cq = (v.crf ?: 21).coerceIn(0, 51)
-            args += listOf("-cq", cq.toString())
+            if (targetBitrateK == null) {
+                // Map CRF to CQ for NVENC
+                val cq = (v.crf ?: 21).coerceIn(0, 51)
+                args += listOf("-cq", cq.toString())
+            } else {
+                args += listOf("-rc", "vbr")
+            }
             // NVENC presets: default to a medium level if not specified
             val nvPreset = when (v.x264Preset?.lowercase()) {
                 "veryfast" -> "p1"
@@ -217,13 +307,19 @@ object FFmpegCommandBuilder {
         } else if (p.encoderLabel.contains("libx264", ignoreCase = true)) {
             // Software x264 tuning
             v.x264Preset?.let { args += listOf("-preset", it) }
-            v.crf?.let { args += listOf("-crf", it.toString()) }
+            if (targetBitrateK == null) v.crf?.let { args += listOf("-crf", it.toString()) }
         } else {
             // Other hardware encoders (QSV/AMF): keep defaults; consider mapping CRF to a vendor-specific quality if needed in future.
         }
-        v.vbvMaxrateK?.let { maxk ->
-            args += listOf("-maxrate", "${maxk}k")
-            v.vbvBufsizeK?.let { bufk -> args += listOf("-bufsize", "${bufk}k") }
+        if (targetBitrateK != null) {
+            // Average bitrate with some room for fast motion, so the file size stays predictable.
+            args += listOf("-b:v", "${targetBitrateK}k")
+            args += listOf("-maxrate", "${targetBitrateK * 3 / 2}k", "-bufsize", "${targetBitrateK * 2}k")
+        } else {
+            v.vbvMaxrateK?.let { maxk ->
+                args += listOf("-maxrate", "${maxk}k")
+                v.vbvBufsizeK?.let { bufk -> args += listOf("-bufsize", "${bufk}k") }
+            }
         }
         v.pixelFormat?.let { args += listOf("-pix_fmt", it) }
         p.outputFrameRate?.let { args += listOf("-r", it) }

@@ -64,6 +64,27 @@ class ScoreboardAssTest {
     }
 
     @Test
+    fun aPolygonStartsAtTheTopLeftCornerOfItsBounds() {
+        val polygon = SceneItem.Polygon(listOf(ScenePoint(10.0, 50.0), ScenePoint(30.0, 40.0), ScenePoint(30.0, 50.0)), 0xFF0000, 0.5)
+
+        val event = ScoreboardAss.events(ScoreboardScene(100.0, 100.0, listOf(polygon)), BoardPlacement(100.0, 200.0, 2.0)).single()
+
+        assertEquals("{\\an7\\pos(120,280)\\bord0\\shad0\\blur0\\fscx100\\fscy100\\frz0\\1c&H0000FF&\\1a&H7F&\\p1}m 0 20 l 40 0 40 20{\\p0}", event)
+    }
+
+    @Test
+    fun aPolylineGoesBackOnItselfAndDrawsItsOutline() {
+        val line = SceneItem.Polyline(listOf(ScenePoint(0.0, 10.0), ScenePoint(10.0, 0.0), ScenePoint(20.0, 10.0)), 4.0, 0xFFFFFF)
+
+        val event = ScoreboardAss.events(ScoreboardScene(100.0, 100.0, listOf(line)), BoardPlacement(0.0, 0.0, 1.0)).single()
+
+        // No fill, and an outline of half the width on each side.
+        assertTrue("\\bord2\\" in event, event)
+        assertTrue("\\1a&HFF&" in event, event)
+        assertTrue(event.endsWith("\\p1}m 0 10 l 10 0 20 10 10 0 0 10{\\p0}"), event)
+    }
+
+    @Test
     fun roundedRectPathStartsAtTheTopEdgeAndSkipsZeroCorners() {
         assertEquals(
             "m 0 0 l 10 0 l 10 5 l 0 5 l 0 0",

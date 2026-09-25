@@ -127,10 +127,6 @@ class HelpPanel : JPanel(BorderLayout()) {
         val shortcuts = help.shortcuts.joinToString("") {
             "<tr><td class='key'>${escape(it.shortcut.display)}</td><td>${escape(it.action)}</td></tr>"
         }
-        val notes = if (help.notes.isEmpty()) "" else """
-            <h2>Notes</h2>
-            <ul>${items(help.notes)}</ul>
-        """.trimIndent()
 
         return """
             <html>
@@ -154,9 +150,10 @@ class HelpPanel : JPanel(BorderLayout()) {
               <ul>${items(help.workflow)}</ul>
               <h2>Available actions</h2>
               <ul>${items(help.actions)}</ul>
+              <h2>Good to know</h2>
+              <ul>${items(help.goodToKnow)}</ul>
               <h2>Keyboard shortcuts</h2>
               <table>$shortcuts</table>
-              $notes
             </body>
             </html>
         """.trimIndent()

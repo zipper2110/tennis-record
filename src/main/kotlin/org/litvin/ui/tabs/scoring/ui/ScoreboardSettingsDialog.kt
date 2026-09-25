@@ -7,6 +7,7 @@ import org.litvin.scoring.ScoreboardPosition
 import org.litvin.scoring.ScoreboardSettingsV1
 import org.litvin.scoring.ScoreboardStyleId
 import org.litvin.ui.UiStyles
+import org.litvin.ui.commons.ScoreboardSceneImage
 import java.awt.BasicStroke
 import java.awt.BorderLayout
 import java.awt.Color

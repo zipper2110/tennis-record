@@ -7,20 +7,19 @@ import java.nio.file.Path
 internal class ExportScreen(application: ApplicationScreen) : UserFlowScreen(application) {
     fun open(): ExportScreen = apply { open("nav-export", "export-initialize") }
 
+    /** [content] is "full", "points" or "favorites". */
     fun configure(
-        preset: String,
-        resolution: String,
-        idleTrim: Boolean,
-        favoritesOnly: Boolean,
+        content: String,
         scoreboard: Boolean,
         comments: Boolean,
     ): ExportScreen = apply {
-        context.driver.select("export-preset", preset)
-        context.driver.select("export-resolution", resolution)
-        context.driver.setSelected("export-idle-trim", idleTrim)
-        context.driver.setSelected("export-favorites-only", favoritesOnly)
+        selectContent(content)
         context.driver.setSelected("export-scoreboard", scoreboard)
         context.driver.setSelected("export-comments", comments)
+    }
+
+    fun selectContent(content: String): ExportScreen = apply {
+        context.driver.setSelected("export-content-$content", true)
     }
 
     fun setComments(enabled: Boolean): ExportScreen = apply {
@@ -33,21 +32,30 @@ internal class ExportScreen(application: ApplicationScreen) : UserFlowScreen(app
         }
     }
 
-    fun setIdleTrim(enabled: Boolean): ExportScreen = apply {
-        context.driver.setSelected("export-idle-trim", enabled)
+    fun setIdleTrim(enabled: Boolean): ExportScreen = selectContent(if (enabled) "points" else "full")
+
+    /** [preset] is "best", "balanced" or "fast". */
+    fun selectSimpleQuality(preset: String): ExportScreen = apply {
+        context.driver.setSelected("export-mode-simple", true)
+        context.driver.setSelected("export-quality-$preset", true)
     }
 
-    fun selectResolution(resolution: String): ExportScreen = apply {
-        context.driver.select("export-resolution", resolution)
+    /** [card] is the end of the card name, for example "export-fps-24" takes "24". */
+    fun selectAdvancedFrameRate(card: String): ExportScreen = apply {
+        context.driver.setSelected("export-mode-advanced", true)
+        context.driver.setSelected("export-fps-$card", true)
     }
 
-    fun selectBitrateQuality(quality: String): ExportScreen = apply {
-        context.driver.select("export-preset", quality)
+    fun assertAdvancedCardEnabled(cardName: String, enabled: Boolean): ExportScreen = apply {
+        context.driver.setSelected("export-mode-advanced", true)
+        application.eventually("$cardName enabled state to be $enabled") {
+            context.driver.requireEnabled(cardName, enabled)
+        }
     }
 
     fun enableFavoritesOnlyAndDismissUnavailable(): ExportScreen = apply {
         context.dialogs.showNextAsRealModal()
-        context.driver.click("export-favorites-only")
+        context.driver.click("export-content-favorites")
         application.eventually("favorite-only validation dialog to be dismissed") {
             context.driver.dismissDialog("Favorite export unavailable", "OK")
         }
@@ -74,10 +82,10 @@ internal class ExportScreen(application: ApplicationScreen) : UserFlowScreen(app
         context.dialogs.showNextAsRealModal()
         context.driver.click("export-initialize")
         application.eventually("blocked render dialog to be dismissed") {
-            context.driver.dismissDialog("Cannot start render", "OK")
+            context.driver.dismissDialog("Cannot start export", "OK")
         }
         val last = context.dialogs.calls.last()
-        if (last.title != "Cannot start render" || !last.message.contains(explanation)) {
+        if (last.title != "Cannot start export" || !last.message.contains(explanation)) {
             throw AssertionError("Blocked render dialog was $last")
         }
     }

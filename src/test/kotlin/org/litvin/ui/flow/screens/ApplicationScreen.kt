@@ -87,7 +87,7 @@ internal class ApplicationScreen(
     private fun assertNavigation(projectNavigationVisible: Boolean) {
         eventually("project navigation visibility to be $projectNavigationVisible") {
             context.driver.requireShowing("nav-projects")
-            listOf("nav-points", "nav-colors", "nav-crop", "nav-scoring", "nav-export")
+            listOf("nav-points", "nav-colors", "nav-crop", "nav-scoring", "nav-stats", "nav-export")
                 .forEach { name -> context.driver.requireShowing(name, projectNavigationVisible) }
         }
     }

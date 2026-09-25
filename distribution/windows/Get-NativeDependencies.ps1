@@ -52,6 +52,9 @@ function Expand-Dependency {
     if ($Dependency.archiveName.EndsWith(".7z", [StringComparison]::OrdinalIgnoreCase)) {
         & (Get-SevenZip) x -y "-o$extractRoot" $archive | Out-Null
         if ($LASTEXITCODE -ne 0) { throw "7-Zip failed to extract $archive (exit code $LASTEXITCODE)." }
+    } elseif ($Dependency.archiveName.EndsWith(".tar.gz", [StringComparison]::OrdinalIgnoreCase)) {
+        & tar.exe -xzf $archive -C $extractRoot
+        if ($LASTEXITCODE -ne 0) { throw "tar failed to extract $archive (exit code $LASTEXITCODE)." }
     } else {
         Expand-Archive -LiteralPath $archive -DestinationPath $extractRoot
     }
@@ -61,7 +64,15 @@ function Expand-Dependency {
         throw "Expected extracted directory is missing: $source"
     }
     New-Item -ItemType Directory -Path $Destination -Force | Out-Null
-    if ($Dependency.directories -or $Dependency.files) {
+    if ($Dependency.flattenDirectories -or $Dependency.directories -or $Dependency.files) {
+        # The contents of a flattened directory go directly into the destination.
+        foreach ($directory in $Dependency.flattenDirectories) {
+            $sourceDirectory = Join-Path $source $directory
+            if (-not (Test-Path -LiteralPath $sourceDirectory -PathType Container)) {
+                throw "Expected directory is missing from $($Dependency.archiveName): $directory"
+            }
+            Copy-Item -Path (Join-Path $sourceDirectory "*") -Destination $Destination -Recurse -Force
+        }
         foreach ($directory in $Dependency.directories) {
             $sourceDirectory = Join-Path $source $directory
             if (-not (Test-Path -LiteralPath $sourceDirectory -PathType Container)) {

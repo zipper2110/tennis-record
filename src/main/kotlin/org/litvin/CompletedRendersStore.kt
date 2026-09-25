@@ -31,6 +31,11 @@ data class CompletedRender(
     val includeScoreboard: Boolean = false,
     val includeComments: Boolean = false,
     val createdAtEpochMs: Long = 0L,
+    // Entries from earlier versions do not have the fields below.
+    val presetId: String? = null,
+    val videoBitrateK: Int? = null,
+    val expectedBytes: Long? = null,
+    val pointCount: Int? = null,
 )
 
 object CompletedRendersStore {

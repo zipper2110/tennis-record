@@ -61,13 +61,11 @@ class ExportConfigurationUiFlowIT {
         application.projects.open().openRecent(project.manifest.id)
         application.export.open()
             .configure(
-                preset = "Balanced",
-                resolution = "1080p",
-                idleTrim = true,
-                favoritesOnly = false,
+                content = "points",
                 scoreboard = true,
                 comments = true,
             )
+            .selectSimpleQuality("balanced")
             .initialize(output)
             .assertExactlyOneRenderQueued()
 
@@ -78,8 +76,11 @@ class ExportConfigurationUiFlowIT {
         assertEquals(listOf("point-1", "point-2"), job.edlSnapshot.map { it.id })
         assertEquals(listOf(500L to 2_500L, 4_000L to 6_000L), job.edlSnapshot.map { it.startMs.toLong() to it.endMs.toLong() })
         assertEquals("balanced", job.presetId)
-        assertEquals(1920, job.outWidth)
-        assertEquals(1080, job.outHeight)
+        // The fixture video is 720x486, 30 fps, 2206 kbit/s. Balanced keeps the size and uses 75% of the bitrate.
+        assertEquals(720, job.outWidth)
+        assertEquals(486, job.outHeight)
+        assertEquals("30/1", job.outputFrameRate)
+        assertEquals(1_654, job.videoBitrateK)
         assertEquals("H.264 (libx264)", job.encoderLabel)
         assertEquals(true, job.idleTrim)
         assertEquals(false, job.favoriteOnly)
@@ -139,38 +140,45 @@ class ExportConfigurationUiFlowIT {
     }
 
     @Test
-    fun `changing bitrate quality keeps the selected resolution`(context: UiFlowContext) {
+    fun `best quality is the default and keeps the source video settings`(context: UiFlowContext) {
         val project = context.fixtures.exportReadyProject()
-        val output = context.workspace.resolve("exports").resolve("four-k-match.mp4")
+        val output = context.workspace.resolve("exports").resolve("best-match.mp4")
         val application = ApplicationScreen(context)
 
         application.projects.open().openRecent(project.manifest.id)
         application.export.open()
-            .selectResolution("4K")
-            .selectBitrateQuality("Balanced")
             .initialize(output)
             .assertExactlyOneRenderQueued()
 
         val job = context.renderService.jobs.single()
-        assertEquals(3840, job.outWidth)
-        assertEquals(2160, job.outHeight)
+        assertEquals("best", job.presetId)
+        assertEquals(720, job.outWidth)
+        assertEquals(486, job.outHeight)
+        assertEquals(2_205, job.videoBitrateK)
     }
 
     @Test
-    fun `source resolution option is labelled and exports at source dimensions`(context: UiFlowContext) {
+    fun `advanced mode offers only resolutions up to the source and exports the selected frame rate`(context: UiFlowContext) {
         val project = context.fixtures.exportReadyProject()
-        val output = context.workspace.resolve("exports").resolve("source-resolution-match.mp4")
+        val output = context.workspace.resolve("exports").resolve("advanced-match.mp4")
         val application = ApplicationScreen(context)
 
         application.projects.open().openRecent(project.manifest.id)
         application.export.open()
-            .selectResolution("720x486 (source)")
+            .assertAdvancedCardEnabled("export-resolution-source", true)
+            .assertAdvancedCardEnabled("export-resolution-720p", false)
+            .assertAdvancedCardEnabled("export-resolution-1080p", false)
+            .assertAdvancedCardEnabled("export-fps-60", false)
+            .selectAdvancedFrameRate("24")
             .initialize(output)
             .assertExactlyOneRenderQueued()
 
         val job = context.renderService.jobs.single()
+        assertEquals("custom", job.presetId)
         assertEquals(720, job.outWidth)
         assertEquals(486, job.outHeight)
+        assertEquals("24", job.outputFrameRate)
+        assertEquals(2_205, job.videoBitrateK)
     }
 
     companion object {

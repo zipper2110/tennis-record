@@ -11,7 +11,7 @@ $inputDirectory = Join-Path $targetRoot "distribution\input"
 $nativeDirectory = Join-Path $targetRoot "native\windows-x64"
 $packageRoot = Join-Path $targetRoot "package"
 $appImageRoot = Join-Path $packageRoot "app-image"
-$icon = Join-Path $PSScriptRoot "assets\tennis-record-temp.ico"
+$icon = Join-Path $PSScriptRoot "assets\tennis-record.ico"
 
 if (-not $IsWindows -and $PSVersionTable.PSEdition -eq "Core") {
     throw "The Windows application image must be built on Windows."
@@ -55,7 +55,7 @@ if (-not (Test-Path -LiteralPath (Join-Path $nativeDirectory "mpv\libmpv-2.dll")
     throw "Native dependencies are missing. Run distribution/windows/Get-NativeDependencies.ps1."
 }
 if (-not (Test-Path -LiteralPath $icon)) {
-    & (Join-Path $PSScriptRoot "New-TemporaryIcon.ps1") -OutputPath $icon
+    & (Join-Path $PSScriptRoot "New-AppIcon.ps1") -OutputPath $icon
 }
 
 $mainJar = Get-ChildItem -LiteralPath $inputDirectory -Filter "tennisrecord-*.jar" |

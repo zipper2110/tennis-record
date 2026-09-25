@@ -36,6 +36,10 @@ class FileCompletedRendersRepository(
             includeScoreboard = job.includeScoreboard,
             includeComments = job.includeComments,
             createdAtEpochMs = nowEpochMs(),
+            presetId = job.presetId,
+            videoBitrateK = job.videoBitrateK,
+            expectedBytes = job.expectedBytes,
+            pointCount = job.edlSnapshot.size.takeIf { job.idleTrim },
         ),
     )
 

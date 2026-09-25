@@ -29,9 +29,11 @@ if (Test-Path -LiteralPath $installerDirectory) {
 }
 New-Item -ItemType Directory -Path $installerDirectory -Force | Out-Null
 @(
-    Get-Content -LiteralPath (Join-Path $repoRoot "LICENSE-NOTICE")
+    Get-Content -LiteralPath (Join-Path $repoRoot "LICENSE-NOTICE") -Encoding utf8
     ""
-    Get-Content -LiteralPath (Join-Path $repoRoot "LICENSE")
+    Get-Content -LiteralPath (Join-Path $repoRoot "LICENSE") -Encoding utf8
+    ""
+    Get-Content -LiteralPath (Join-Path $repoRoot "distribution\THIRD-PARTY-NOTICES.txt") -Encoding utf8
 ) | Set-Content -LiteralPath $installerLicense -Encoding utf8
 $resolvedTemp = [IO.Path]::GetFullPath($tempDirectory)
 if (-not $resolvedTemp.StartsWith($resolvedTarget, [StringComparison]::OrdinalIgnoreCase)) {

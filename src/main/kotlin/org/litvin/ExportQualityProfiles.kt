@@ -11,19 +11,22 @@ data class ExportQualityTier(
 )
 
 object ExportQualityProfiles {
+    // The export sets its own bitrate (RenderJob.videoBitrateK). The bitrate table and CRF only apply
+    // to jobs without that value. The x264 preset sets the encoding speed in both cases.
     private val tiers = listOf(
-        ExportQualityTier("data-saver", "Data Saver", 24, "veryfast", listOf(3_000, 6_000, 6_000, 12_000)),
+        ExportQualityTier("best", "Original quality", 17, "slow", listOf(20_000, 40_000, 40_000, 80_000)),
         ExportQualityTier("balanced", "Balanced", 21, "medium", listOf(5_000, 10_000, 10_000, 20_000)),
-        ExportQualityTier("high", "High", 20, "medium", listOf(10_000, 20_000, 20_000, 40_000)),
-        ExportQualityTier("very-high", "Very High", 18, "slow", listOf(15_000, 30_000, 30_000, 60_000)),
-        ExportQualityTier("maximum", "Maximum", 17, "slow", listOf(20_000, 40_000, 40_000, 80_000)),
+        ExportQualityTier("fast", "Fast export", 24, "veryfast", listOf(3_000, 6_000, 6_000, 12_000)),
+        ExportQualityTier("custom", "Custom", 20, "medium", listOf(10_000, 20_000, 20_000, 40_000)),
     )
 
     fun all(): List<ExportQualityTier> = tiers
 
+    /** Maps the ids of the earlier five quality presets to the current tiers. */
     fun normalizedId(id: String?): String? = when (id?.lowercase()) {
-        "fast" -> "data-saver"
-        "quality" -> "maximum"
+        "quality", "maximum", "very-high" -> "best"
+        "high" -> "balanced"
+        "data-saver" -> "fast"
         else -> id?.lowercase()
     }
 
@@ -47,8 +50,4 @@ object ExportQualityProfiles {
         return tier.bitratesK[(if (is4k) 2 else 0) + if (highFrameRate) 1 else 0]
     }
 
-    fun description(preset: ExportPreset, outWidth: Int, outHeight: Int, outputFrameRate: String?): String? {
-        val tier = tiers.firstOrNull { it.id == normalizedId(preset.id) } ?: return preset.description
-        return "${tier.label} — up to ${bitrateK(tier, outWidth, outHeight, outputFrameRate) / 1_000} Megabits/s"
-    }
 }

@@ -146,4 +146,46 @@ class FFmpegCommandBuilderTest {
         assertEquals("20000k", res.args[res.args.indexOf("-maxrate") + 1])
         assertEquals("40000k", res.args[res.args.indexOf("-bufsize") + 1])
     }
+
+    @Test
+    fun build_targetBitrate_replacesCrfWithAverageBitrate() {
+        val res = FFmpegCommandBuilder.build(
+            FFmpegCommandBuilder.BuildParams(
+                sourcePath = "input.mp4",
+                outputPath = "out.mp4",
+                preset = preset,
+                outWidth = 1920,
+                outHeight = 1080,
+                encoderLabel = "H.264 (libx264)",
+                idleTrim = false,
+                videoBitrateK = 12_000,
+            )
+        )
+
+        assertTrue("-crf" !in res.args, "CRF must not limit the target bitrate, args: ${res.args}")
+        assertEquals("12000k", res.args[res.args.indexOf("-b:v") + 1])
+        assertEquals("18000k", res.args[res.args.indexOf("-maxrate") + 1])
+        assertEquals("24000k", res.args[res.args.indexOf("-bufsize") + 1])
+    }
+
+    @Test
+    fun build_nvencTargetBitrate_usesVariableBitrateWithoutCq() {
+        val res = FFmpegCommandBuilder.build(
+            FFmpegCommandBuilder.BuildParams(
+                sourcePath = "input.mp4",
+                outputPath = "out.mp4",
+                preset = preset,
+                outWidth = 1920,
+                outHeight = 1080,
+                encoderLabel = "H.264 (NVENC)",
+                idleTrim = false,
+                videoBitrateK = 8_000,
+            )
+        )
+
+        val argsStr = res.args.joinToString(" ")
+        assertTrue(argsStr.contains("-rc vbr"), "Expected NVENC variable bitrate mode, args: $argsStr")
+        assertTrue("-cq" !in res.args, "CQ must not limit the target bitrate, args: $argsStr")
+        assertTrue(argsStr.contains("-b:v 8000k"), "Expected target bitrate, args: $argsStr")
+    }
 }

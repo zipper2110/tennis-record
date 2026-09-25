@@ -151,6 +151,15 @@ class SwingScoringPanel(
         promptScoreSettingsOnFirstVisit()
     }
 
+    /**
+     * Selects the point with [pointId] and shows it in the player, for example after a click in the Stats tab.
+     * Call it after [onActivated], because the activation reads the points again.
+     */
+    fun selectPoint(pointId: String) = uiSafe {
+        val index = points.indexOfFirst { it.id == pointId }
+        if (index >= 0) setSelectedIndex(index, userInitiated = false)
+    }
+
     fun onDeactivated() = uiSafe {
         isActive = false
         if (::leftListPanel.isInitialized) leftListPanel.hideScoreSettingsHint()

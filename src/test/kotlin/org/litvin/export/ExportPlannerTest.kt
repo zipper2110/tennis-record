@@ -55,6 +55,9 @@ class ExportPlannerTest {
         assertEquals(1_500, summary.totalMs)
         assertEquals(1_000, summary.favoriteTotalMs)
         assertEquals(2, summary.scoredCount)
+        assertEquals(1_000, summary.scoredTotalMs)
+        assertEquals(2, summary.validPointCount)
+        assertEquals(1_500, summary.validTotalMs)
         assertFalse(summary.allScored)
     }
 
@@ -167,14 +170,160 @@ class ExportPlannerTest {
         assertEquals("1.50 KB", RenderFormatting.formatSize(1_500))
         assertEquals("2.00 MB", RenderFormatting.formatSize(2_000_000))
         assertEquals("1:02:03", RenderFormatting.formatDuration(3_723_000))
+        assertEquals("2h 30min 10sec", RenderFormatting.formatDurationWords(9_010_000))
+        assertEquals("1h 0min 5sec", RenderFormatting.formatDurationWords(3_605_000))
+        assertEquals("5min 10sec", RenderFormatting.formatDurationWords(310_000))
+        assertEquals("45sec", RenderFormatting.formatDurationWords(45_900))
     }
 
     @Test
     fun renderFormattingDescribesHowTheVideoWasCut() {
         assertEquals("Full video", RenderFormatting.formatCutMode(idleTrim = false, favoriteOnly = false))
         assertEquals("Full video", RenderFormatting.formatCutMode(idleTrim = false, favoriteOnly = true))
-        assertEquals("Cut points", RenderFormatting.formatCutMode(idleTrim = true, favoriteOnly = false))
-        assertEquals("Favorite points", RenderFormatting.formatCutMode(idleTrim = true, favoriteOnly = true))
+        assertEquals("Only points", RenderFormatting.formatCutMode(idleTrim = true, favoriteOnly = false))
+        assertEquals("Only favorites", RenderFormatting.formatCutMode(idleTrim = true, favoriteOnly = true))
+    }
+
+    @Test
+    fun renderFormattingDescribesTheContentSettings() {
+        assertEquals(
+            "Only points (12 points)  ·  Scoreboard: on  ·  Comments: off",
+            RenderFormatting.formatContent(idleTrim = true, favoriteOnly = false, pointCount = 12, includeScoreboard = true, includeComments = false),
+        )
+        assertEquals(
+            "Only favorites (1 point)  ·  Scoreboard: off  ·  Comments: on",
+            RenderFormatting.formatContent(idleTrim = true, favoriteOnly = true, pointCount = 1, includeScoreboard = false, includeComments = true),
+        )
+        assertEquals(
+            "Full video  ·  Scoreboard: off  ·  Comments: off",
+            RenderFormatting.formatContent(idleTrim = false, favoriteOnly = false, pointCount = 0, includeScoreboard = false, includeComments = false),
+        )
+    }
+
+    @Test
+    fun renderFormattingDescribesTheVideoSettings() {
+        assertEquals(
+            "Balanced  ·  1080p  ·  60 FPS  ·  12 Mbit/s  ·  H.264 (NVENC)",
+            RenderFormatting.formatVideo("balanced", 1920, 1080, "60", 12_000, "H.264 (NVENC)"),
+        )
+        // A job that keeps the source rate has no frame rate. Old entries have no bitrate and can have an old preset id.
+        assertEquals(
+            "Original quality  ·  2704×1520  ·  Original FPS  ·  H.264 (libx264)",
+            RenderFormatting.formatVideo("maximum", 2704, 1520, null, null, "H.264 (libx264)"),
+        )
+        assertEquals(
+            "4K  ·  30 FPS  ·  8.5 Mbit/s  ·  H.264 (QSV)",
+            RenderFormatting.formatVideo("unknown-preset", 3840, 2160, "30", 8_500, "H.264 (QSV)"),
+        )
+        // A size near a standard size keeps its pixels, so the user sees that it is not exactly 1080p.
+        assertEquals(
+            "1080p (1920×1088)  ·  30 FPS  ·  H.264 (QSV)",
+            RenderFormatting.formatVideo(null, 1920, 1088, "30", null, "H.264 (QSV)"),
+        )
+    }
+
+    @Test
+    fun renderFormattingShowsTheWrittenAndTheExpectedSize() {
+        assertEquals("120.50 MB / ~480.00 MB", RenderFormatting.formatSizeProgress(120_500_000, 480_000_000))
+        assertEquals("0 B", RenderFormatting.formatSizeProgress(0, null))
+    }
+
+    @Test
+    fun buildRenderPlanEstimatesTheSizeFromTheKeptPointsOrTheSourceDuration() {
+        val edl = EdlV1(points = listOf(point("p1", 0, 10_000), point("p2", 20_000, 30_000)))
+        fun expectedBytes(idleTrim: Boolean, bitrateK: Int?, sourceDurationMs: Long?) = ExportPlanner.buildRenderPlan(
+            ExportRenderPlanRequest(
+                manifest = manifest(),
+                sourcePath = "input.mp4",
+                edl = edl,
+                score = ScoreV1(),
+                preset = preset,
+                resolution = ExportResolution("1080p", 1920, 1080),
+                videoBitrateK = bitrateK,
+                encoderLabel = "H.264 (libx264)",
+                idleTrim = idleTrim,
+                favoriteOnly = false,
+                includeScoreboard = false,
+                outputPath = "out.mp4",
+                sourceDurationMs = sourceDurationMs,
+            )
+        ).job.expectedBytes
+
+        // 20 s of points at 8,000 + 192 kbit/s.
+        assertEquals(20_480_000L, expectedBytes(idleTrim = true, bitrateK = 8_000, sourceDurationMs = 60_000))
+        assertEquals(61_440_000L, expectedBytes(idleTrim = false, bitrateK = 8_000, sourceDurationMs = 60_000))
+        assertNull(expectedBytes(idleTrim = false, bitrateK = 8_000, sourceDurationMs = null))
+        assertNull(expectedBytes(idleTrim = true, bitrateK = null, sourceDurationMs = 60_000))
+    }
+
+    @Test
+    fun theStatisticsCardIsInTheJobAndInTheSizeEstimate() {
+        val edl = EdlV1(points = listOf(point("p1", 0, 10_000), point("p2", 20_000, 30_000)))
+        fun plan(includeStatsCard: Boolean, score: ScoreV1) = ExportPlanner.buildRenderPlan(
+            ExportRenderPlanRequest(
+                manifest = manifest(),
+                sourcePath = "input.mp4",
+                edl = edl,
+                score = score,
+                preset = preset,
+                resolution = ExportResolution("1080p", 1920, 1080),
+                videoBitrateK = 8_000,
+                encoderLabel = "H.264 (libx264)",
+                idleTrim = true,
+                favoriteOnly = false,
+                includeScoreboard = false,
+                outputPath = "out.mp4",
+                includeStatsCard = includeStatsCard,
+            )
+        ).job
+        val scored = ScoreV1(outcomes = mapOf("p1" to Outcome.P1, "p2" to Outcome.P2))
+
+        val job = plan(includeStatsCard = true, scored)
+
+        // The default rows fit on one page. The momentum chart is on a second page.
+        assertEquals(2, job.statsCard?.pages?.size)
+        assertEquals(1920.0, job.statsCard?.pages?.first()?.width)
+        // 20 s of points and 12 s of card at 8,000 + 192 kbit/s.
+        assertEquals(32_768_000L, job.expectedBytes)
+        assertNull(plan(includeStatsCard = false, scored).statsCard)
+        assertNull(plan(includeStatsCard = true, ScoreV1()).statsCard, "Without scored points the export has no card")
+    }
+
+    @Test
+    fun theSetCardsAreInTheJobForTheSetsThatTheVideoShows() {
+        // One game wins a set with a two-game lead: sets of 8 points. Set 3 is not complete.
+        val winners = "11111111" + "22222222" + "1111"
+        val points = winners.indices.map { point("p${it + 1}", it * 10_000, it * 10_000 + 5_000, favorite = it >= 8) }
+        val score = ScoreV1(
+            outcomes = points.zip(winners.toList()).associate { (p, c) -> p.id to if (c == '1') Outcome.P1 else Outcome.P2 },
+            rules = org.litvin.scoring.MatchRulesV1(gamesPerSet = 1, setTiebreak = false),
+        )
+        fun job(idleTrim: Boolean, favoriteOnly: Boolean) = ExportPlanner.buildRenderPlan(
+            ExportRenderPlanRequest(
+                manifest = manifest(),
+                sourcePath = "input.mp4",
+                edl = EdlV1(points = points),
+                score = score,
+                preset = preset,
+                resolution = ExportResolution("1080p", 1920, 1080),
+                videoBitrateK = 8_000,
+                encoderLabel = "H.264 (libx264)",
+                idleTrim = idleTrim,
+                favoriteOnly = favoriteOnly,
+                includeScoreboard = false,
+                outputPath = "out.mp4",
+                sourceDurationMs = 300_000,
+                includeSetSummaries = true,
+            )
+        ).job
+
+        val all = job(idleTrim = true, favoriteOnly = false)
+        assertEquals(listOf(1, 2), all.setSummaries.map { it.setNumber })
+        // 100 s of points and two cards of 12 s (rows and chart) at 8,000 + 192 kbit/s.
+        assertEquals(126_976_000L, all.expectedBytes)
+        // The favorites start in set 2, so the video does not show set 1.
+        assertEquals(listOf(2), job(idleTrim = true, favoriteOnly = true).setSummaries.map { it.setNumber })
+        assertEquals(emptyList(), job(idleTrim = false, favoriteOnly = false).setSummaries)
     }
 
     @Test

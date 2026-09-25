@@ -16,6 +16,7 @@ class HelpCatalogTest {
                 HelpPage.CROP,
                 HelpPage.POINTS,
                 HelpPage.SCORING,
+                HelpPage.STATISTICS,
                 HelpPage.EXPORT,
             ),
             HelpCatalog.pages.map { it.page },
@@ -23,11 +24,12 @@ class HelpCatalogTest {
     }
 
     @Test
-    fun everyPageHasWorkflowActionsAndContextHelpShortcut() {
+    fun everyPageHasWorkflowActionsGoodToKnowAndContextHelpShortcut() {
         HelpCatalog.pages.forEach { page ->
             assertTrue(page.summary.isNotBlank(), "${page.page} needs a summary")
             assertTrue(page.workflow.isNotEmpty(), "${page.page} needs workflow steps")
             assertTrue(page.actions.isNotEmpty(), "${page.page} needs actions")
+            assertTrue(page.goodToKnow.isNotEmpty(), "${page.page} needs good-to-know items")
             assertTrue(
                 page.shortcuts.any { it.shortcut == AppShortcuts.HELP },
                 "${page.page} needs the shared F1 shortcut",

@@ -40,7 +40,25 @@ enum class TextAnchor(val ass: Int) {
     MIDDLE_RIGHT(6),
 }
 
+/** A point of a [SceneItem.Polygon] or a [SceneItem.Polyline], in board units. */
+data class ScenePoint(val x: Double, val y: Double)
+
 sealed interface SceneItem {
+    /** A filled shape through [points]. The last point connects to the first point. */
+    data class Polygon(
+        val points: List<ScenePoint>,
+        val rgb: Int,
+        val opacity: Double = 1.0,
+    ) : SceneItem
+
+    /** A line through [points], [width] units wide, with round joins and round ends. */
+    data class Polyline(
+        val points: List<ScenePoint>,
+        val width: Double,
+        val rgb: Int,
+        val opacity: Double = 1.0,
+    ) : SceneItem
+
     /** A filled rectangle with rounded corners. [opacity] is 0.0 (transparent) to 1.0 (opaque). */
     data class Box(
         val x: Double,

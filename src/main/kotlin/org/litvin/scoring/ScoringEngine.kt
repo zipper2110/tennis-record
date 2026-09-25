@@ -34,16 +34,33 @@ object ScoringEngine {
 
     data class SetScore(val p1: Int, val p2: Int, val tiebreak: Boolean)
 
+    /** The largest unit that a player wins with a point. The order is from small to large. */
+    enum class Stake { NONE, GAME, SET, MATCH }
+
+    /** What each player wins if that player wins the point. For example, a break point gives the receiver [Stake.GAME]. */
+    data class PointStakes(val p1: Stake, val p2: Stake) {
+        fun of(player: Int): Stake = if (player == 1) p1 else p2
+
+        companion object {
+            val NONE = PointStakes(Stake.NONE, Stake.NONE)
+        }
+    }
+
     /**
      * The state before the first point, the state after each point, and the completed sets after each point.
      * [serverOfPoint] is the player (1 or 2) who serves each point, or null when the user did not mark a server.
+     * [stakesOfPoint] tells what each player wins with each point. In manual scoring, no point has a stake.
      */
     data class Timeline(
         val initial: MatchState,
         val statesAfterPoint: List<MatchState>,
         val setsAfterPoint: List<List<SetScore>>,
         val serverOfPoint: List<Int?> = List(statesAfterPoint.size) { null },
-    )
+        val stakesOfPoint: List<PointStakes> = List(statesAfterPoint.size) { PointStakes.NONE },
+    ) {
+        /** The state before the point at [index]. */
+        fun stateBefore(index: Int): MatchState = if (index == 0) initial else statesAfterPoint[index - 1]
+    }
 
     /**
      * Compute timeline snapshots for the whole match based on outcomes applied to points order.
@@ -82,6 +99,7 @@ object ScoringEngine {
         val states = ArrayList<MatchState>(points.size)
         val sets = ArrayList<List<SetScore>>(points.size)
         val servers = ArrayList<Int>(points.size)
+        val stakes = ArrayList<PointStakes>(points.size)
         var marked = false
         for (point in points) {
             match.startPoint()
@@ -92,6 +110,7 @@ object ScoringEngine {
                 match.setServer(server)
             }
             servers += match.server()
+            stakes += PointStakes(match.stakeIfWonBy(1), match.stakeIfWonBy(2))
             when (outcomesByPointId[point.id]) {
                 Outcome.P1 -> match.pointWonBy(1)
                 Outcome.P2 -> match.pointWonBy(2)
@@ -104,7 +123,7 @@ object ScoringEngine {
             states += match.snapshot()
             sets += match.completedSets.toList()
         }
-        return Timeline(initial, states, sets, if (marked) servers else servers.map { null })
+        return Timeline(initial, states, sets, if (marked) servers else servers.map { null }, stakes)
     }
 
     /** The tiebreak target of [MatchStructure.PLAIN_POINTS]. No score gets to it, so the tiebreak does not end. */
@@ -161,6 +180,33 @@ object ScoringEngine {
             if (player == 1) p1Pts++ else p2Pts++
             if (rules.manualScoring) return
             if (isTiebreak) checkTiebreak() else checkGame()
+        }
+
+        /** Plays the next point on a copy of the match, and tells what [player] wins with it. */
+        fun stakeIfWonBy(player: Int): Stake {
+            if (rules.manualScoring || matchWonBy != null) return Stake.NONE
+            val next = copy().apply { pointWonBy(player) }
+            return when {
+                next.matchWonBy != null -> Stake.MATCH
+                next.setWonBy != null -> Stake.SET
+                next.gameWonBy != null -> Stake.GAME
+                else -> Stake.NONE
+            }
+        }
+
+        /** Returns an independent copy. Copy each new field here too. */
+        private fun copy(): Match = Match(rules).also { m ->
+            m.p1Pts = p1Pts; m.p2Pts = p2Pts
+            m.gamesP1 = gamesP1; m.gamesP2 = gamesP2
+            m.setsP1 = setsP1; m.setsP2 = setsP2
+            m.isTiebreak = isTiebreak
+            m.tiebreakTarget = tiebreakTarget
+            m.tiebreakReplacesSet = tiebreakReplacesSet
+            m.gameServer = gameServer
+            m.matchWonBy = matchWonBy
+            m.gameWonBy = gameWonBy
+            m.setWonBy = setWonBy
+            m.completedSets += completedSets
         }
 
         fun markGameWon(player: Int) {

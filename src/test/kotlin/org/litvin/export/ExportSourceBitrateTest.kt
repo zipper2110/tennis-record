@@ -26,14 +26,4 @@ class ExportSourceBitrateTest {
         assertEquals("12", ExportSourceBitrate(12_400_000).displayMegabits)
         assertEquals("83", ExportSourceBitrate(82_600_000).displayMegabits)
     }
-
-    @Test
-    fun `labels the source bitrate in megabits per second`() {
-        assertEquals("Source: 4.5 Megabits/s", ExportSourceBitrates.label(ExportSourceBitrate(4_500_000)))
-    }
-
-    @Test
-    fun `labels nothing when the bitrate is unknown`() {
-        assertEquals("", ExportSourceBitrates.label(null))
-    }
 }

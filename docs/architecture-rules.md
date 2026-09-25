@@ -38,6 +38,13 @@ Allowed directions:
 - `shared.util` must not depend on any feature/ui/app.
 - Cycles are forbidden.
 
+## Third-party license boundaries
+The app uses the Elastic License 2.0. A GPL component must not be part of the app process.
+- Start the bundled GPL FFmpeg build only as a separate process (`ffmpeg.exe`, `ffprobe.exe`). Communicate only through command-line arguments, pipes and files.
+- Do not load a GPL FFmpeg build into the app process (for example through JNA, JavaCV or bytedeco). Only an LGPL FFmpeg build, as a separate and replaceable library, can load in process.
+- Load only an LGPL build of libmpv (`-Dgpl=false`). Keep `libmpv-2.dll` a separate, replaceable file.
+- Before you add a dependency, check its license. Apache-2.0, MIT, BSD, EPL and LGPL (as a replaceable library) are compatible. GPL and AGPL are not compatible in process.
+
 ## UI architecture: MVP (Passive View)
 
 This project uses MVP (Model–View–Presenter), Passive View flavor, for all Swing UI under `org.litvin.ui.*`.

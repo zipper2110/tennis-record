@@ -4,13 +4,64 @@ on:
   push:
     tags:
       - "v*.*.*"
+  # A manual run collects only the native sources. Use it to test that job.
+  workflow_dispatch:
 
 permissions:
   contents: write
   id-token: write
 
 jobs:
+  native-sources:
+    # GPL and LGPL require the corresponding source of the bundled native builds.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v5
+
+      - name: Install source download tools
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends subversion autoconf automake libtool jq xz-utils
+
+      - name: Collect FFmpeg corresponding source
+        run: bash distribution/sources/collect-btbn-ffmpeg-sources.sh distribution/windows/native-dependencies.json target/ffmpeg-source
+
+      - name: Fetch libmpv corresponding source
+        run: |
+          set -euo pipefail
+          manifest=distribution/windows/native-dependencies.json
+          mkdir -p target/distribution/sources
+          target="target/distribution/sources/$(jq -er .mpv.sourceArchiveName "$manifest")"
+          curl -fsSL --retry 3 -o "$target" "$(jq -er .mpv.sourceUrl "$manifest")"
+          echo "$(jq -er .mpv.sourceSha256 "$manifest")  $target" | sha256sum -c -
+
+      - name: Package native sources
+        run: |
+          set -euo pipefail
+          mkdir -p target/distribution/sources
+          name="ffmpeg-$(jq -r .ffmpeg.version distribution/windows/native-dependencies.json)-$(jq -r .ffmpeg.variant distribution/windows/native-dependencies.json)-source.tar"
+          tar -C target/ffmpeg-source -cf "target/distribution/sources/$name" .
+          # A GitHub release asset must be smaller than 2 GiB.
+          if [ "$(stat -c %s "target/distribution/sources/$name")" -gt 2000000000 ]; then
+            split -b 1900M -d "target/distribution/sources/$name" "target/distribution/sources/$name.part"
+            rm "target/distribution/sources/$name"
+            printf 'Join the parts before you extract them:\n  cat %s.part* > %s\n' "$name" "$name" > "target/distribution/sources/$name.README.txt"
+          fi
+          ( cd target/distribution/sources && sha256sum * > NATIVE-SOURCES.sha256 )
+          ls -l target/distribution/sources
+
+      - name: Upload native sources
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-sources
+          path: target/distribution/sources/*
+          compression-level: 0
+          if-no-files-found: error
+
   windows-installer:
+    needs: native-sources
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: windows-2022
     environment: windows-release
 
@@ -97,6 +148,12 @@ jobs:
           timestamp-digest: SHA256
           description: Tennis Record installer
           timeout: 900
+
+      - name: Download native sources
+        uses: actions/download-artifact@v4
+        with:
+          name: native-sources
+          path: target/distribution/sources
 
       - name: Verify signatures and stage release files
         shell: pwsh

@@ -1,13 +1,32 @@
 Tennis Record
-Copyright (c) 2026 Tennis Record contributors
+Copyright (c) 2026 Dmitrii Litvin
 
-Tennis Record is free software: you can redistribute it and/or modify it
-under the terms of the GNU General Public License as published by the Free
-Software Foundation, either version 3 of the License, or (at your option) any
-later version.
+Tennis Record is source-available software. Dmitrii Litvin (the "licensor")
+makes it available under the Elastic License 2.0 (ELv2). The complete license
+text is in the LICENSE file. ELv2 is not an open source license as defined by
+the Open Source Initiative.
 
-Tennis Record is distributed in the hope that it will be useful, but WITHOUT
-ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+LICENSE KEY FUNCTIONALITY
 
-The complete GNU General Public License version 3 text is in the LICENSE file.
+In the Elastic License 2.0, "license key functionality" includes each
+mechanism in the software that controls if the software runs, how long it
+runs, or which features it enables. This includes:
+
+- the expiry date of a build;
+- the check for the minimum supported version;
+- license files, license keys, and the checks of their signatures;
+- the entitlement checks that enable or disable features.
+
+THIRD-PARTY COMPONENTS
+
+The Tennis Record distribution includes third-party components, for example
+FFmpeg, libmpv, and a Java runtime. Each third-party component keeps its own
+license. The Elastic License 2.0 applies only to the Tennis Record code. It
+does not restrict the rights that the license of a third-party component gives
+you. The file THIRD-PARTY-NOTICES.txt lists the components and their licenses.
+
+EARLIER VERSIONS
+
+Versions of Tennis Record up to and including the Git tag "last-gpl" (commit
+311a444) were released under the GNU General Public License version 3 or
+later. Later versions are available only under the Elastic License 2.0.

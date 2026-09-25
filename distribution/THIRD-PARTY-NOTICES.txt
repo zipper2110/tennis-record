@@ -3,15 +3,28 @@ TENNIS RECORD THIRD-PARTY NOTICES
 This distribution contains third-party software. The authoritative license
 texts shipped inside dependency archives and JAR files remain controlling.
 
-mpv / libmpv v0.41.0-1023-g69e63f425
-(shinchiro mpv-winbuild-cmake build 20260903-git-69e63f425a)
-Copyright mpv developers and dependency authors.
-License: GNU General Public License v2 or later for this build variant, with
-individual components under compatible licenses.
+mpv / libmpv v0.41.0, with FFmpeg n7.1 and libplacebo v7.351.0
+(grid-libmpv-windows-x86_64, build libmpv-windows-v0.41.0-b4 of
+https://github.com/lpbborges/grid)
+Copyright mpv, FFmpeg and libplacebo developers and dependency authors.
+License: GNU Lesser General Public License version 2.1 or later. mpv is built
+with -Dgpl=false. The FFmpeg libraries (avcodec, avfilter, avformat, avutil,
+swresample, swscale) are built without --enable-gpl, --enable-version3 and
+--enable-nonfree. The other DLLs in natives/windows-x64/mpv come from MSYS2
+UCRT64 packages under compatible licenses (LGPL, MIT, BSD, ISC, Zlib, Apache
+2.0, and the GCC Runtime Library Exception). natives/windows-x64/mpv/LICENSES
+contains each license text. natives/windows-x64/mpv/BUILD-INFO.txt lists each
+DLL, its package version, and its license.
+FreeType is used under the FreeType License (FTL). Portions of this software
+are copyright (c) The FreeType Project (www.freetype.org). All rights
+reserved.
 Source and build information: https://mpv.io/
-https://github.com/shinchiro/mpv-winbuild-cmake
-The bundled libmpv-2.dll is unmodified and remains replaceable in the
-installation directory.
+https://github.com/lpbborges/grid
+The corresponding source code of this build (mpv, FFmpeg, libplacebo, the
+build recipe, and the LGPL MSYS2 source packages) is published beside each
+Tennis Record release.
+The bundled DLLs are unmodified. You can replace them with your own builds in
+the installation directory (natives/windows-x64/mpv).
 
 FFmpeg n9.0.2-3-ga5923073bf, BtbN win64-gpl-shared-9.0 build
 Copyright FFmpeg developers and dependency authors.
@@ -20,9 +33,12 @@ variant, which is configured with --enable-gpl --enable-version3 and includes
 GPL components such as x264 and x265. Source/build information:
 https://github.com/BtbN/FFmpeg-Builds
 https://ffmpeg.org/
-The shared libraries and executables are unmodified and remain replaceable in
-the installation directory. The FFmpeg license text is installed at
-natives/windows-x64/ffmpeg/LICENSE.txt.
+The corresponding source code of this build is published beside each Tennis
+Record release.
+Tennis Record runs FFmpeg only as separate programs (ffmpeg.exe and
+ffprobe.exe). The shared libraries and executables are unmodified and remain
+replaceable in the installation directory. The FFmpeg license text is
+installed at natives/windows-x64/ffmpeg/LICENSE.txt.
 
 Eclipse Temurin OpenJDK 17 runtime
 Copyright Eclipse Foundation and OpenJDK contributors.
@@ -36,8 +52,10 @@ are retained in their distributed JAR files. The release includes a
 CycloneDX software bill of materials for the exact Maven dependency set.
 
 Tennis Record
-Copyright (c) 2026 Tennis Record contributors.
-License: GNU General Public License v3 or later.
-The complete license text is in LICENSE.txt. The corresponding source code
-for the Tennis Record application is published alongside the Windows
-installer.
+Copyright (c) 2026 Dmitrii Litvin.
+License: Elastic License 2.0. The complete license text is in LICENSE.txt.
+LICENSE-NOTICE.txt describes the license key functionality and the earlier
+GPL versions. The Elastic License 2.0 applies only to Tennis Record. It does
+not change the license of any third-party component in this file.
+The source code of Tennis Record is published beside each release and at
+https://github.com/zipper2110/tennis-record.

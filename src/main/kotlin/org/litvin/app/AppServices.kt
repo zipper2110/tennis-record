@@ -17,6 +17,7 @@ import org.litvin.ui.commons.UserDialogService
 import org.litvin.analytics.AnalyticsBuildConfig
 import org.litvin.analytics.AnalyticsController
 import org.litvin.analytics.AnalyticsPreferences
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.atomic.AtomicBoolean
 
 internal data class AppServicesProductionFactory(
@@ -49,7 +50,8 @@ data class AppServices(
     val projectsRepository: ProjectsRepository,
     val completedRenders: CompletedRendersRepository,
     val adjustments: AdjustmentsSession,
-    val encoderCapabilities: EncoderCapabilities = EncoderCapabilities.NONE,
+    // The detection runs test encodes and takes some seconds, so the export panel waits for it in the background.
+    val encoderCapabilities: CompletableFuture<EncoderCapabilities> = CompletableFuture.completedFuture(EncoderCapabilities.NONE),
     val analyticsConfig: AnalyticsBuildConfig = AnalyticsBuildConfig.Disabled("not_configured"),
     val analyticsPreferences: AnalyticsPreferences? = null,
     val analyticsController: AnalyticsController? = null,
@@ -105,7 +107,7 @@ data class AppServices(
                 val completedRenders = construct { factory.completedRenders(paths) }
                 val adjustments = construct { factory.adjustments(executors) }
                 val renderService = construct { factory.renderService(adjustments, completedRenders) }
-                val encoderCapabilities = factory.encoderCapabilities()
+                val encoderCapabilities = CompletableFuture.supplyAsync { factory.encoderCapabilities() }
                 val analyticsConfig = AnalyticsBuildConfig.fromSystemProperties()
                 val analyticsPreferences = if (analyticsConfig is AnalyticsBuildConfig.Enabled) {
                     AnalyticsPreferences(preferences.node(PreferencesProvider.ANALYTICS))

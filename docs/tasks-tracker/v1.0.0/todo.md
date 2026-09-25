@@ -1,7 +1,0 @@
-- help
-- colors tab
-- crop tab
-- export settings simple/advanced + refine
-- buttons: yellow on hover
-- scoring: point won better highlight
-- installers

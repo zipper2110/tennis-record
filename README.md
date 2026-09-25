@@ -101,13 +101,19 @@ See: [docs/solution-outline.md](docs/solution-outline.md)
 - Keep EDL/score models versioned and migration‑ready.
 
 ## Licensing & third‑party components
-- Tennis Record is free software licensed under the GNU General Public License
-  version 3 or later. See [LICENSE](LICENSE).
-- Binary releases include the application source, an SBOM, native dependency
-  provenance, and third-party notices.
-- libmpv (GPLv2+ in the bundled build) — shipped unmodified and replaceable by
-  users.
-- FFmpeg — prefer LGPL builds unless GPL filters/codecs are explicitly required.
+- Tennis Record is source-available software under the Elastic License 2.0
+  (ELv2). See [LICENSE](LICENSE) and [LICENSE-NOTICE](LICENSE-NOTICE). ELv2 is
+  not an OSI open source license. You must not bypass the license key
+  functionality that LICENSE-NOTICE describes.
+- Versions up to the `last-gpl` tag were released under the GNU General Public
+  License version 3 or later.
+- Binary releases include the application source, the source of the bundled
+  FFmpeg and libmpv builds, an SBOM, native dependency provenance, and
+  third-party notices.
+- libmpv (LGPL build, `-Dgpl=false`) — loaded in the app process, shipped
+  unmodified, and replaceable by users.
+- FFmpeg (GPL build) — runs only as a separate `ffmpeg.exe` process. An
+  in-process FFmpeg must be an LGPL build.
 - Fonts — ensure redistribution rights (e.g., OFL fonts like Roboto).
 
 ## Acknowledgements

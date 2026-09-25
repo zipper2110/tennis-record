@@ -74,7 +74,7 @@ class FeatureBoundaryWiringTest {
                 completed,
                 picker,
                 dialogs,
-                EncoderCapabilities.NONE,
+                java.util.concurrent.CompletableFuture.completedFuture(EncoderCapabilities.NONE),
             )
         }
 

@@ -17,15 +17,31 @@ class ExportSettingsPreferencesTest {
         try {
             val settings = ExportSettingsPreferences(node)
 
-            settings.savePreset("quality")
-            settings.saveResolution("4K")
+            assertEquals(ExportVideoSettings(null, false, null), settings.load())
+
+            settings.saveSimplePreset("balanced")
+            settings.saveAdvancedMode(true)
             settings.saveEncoder("h264_nvenc")
-            settings.saveOutputFrameRate("30000/1001")
 
             assertEquals(
-                ExportVideoSettings("quality", "4K", "h264_nvenc", "30000/1001"),
+                ExportVideoSettings("balanced", true, "h264_nvenc"),
                 settings.load(),
             )
+        } finally {
+            node.removeNode()
+        }
+    }
+
+    @Test
+    fun ignoresAndRemovesTheEncoderOfTheEarlierExportPanel() {
+        val node = Preferences.userRoot().node("/org/litvin/test/${UUID.randomUUID()}")
+        try {
+            node.put("export.video.encoder", "libx264")
+            node.put("export.video.preset", "very-high")
+
+            assertNull(ExportSettingsPreferences(node).load().encoderId)
+            assertNull(node.get("export.video.encoder", null))
+            assertNull(node.get("export.video.preset", null))
         } finally {
             node.removeNode()
         }

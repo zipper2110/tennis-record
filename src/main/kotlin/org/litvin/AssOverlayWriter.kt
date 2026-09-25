@@ -1,8 +1,11 @@
 package org.litvin
 
+import org.litvin.export.scoreboard.BoardPlacement
 import org.litvin.export.scoreboard.ScoreboardAss
 import org.litvin.export.scoreboard.ScoreboardLayouts
 import org.litvin.scoring.ScoreboardSettingsV1
+import org.litvin.stats.StatsCard
+import org.litvin.stats.StatsCardVideo
 import java.io.File
 import java.util.Locale
 
@@ -53,15 +56,7 @@ object AssOverlayWriter {
 
         file.parentFile?.mkdirs()
         file.bufferedWriter(Charsets.UTF_8).use { w ->
-            w.appendLine("[Script Info]")
-            w.appendLine("ScriptType: v4.00+")
-            w.appendLine("PlayResX: $playResX")
-            w.appendLine("PlayResY: $playResY")
-            w.appendLine("ScaledBorderAndShadow: yes")
-            // Without this header, FFmpeg converts the colors like VSFilter (TV range BT.601).
-            // The mpv preview uses the RGB values as they are, so the export must do the same.
-            w.appendLine("YCbCr Matrix: None")
-            w.appendLine()
+            w.scriptInfo(playResX, playResY)
 
             // Colors use &HAABBGGRR (AA: 00 opaque, FF transparent)
             val black = assColor(0x000000, 0x00)
@@ -117,6 +112,47 @@ object AssOverlayWriter {
                 w.appendLine("Dialogue: ${COMMENT_LAYER + 1},$start,$end,CommentText,,0,0,0,,{\\an2\\pos(${playResX / 2},$textY)\\1c${assColor(colorRgb, 0x00)}\\1a${assAlpha(commentAlpha)}\\3a${assAlpha(commentAlpha)}}$escapedText")
             }
         }
+    }
+
+    /**
+     * Writes the ASS file of the statistics card pass. The pass video starts at 0, so page i shows
+     * from i x [StatsCardVideo.pageDurationMs] to the end of that page.
+     */
+    fun writeStatsCard(file: File, card: StatsCardVideo, outWidth: Int, outHeight: Int) {
+        val playResX = outWidth.coerceAtLeast(16)
+        val playResY = outHeight.coerceAtLeast(16)
+        // The pages have the aspect ratio of the output, so one scale fills the frame.
+        val placement = BoardPlacement(0.0, 0.0, playResY / StatsCard.HEIGHT)
+        file.parentFile?.mkdirs()
+        file.bufferedWriter(Charsets.UTF_8).use { w ->
+            w.scriptInfo(playResX, playResY)
+            w.appendLine("[V4+ Styles]")
+            w.appendLine("Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding")
+            val black = assColor(0x000000, 0x00)
+            w.appendLine("Style: Board,Arial,20,${assColor(0xFFFFFF, 0x00)},&H000000FF,$black,$black,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,0")
+            w.appendLine()
+            w.appendLine("[Events]")
+            w.appendLine("Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text")
+            card.pages.forEachIndexed { index, scene ->
+                val start = toAssTs(index * card.pageDurationMs)
+                val end = toAssTs((index + 1) * card.pageDurationMs)
+                ScoreboardAss.events(scene, placement).forEachIndexed { layer, text ->
+                    w.appendLine("Dialogue: $layer,$start,$end,Board,,0,0,0,,$text")
+                }
+            }
+        }
+    }
+
+    private fun Appendable.scriptInfo(playResX: Int, playResY: Int) {
+        appendLine("[Script Info]")
+        appendLine("ScriptType: v4.00+")
+        appendLine("PlayResX: $playResX")
+        appendLine("PlayResY: $playResY")
+        appendLine("ScaledBorderAndShadow: yes")
+        // Without this header, FFmpeg converts the colors like VSFilter (TV range BT.601).
+        // The mpv preview uses the RGB values as they are, so the export must do the same.
+        appendLine("YCbCr Matrix: None")
+        appendLine()
     }
 
     /**

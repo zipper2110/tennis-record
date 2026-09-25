@@ -5,6 +5,7 @@ import org.litvin.SwingMainApp
 import org.litvin.WindowsGpuPreference
 import org.litvin.media.MediaScreen
 import org.litvin.ui.UiStyles
+import org.litvin.ui.commons.AppIcon
 import org.litvin.ui.commons.AppShortcuts
 import org.litvin.ui.help.HelpDialog
 import org.litvin.ui.help.HelpPage
@@ -20,6 +21,7 @@ import org.litvin.ui.tabs.projects.presenter.DefaultProjectsPresenter
 import org.litvin.ui.tabs.scoring.PreferencesScoreSettingsHint
 import org.litvin.ui.tabs.scoring.PreferencesScoreboardStyleDefaults
 import org.litvin.ui.tabs.scoring.SwingScoringPanel
+import org.litvin.ui.tabs.stats.SwingStatsPanel
 import org.litvin.ui.tabs.test.SwingTestPanel
 import org.litvin.analytics.AnalyticsBuildConfig
 import org.litvin.analytics.AnalyticsEvent
@@ -44,6 +46,7 @@ object SwingApplicationFactory {
     private const val CARD_POINTS = "points"
     private const val CARD_EXPORT = "export"
     private const val CARD_SCORING = "scoring"
+    private const val CARD_STATS = "stats"
     private const val CARD_ADJ_COLORS = "adjustments"
     private const val CARD_ADJ_CROP_ROTATE = "adjustments-crop-rotate"
     private const val CARD_TEST = "test"
@@ -63,6 +66,7 @@ object SwingApplicationFactory {
 
         val frame = JFrame(AppInfo.displayName).apply {
             name = "app-frame"
+            iconImages = AppIcon.windowImages()
             defaultCloseOperation = JFrame.DISPOSE_ON_CLOSE
             layout = BorderLayout()
         }
@@ -83,6 +87,7 @@ object SwingApplicationFactory {
             lateinit var btnPoints: UiStyles.SidebarButton
             lateinit var btnColors: UiStyles.SidebarButton
             lateinit var btnScoring: UiStyles.SidebarButton
+            lateinit var btnStats: UiStyles.SidebarButton
             lateinit var btnExport: UiStyles.SidebarButton
             lateinit var btnCropRotate: UiStyles.SidebarButton
             var btnPrivacy: UiStyles.SidebarButton? = null
@@ -130,6 +135,15 @@ object SwingApplicationFactory {
             )
             closeActions += scoringPanel::close
 
+            val statsPanel = SwingStatsPanel(
+                services.dialogs,
+                onOpenScoring = { btnScoring.doClick() },
+                onOpenPoint = { pointId ->
+                    btnScoring.doClick()
+                    scoringPanel.selectPoint(pointId)
+                },
+            )
+
             val exportPanel = SwingExportPanel(
                 ExportSettingsPreferences(services.preferences.node(PreferencesProvider.EXPORT)),
                 services.renderService,
@@ -163,6 +177,7 @@ object SwingApplicationFactory {
                 CARD_ADJ_COLORS -> HelpPage.COLORS
                 CARD_ADJ_CROP_ROTATE -> HelpPage.CROP
                 CARD_SCORING -> HelpPage.SCORING
+                CARD_STATS -> HelpPage.STATISTICS
                 CARD_EXPORT -> HelpPage.EXPORT
                 else -> HelpPage.OVERVIEW
             }
@@ -190,6 +205,7 @@ object SwingApplicationFactory {
                     CARD_ADJ_COLORS -> colorsPanel.onActivated()
                     CARD_ADJ_CROP_ROTATE -> cropRotatePanel.onActivated()
                     CARD_SCORING -> scoringPanel.onActivated()
+                    CARD_STATS -> statsPanel.onActivated()
                     CARD_EXPORT -> exportPanel.onActivated()
                     CARD_TEST -> testPanel?.onActivated()
                 }
@@ -198,6 +214,7 @@ object SwingApplicationFactory {
                 btnColors.active = card == CARD_ADJ_COLORS
                 btnCropRotate.active = card == CARD_ADJ_CROP_ROTATE
                 btnScoring.active = card == CARD_SCORING
+                btnStats.active = card == CARD_STATS
                 btnExport.active = card == CARD_EXPORT
                 btnTest?.active = card == CARD_TEST
                 currentCard = card
@@ -218,12 +235,14 @@ object SwingApplicationFactory {
                     colorsPanel.setProjectManifest(path)
                     cropRotatePanel.setProjectManifest(path)
                     scoringPanel.setProjectManifest(path)
+                    statsPanel.setProjectManifest(path)
                     exportPanel.setProjectManifest(path)
                     testPanel?.setProjectManifest(path)
                     btnPoints.isVisible = true
                     btnColors.isVisible = true
                     btnCropRotate.isVisible = true
                     btnScoring.isVisible = true
+                    btnStats.isVisible = true
                     btnExport.isVisible = true
                     btnTest?.isVisible = true
                     sidebar.revalidate()
@@ -242,6 +261,7 @@ object SwingApplicationFactory {
             cards.add(colorsPanel, CARD_ADJ_COLORS)
             cards.add(cropRotatePanel, CARD_ADJ_CROP_ROTATE)
             cards.add(scoringPanel, CARD_SCORING)
+            cards.add(statsPanel, CARD_STATS)
             cards.add(exportPanel, CARD_EXPORT)
             if (testPanel != null) cards.add(testPanel, CARD_TEST)
 
@@ -270,6 +290,11 @@ object SwingApplicationFactory {
                 goTo(CARD_SCORING)
             }.apply { name = "nav-scoring" }
             addItem(btnScoring)
+            btnStats = UiStyles.sidebarButton("Stats", UiStyles.statsIcon()) {
+                showTitle("Statistics")
+                goTo(CARD_STATS)
+            }.apply { name = "nav-stats" }
+            addItem(btnStats)
             btnExport = UiStyles.sidebarButton("Export", UiStyles.exportIcon()) {
                 showTitle("Export")
                 goTo(CARD_EXPORT)
@@ -304,6 +329,7 @@ object SwingApplicationFactory {
             btnColors.isVisible = false
             btnCropRotate.isVisible = false
             btnScoring.isVisible = false
+            btnStats.isVisible = false
             btnExport.isVisible = false
 
             frame.add(sidebar, BorderLayout.WEST)

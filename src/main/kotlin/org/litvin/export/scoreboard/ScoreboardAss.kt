@@ -65,6 +65,8 @@ object ScoreboardAss {
             when (item) {
                 is SceneItem.Box -> box(item, placement)
                 is SceneItem.Label -> label(item, placement)
+                is SceneItem.Polygon -> polygon(item, placement)
+                is SceneItem.Polyline -> polyline(item, placement)
             }
         }
 
@@ -79,6 +81,43 @@ object ScoreboardAss {
         val path = roundedRectPath(width, height, box.corners.scaled(s))
         return "{\\an7\\pos(${fmt(x)},${fmt(y)})\\bord0\\shad0\\blur0\\fscx100\\fscy100\\frz0" +
             "\\1c${color(box.rgb)}\\1a${alpha(box.opacity)}\\p1}$path{\\p0}"
+    }
+
+    private fun polygon(polygon: SceneItem.Polygon, placement: BoardPlacement): String? {
+        if (polygon.points.size < 3 || polygon.opacity <= 0.0) return null
+        val (origin, path) = drawingPath(polygon.points, placement)
+        return "{\\an7\\pos(${fmt(origin.x)},${fmt(origin.y)})\\bord0\\shad0\\blur0\\fscx100\\fscy100\\frz0" +
+            "\\1c${color(polygon.rgb)}\\1a${alpha(polygon.opacity)}\\p1}$path{\\p0}"
+    }
+
+    /**
+     * ASS has no open lines, so the path goes to the last point and back again. The shape has no area,
+     * and its outline ([SceneItem.Polyline.width] / 2 on each side) draws the line.
+     */
+    private fun polyline(line: SceneItem.Polyline, placement: BoardPlacement): String? {
+        if (line.points.size < 2 || line.opacity <= 0.0 || line.width <= 0.0) return null
+        val (origin, path) = drawingPath(line.points + line.points.dropLast(1).asReversed(), placement)
+        return "{\\an7\\pos(${fmt(origin.x)},${fmt(origin.y)})\\bord${fmt(line.width * placement.scale / 2)}\\shad0\\blur0" +
+            "\\fscx100\\fscy100\\frz0\\1a&HFF&\\3c${color(line.rgb)}\\3a${alpha(line.opacity)}\\p1}$path{\\p0}"
+    }
+
+    /**
+     * The drawing commands for [points] in frame pixels. The path starts at (0, 0) of its bounds,
+     * so a top-left anchor at the returned origin places the shape exactly.
+     */
+    private fun drawingPath(points: List<ScenePoint>, placement: BoardPlacement): Pair<ScenePoint, String> {
+        val s = placement.scale
+        val minX = points.minOf { it.x }
+        val minY = points.minOf { it.y }
+        val path = points.mapIndexed { index, point ->
+            val command = when (index) {
+                0 -> "m "
+                1 -> " l "
+                else -> " "
+            }
+            "$command${fmt((point.x - minX) * s)} ${fmt((point.y - minY) * s)}"
+        }.joinToString("")
+        return ScenePoint(placement.x + minX * s, placement.y + minY * s) to path
     }
 
     private fun label(label: SceneItem.Label, placement: BoardPlacement): String? {

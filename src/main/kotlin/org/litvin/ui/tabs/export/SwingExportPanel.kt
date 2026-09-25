@@ -1,9 +1,6 @@
 package org.litvin.ui.tabs.export
 import org.litvin.ActiveQueueSnapshot
 import org.litvin.ApplicationLayout
-import org.litvin.CompletedRender
-import org.litvin.FFmpegCapabilities
-import org.litvin.ExportQualityProfiles
 import org.litvin.ExportPresetsIO
 import org.litvin.RenderJob
 import org.litvin.adjustments.AdjustmentsStore
@@ -13,16 +10,12 @@ import org.litvin.export.EncoderCapabilities
 import org.litvin.export.ProductionRenderService
 import org.litvin.export.RenderService
 import org.litvin.RenderStatus
+import org.litvin.export.ExportChunkPlanner
 import org.litvin.export.ExportPlanner
+import org.litvin.export.ExportPointSummary
 import org.litvin.export.ExportReadiness
-import org.litvin.export.ExportFrameRateOption
-import org.litvin.export.ExportFrameRateProbe
-import org.litvin.export.ExportFrameRates
-import org.litvin.export.ExportResolutionOption
-import org.litvin.export.ExportResolutionProbe
-import org.litvin.export.ExportResolutions
-import org.litvin.export.ExportSourceBitrateProbe
-import org.litvin.export.ExportSourceBitrates
+import org.litvin.export.ExportSourceInfo
+import org.litvin.export.ExportSourceProbe
 import org.litvin.export.ExportRenderPlanRequest
 import org.litvin.export.RenderFormatting
 import org.litvin.points.EdlIO
@@ -32,17 +25,21 @@ import org.litvin.projects.ManifestIO
 import org.litvin.scoring.Outcome
 import org.litvin.scoring.ScoreIO
 import org.litvin.scoring.ScoreV1
+import org.litvin.stats.SetSummaryCard
+import org.litvin.stats.StatsCardVideo
+import org.litvin.stats.StatsIO
+import org.litvin.stats.StatsSettingsV1
 import org.litvin.ui.UiStyles
-import org.litvin.ui.commons.Html
 import org.litvin.ui.commons.FilePicker
 import org.litvin.ui.commons.SwingFilePicker
 import org.litvin.ui.commons.SwingUserDialogService
 import org.litvin.ui.commons.UserDialogService
+import org.litvin.export.ExportCardInfo
 
-import com.formdev.flatlaf.ui.FlatProgressBarUI
 import io.github.oshai.kotlinlogging.KotlinLogging
 import java.awt.*
 import java.io.File
+import java.util.concurrent.CompletableFuture
 import javax.swing.*
 import javax.swing.border.EmptyBorder
 import java.util.concurrent.atomic.AtomicBoolean
@@ -50,8 +47,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 /**
  * Phase 4 — Export pipeline (Swing)
  *
- * Provides a Swing UI to configure and start an export job using the existing
- * FFmpegCommandBuilder and RenderQueueManager. Shows live progress with Cancel.
+ * The left column has three blocks: the project summary, the content of the video, and the quality.
+ * The right column shows the active export, the queue and the completed exports.
  */
 class SwingExportPanel(
     private val settingsPreferences: ExportSettingsPreferences,
@@ -59,7 +56,7 @@ class SwingExportPanel(
     private val completedRepository: CompletedRendersRepository,
     private val filePicker: FilePicker,
     private val dialogs: UserDialogService,
-    encoderCapabilities: EncoderCapabilities,
+    encoderCapabilities: CompletableFuture<EncoderCapabilities>,
 ) : JPanel(BorderLayout()), AutoCloseable {
     constructor() : this(
         ExportSettingsPreferences(),
@@ -67,7 +64,7 @@ class SwingExportPanel(
         ProductionCompletedRendersRepository,
         SwingFilePicker(),
         SwingUserDialogService(),
-        EncoderCapabilities.production(),
+        CompletableFuture.supplyAsync(EncoderCapabilities::production),
     )
 
     private val logger = KotlinLogging.logger {}
@@ -82,57 +79,71 @@ class SwingExportPanel(
         updateInitButtonState()
         updateScoreboardDefault()
         updateCommentsDefault()
+        updateStatsCardDefault()
+        updateSetSummariesDefault()
     }
     // Project context (manifest path) — optional; user can still pick output file.
     private var manifestPath: String? = null
     // Keep last observed snapshot to expose Details dialog
     private var lastSnapshot: ActiveQueueSnapshot? = null
+    // The source video that was probed last, so that a tab switch does not run ffprobe again.
+    private var probedSourcePath: String? = null
+    private var sourceInfo = ExportSourceInfo.UNKNOWN
 
-    // Left controls
-    private val presets = ExportPresetsIO.load()
-    private val savedVideoSettings = settingsPreferences.load()
-    private val presetCombo = JComboBox(presets.map { it.label }.toTypedArray()).apply { name = "export-preset" }
-    private val resCombo = JComboBox<ExportResolutionOption>().apply { name = "export-resolution" }
-    private val frameRateCombo = JComboBox<ExportFrameRateOption>()
-    private var refreshingFrameRateOptions = false
-    private val idleTrimCheck = JCheckBox("Cut idle time between points", true).apply { name = "export-idle-trim" }
-    private val favoriteOnlyCheck = JCheckBox("Only favorite points", false).apply {
-        name = "export-favorites-only"
-        toolTipText = "Render only points marked with a star. Requires idle-trim because the export is assembled from point intervals."
+    // Left controls: content of the video
+    private val fullVideoRadio = JRadioButton("Full video").apply {
+        name = "export-content-full"
+        toolTipText = "Export the complete source video, with the time between points."
     }
-    private val scoreboardCheck = JCheckBox("Include Scoreboard", false).apply {
+    private val pointsRadio = JRadioButton("Only points", true).apply {
+        name = "export-content-points"
+        toolTipText = "Export only the marked points. The time between points is cut."
+    }
+    private val favoritesRadio = JRadioButton("Only favorites").apply {
+        name = "export-content-favorites"
+    }
+    private var lastContentRadio: JRadioButton = pointsRadio
+    private val scoreboardCheck = JCheckBox("Include scoreboard", false).apply {
         name = "export-scoreboard"
-        toolTipText = "Burn in a simple scoreboard overlay that updates after each point. Uses current Scoring data; fixed English labels in v0.1.0."
+        toolTipText = "Burn in a scoreboard overlay that updates after each point. Uses the data of the Scoring tab."
     }
     private val commentsCheck = JCheckBox("Include comments", false).apply {
         name = "export-comments"
         toolTipText = "Burn the comments from the Points tab into the video as centered lower-third text."
     }
-    private val initButton = UiStyles.primaryButton("Initialize Render") { onInitializeRender() }.apply {
+    private val statsCardCheck = JCheckBox("Include statistics card", false).apply {
+        name = "export-stats-card"
+        toolTipText = "Add a card with the match statistics after the last point. Select the statistics in the Stats tab."
+    }
+    private val statsCardLabel = JLabel().apply { name = "export-stats-card-note" }
+    private val setSummariesCheck = JCheckBox("Include set summaries", false).apply {
+        name = "export-set-summaries"
+        toolTipText = "Add a card with the statistics of each set after the last point of the set. Select the statistics in the Stats tab."
+    }
+    private val setSummariesLabel = JLabel().apply { name = "export-set-summaries-note" }
+    private val contentTable = ExportContentTable(fullVideoRadio, pointsRadio, favoritesRadio)
+    private val scoredLabel = JLabel().apply { name = "export-scoreboard-scored" }
+    private val qualityPanel = ExportQualityPanel(settingsPreferences)
+    private val initButton = UiStyles.primaryButton(START_EXPORT) { onInitializeRender() }.apply {
         name = "export-initialize"
     }
-    private val encoderPanel = EncoderSummaryPanel(
-        savedVideoSettings.encoderId ?: encoderCapabilities.preferredId,
-        encoderCapabilities.availableIds,
-    )
 
-    // Right side — Active + Completed
-    private val progressBar = JProgressBar(0, 100).apply {
-        name = "export-progress"
-        foreground = UiStyles.GREEN
-        // FlatLaf paints the percent text over the fill in selectionForeground, which has no style key.
-        // The default light text is not legible on the green fill, so this UI returns a contrasting color.
-        setUI(object : FlatProgressBarUI() {
-            override fun getSelectionForeground(): Color = UiStyles.contrastingTextColor(UiStyles.GREEN)
-        })
+    // Right side — the active export, the queue and the completed exports
+    private var activeOutputPath: String? = null
+    private val activeCard = ExportJobCard(
+        componentPrefix = "export-active",
+        onOpenFolder = { activeOutputPath?.let { ExportJobCard.openFolder(it, this, dialogs) } },
+        onCancel = { cancelActiveExport() },
+        showProgress = true,
+    ).apply {
+        // The UI tests find the progress bar and the cancel button of the active export by these names.
+        progressBar.name = "export-progress"
+        cancelButton?.name = "export-cancel"
     }
-    private val progressLabel = JLabel("Idle")
-    private val cancelButton = JButton("Cancel").apply { name = "export-cancel" }
     private var lastFailureNotifiedJobId: String? = null
-    private var lastFailureJob: RenderJob? = null
 
-    private val renderQueue = RenderQueueList(renderService, dialogs)
-    private val completed = CompletedRendersList(completedRepository, dialogs)
+    private val exportQueue = ExportQueueList(renderService, dialogs)
+    private val completed = CompletedExportsList(completedRepository, dialogs)
 
     // Theming — reuse UiStyles palette
     private val DARK_BG = UiStyles.DARK_BG
@@ -141,176 +152,95 @@ class SwingExportPanel(
     private val FG_PRIMARY = UiStyles.FG_PRIMARY
     private val FG_SECONDARY = UiStyles.FG_SECONDARY
 
-    // Helper text labels (from JavaFX ExportTab)
-    private val qualityLabel = JLabel("")
-    private val sourceBitrateLabel = JLabel("")
-    private val resSummaryLabel = JLabel("")
-    private val scalePlanLabel = JLabel("")
-    private val pointsCountLabel = JLabel("")
-    private val pointsTotalLabel = JLabel("")
-    private val pointsScoredLabel = JLabel("")
-
     init {
         border = EmptyBorder(10, 10, 10, 10)
         background = DARK_BG
 
         // Left configuration column (fixed width, dark theme)
-        val left = JPanel()
-        left.layout = BoxLayout(left, BoxLayout.Y_AXIS)
-        left.border = EmptyBorder(12, 12, 12, 16)
+        val left = JPanel(BorderLayout())
+        left.border = EmptyBorder(12, 12, 12, 4)
         left.background = CARD_BG
-        left.foreground = FG_PRIMARY
-        left.preferredSize = Dimension(420, 10)
-        left.minimumSize = Dimension(320, 10)
-        left.maximumSize = Dimension(420, Int.MAX_VALUE)
+        left.preferredSize = Dimension(LEFT_WIDTH, 10)
+        left.minimumSize = Dimension(360, 10)
 
-        val title = JLabel("Export Settings").apply {
-            font = font.deriveFont(Font.BOLD)
-            foreground = FG_PRIMARY
+        val blocks = object : JPanel(), Scrollable {
+            // Follow the width of the scroll pane, so that only a vertical scroll bar can show.
+            override fun getPreferredScrollableViewportSize(): Dimension = preferredSize
+            override fun getScrollableUnitIncrement(visibleRect: Rectangle, orientation: Int, direction: Int) = 16
+            override fun getScrollableBlockIncrement(visibleRect: Rectangle, orientation: Int, direction: Int) = visibleRect.height
+            override fun getScrollableTracksViewportWidth() = true
+            override fun getScrollableTracksViewportHeight() = false
         }
+        blocks.layout = BoxLayout(blocks, BoxLayout.Y_AXIS)
+        blocks.background = CARD_BG
+        blocks.border = EmptyBorder(0, 0, 0, 12)
+
+        blocks.add(block("Content", contentControls()))
+        blocks.add(Box.createRigidArea(Dimension(0, 32)))
+        blocks.add(block("Quality and file size", qualityPanel))
+
+        val scroll = JScrollPane(blocks).apply {
+            border = BorderFactory.createEmptyBorder()
+            viewport.background = CARD_BG
+            horizontalScrollBarPolicy = ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER
+            verticalScrollBar.unitIncrement = 16
+        }
+        left.add(scroll, BorderLayout.CENTER)
+
+        // Primary action (neon green). It fills the width of the column; the button centers its icon and text.
         left.add(JPanel(BorderLayout()).apply {
             isOpaque = false
-            alignmentX = 0f
-            maximumSize = Dimension(Int.MAX_VALUE, 36)
-            add(title, BorderLayout.WEST)
-        })
-        left.add(Box.createRigidArea(Dimension(0, 8)))
-        left.add(JSeparator())
-        left.add(Box.createRigidArea(Dimension(0, 12)))
-
-        // Points and timing summary
-        fun stylePointsLabel(l: JLabel) {
-            l.alignmentX = 0f
-            l.foreground = FG_PRIMARY
-            l.font = l.font.deriveFont(Font.BOLD, l.font.size + 4f)
-        }
-        listOf(pointsCountLabel, pointsTotalLabel, pointsScoredLabel).forEach { stylePointsLabel(it) }
-        left.add(pointsCountLabel)
-        left.add(Box.createRigidArea(Dimension(0, 2)))
-        left.add(pointsTotalLabel)
-        left.add(Box.createRigidArea(Dimension(0, 2)))
-        left.add(pointsScoredLabel)
-        left.add(Box.createRigidArea(Dimension(0, 8)))
-
-        // Idle-trim + EDL info
-        UiStyles.styleCheckBox(idleTrimCheck)
-        left.add(idleTrimCheck)
-        UiStyles.styleCheckBox(favoriteOnlyCheck)
-        left.add(favoriteOnlyCheck)
-        UiStyles.styleCheckBox(scoreboardCheck)
-        left.add(scoreboardCheck)
-        UiStyles.styleCheckBox(commentsCheck)
-        left.add(commentsCheck)
-        left.add(Box.createRigidArea(Dimension(0, 12)))
-
-        // Video settings
-        left.add(sectionLabel("Video Settings"))
-        left.add(Box.createRigidArea(Dimension(0, 8)))
-        left.add(sectionLabel("Resolution"))
-        val initialResolutionOptions = ExportResolutions.availableFor(null)
-        resCombo.model = DefaultComboBoxModel(initialResolutionOptions.toTypedArray())
-        resCombo.maximumSize = Dimension(Short.MAX_VALUE.toInt(), 28)
-        UiStyles.styleComboBox(resCombo)
-        left.add(resCombo)
-        UiStyles.styleHelper(resSummaryLabel)
-        UiStyles.styleMono(scalePlanLabel)
-        left.add(Box.createRigidArea(Dimension(0, 6)))
-        left.add(resSummaryLabel)
-        left.add(scalePlanLabel)
-        left.add(Box.createRigidArea(Dimension(0, 12)))
-
-        left.add(sectionLabel("FPS"))
-        frameRateCombo.maximumSize = Dimension(Short.MAX_VALUE.toInt(), 28)
-        frameRateCombo.toolTipText = "Output frame rate. The source video frame rate is marked."
-        UiStyles.styleComboBox(frameRateCombo)
-        frameRateCombo.isEnabled = false
-        left.add(frameRateCombo)
-        left.add(Box.createRigidArea(Dimension(0, 12)))
-
-        left.add(sectionLabel("Bitrate (quality)"))
-        presetCombo.maximumSize = Dimension(Short.MAX_VALUE.toInt(), 28)
-        UiStyles.styleComboBox(presetCombo)
-        left.add(presetCombo)
-        UiStyles.styleHelper(qualityLabel)
-        qualityLabel.text = ""
-        left.add(Box.createRigidArea(Dimension(0, 4)))
-        left.add(qualityLabel)
-        UiStyles.styleHelper(sourceBitrateLabel)
-        sourceBitrateLabel.text = ""
-        left.add(sourceBitrateLabel)
-        left.add(Box.createRigidArea(Dimension(0, 12)))
-
-        left.add(sectionLabel("Encoder"))
-        left.add(this.encoderPanel.component())
-        left.add(Box.createVerticalGlue())
-
-        // Primary action (neon green)
-        initButton.alignmentX = 0f
-        left.add(Box.createRigidArea(Dimension(0, 12)))
-        left.add(initButton)
+            border = EmptyBorder(12, 0, 0, 12)
+            add(initButton, BorderLayout.CENTER)
+        }, BorderLayout.SOUTH)
 
         // Right column with Active + Completed
         val right = JPanel(BorderLayout())
         right.background = DARK_BG
         right.foreground = FG_PRIMARY
 
-        // Active card
-        val nameLabel = JLabel("")
-        val jobIdLabel = JLabel("")
-        UiStyles.styleMono(jobIdLabel)
-        jobIdLabel.foreground = FG_SECONDARY
-        val stats = JPanel(BorderLayout())
-        stats.background = CARD_BG
-        stats.add(progressLabel, BorderLayout.WEST)
-        val rightButtons = JPanel(FlowLayout(FlowLayout.RIGHT, 8, 0))
-        rightButtons.background = CARD_BG
-        UiStyles.styleSecondary(cancelButton)
-        cancelButton.isEnabled = false
-        rightButtons.add(cancelButton)
-        stats.add(rightButtons, BorderLayout.EAST)
-        cancelButton.addActionListener { renderService.cancelCurrent() }
-
-        progressBar.value = 0
-        progressBar.isStringPainted = true
-
-        val placeholder = JLabel("No active renders").apply {
-            horizontalAlignment = SwingConstants.CENTER
+        // Active card: a placeholder while no export runs, else the card of the running export.
+        val placeholder = JLabel("No active exports").apply {
             foreground = FG_SECONDARY
+            alignmentX = 0f
         }
-
         val activeBody = JPanel()
         activeBody.layout = BoxLayout(activeBody, BoxLayout.Y_AXIS)
         activeBody.background = CARD_BG
-        listOf(placeholder, nameLabel, jobIdLabel, Box.createRigidArea(Dimension(0,6)), progressBar, Box.createRigidArea(Dimension(0,6)), stats).forEach { activeBody.add(it) }
-        // Initial state: show placeholder, hide active controls
-        placeholder.isVisible = true
-        nameLabel.isVisible = false
-        jobIdLabel.isVisible = false
-        progressBar.isVisible = false
-        stats.isVisible = false
+        activeBody.border = EmptyBorder(8, 0, 0, 0)
+        activeCard.alignmentX = 0f
+        activeBody.add(placeholder)
+        activeBody.add(activeCard)
+        activeCard.isVisible = false
 
-        val activeCardPanel = UiStyles.card("Active Renders", activeBody)
+        val activeCardPanel = UiStyles.card("Active Exports", activeBody)
 
-        val renderQueueCardPanel = UiStyles.card("Render Queue", renderQueue.component()).apply {
+        val exportQueueCardPanel = UiStyles.card("Export Queue", exportQueue.component()).apply {
             isVisible = false
-            maximumSize = Dimension(Int.MAX_VALUE, 190)
         }
 
-        val rightTop = JPanel()
-        rightTop.layout = BoxLayout(rightTop, BoxLayout.Y_AXIS)
+        // The active card and the queue follow the width of the column, so that long text wraps.
+        val rightTop = JPanel(GridBagLayout())
         rightTop.background = DARK_BG
-        activeCardPanel.alignmentX = 0f
-        renderQueueCardPanel.alignmentX = 0f
-        rightTop.add(activeCardPanel)
-        rightTop.add(Box.createRigidArea(Dimension(0, 10)))
-        rightTop.add(renderQueueCardPanel)
+        rightTop.add(activeCardPanel, GridBagConstraints().apply {
+            gridy = 0
+            weightx = 1.0
+            fill = GridBagConstraints.HORIZONTAL
+            insets = Insets(0, 0, 10, 0)
+        })
+        rightTop.add(exportQueueCardPanel, GridBagConstraints().apply {
+            gridy = 1
+            weightx = 1.0
+            fill = GridBagConstraints.HORIZONTAL
+            insets = Insets(0, 0, 10, 0)
+        })
         right.add(rightTop, BorderLayout.NORTH)
 
-        // Completed card takes the rest of vertical space
-        val completedCardPanel = UiStyles.card("Completed Renders", completed.component())
+        // The completed card takes the rest of the height.
+        val completedCardPanel = UiStyles.card("Completed Exports", completed.component())
         right.add(completedCardPanel, BorderLayout.CENTER)
 
-        // Load persisted completed renders initially
+        // Load the saved completed exports.
         refreshCompletedFromStore()
 
         val center = JPanel(BorderLayout())
@@ -320,162 +250,128 @@ class SwingExportPanel(
         add(left, BorderLayout.WEST)
         add(center, BorderLayout.CENTER)
 
-        // --- Wiring updates like JavaFX implementation ---
-        fun updateResolutionPreview() {
-            val resolution = selectedResolution()
-            resSummaryLabel.text = "Output: ${resolution.width} x ${resolution.height} (${resolution.label})"
-        }
-
-        // Restore the last video settings, falling back to the original defaults.
-        val defIdx = ExportPresetsIO.defaultBalancedIndex(presets)
-        if (presets.isNotEmpty()) {
-            val restoredPresetId = ExportQualityProfiles.normalizedId(savedVideoSettings.presetId)
-            val restoredPresetIndex = presets.indexOfFirst { it.id == restoredPresetId }
-                .takeIf { it >= 0 }
-                ?: defIdx
-            presetCombo.selectedIndex = restoredPresetIndex
-            resCombo.selectedItem = ExportResolutions.preferredOption(
-                options = initialResolutionOptions,
-                savedResolution = savedVideoSettings.resolution,
-            )
-            updateQualitySummary(restoredPresetIndex)
-        }
-        updateResolutionPreview()
         updatePointsSummary()
         updateFavoriteOnlyAvailability()
 
-        presetCombo.addActionListener {
-            val idx = presetCombo.selectedIndex
-            if (idx in presets.indices) {
-                updateQualitySummary(idx)
-                settingsPreferences.savePreset(presets[idx].id)
+        listOf(fullVideoRadio, pointsRadio).forEach { radio ->
+            radio.addActionListener {
+                lastContentRadio = radio
+                onContentChanged()
             }
         }
-        resCombo.addActionListener {
-            updateResolutionPreview()
-            updateQualitySummary(presetCombo.selectedIndex)
-            (resCombo.selectedItem as? ExportResolutionOption)
-                ?.resolution
-                ?.label
-                ?.let(settingsPreferences::saveResolution)
-        }
-        frameRateCombo.addActionListener {
-            if (refreshingFrameRateOptions) return@addActionListener
-            updateQualitySummary(presetCombo.selectedIndex)
-            (frameRateCombo.selectedItem as? ExportFrameRateOption)
-                ?.frameRate
-                ?.ffmpegArgument
-                ?.let(settingsPreferences::saveOutputFrameRate)
-        }
-        encoderPanel.addChangeListener {
-            settingsPreferences.saveEncoder(encoderPanel.selectedEncoderId())
-        }
-        idleTrimCheck.addActionListener {
-            if (!idleTrimCheck.isSelected) favoriteOnlyCheck.isSelected = false
-            updateFavoriteOnlyAvailability()
-            updatePointsSummary()
-            updateInitButtonState()
-        }
-        favoriteOnlyCheck.addActionListener {
-            if (favoriteOnlyCheck.isSelected && (!idleTrimCheck.isSelected || validFavoriteCount() <= 0)) {
-                favoriteOnlyCheck.isSelected = false
-                dialogs.showInfo(this, "Favorite-only export requires idle-trim and at least one valid favorite point.", "Favorite export unavailable")
+        favoritesRadio.addActionListener {
+            if (validFavoriteCount() <= 0) {
+                lastContentRadio.isSelected = true
+                dialogs.showInfo(
+                    this,
+                    "Only favorites needs at least one valid favorite point. Mark a point with a star on the Points tab.",
+                    "Favorite export unavailable",
+                )
+            } else {
+                lastContentRadio = favoritesRadio
             }
-            updatePointsSummary()
-            updateInitButtonState()
+            onContentChanged()
         }
         scoreboardCheck.addActionListener {
             // If user tries to enable scoreboard with no scored points, prevent and explain
             if (scoreboardCheck.isSelected && !hasAnyScoredPoints()) {
                 scoreboardCheck.isSelected = false
                 dialogs.showInfo(this, "Cannot include scoreboard: there are no scored points in the current project.", "Scoreboard unavailable")
-                return@addActionListener
             }
-            updatePointsSummary()
         }
         commentsCheck.addActionListener {
             // Keep the choice of the user for this project. It replaces the default.
             currentProjectDir()?.let { settingsPreferences.saveIncludeComments(it, commentsCheck.isSelected) }
+        }
+        statsCardCheck.addActionListener {
+            if (statsCardCheck.isSelected && currentStatsCard() == null) {
+                statsCardCheck.isSelected = false
+                dialogs.showInfo(
+                    this,
+                    "Cannot include the statistics card: no selected statistic has a value. Select the statistics in the Stats tab.",
+                    "Statistics card unavailable",
+                )
+            }
+            currentProjectDir()?.let { settingsPreferences.saveIncludeStatsCard(it, statsCardCheck.isSelected) }
+            updateOutputDuration()
+        }
+        setSummariesCheck.addActionListener {
+            currentProjectDir()?.let { settingsPreferences.saveIncludeSetSummaries(it, setSummariesCheck.isSelected) }
+            updateOutputDuration()
+        }
+
+        // The encoder detection runs test encodes in the background. Show its result when it is ready.
+        val detection = encoderCapabilities.exceptionally { EncoderCapabilities.NONE }
+        val detected = detection.getNow(null)
+        if (detected != null) {
+            qualityPanel.setEncoders(detected)
+        } else {
+            detection.thenAccept { capabilities ->
+                SwingUtilities.invokeLater { if (!closed.get()) qualityPanel.setEncoders(capabilities) }
+            }
         }
 
         // Observe queue updates to refresh UI
         queueSubscription = renderService.observe { snap ->
             SwingUtilities.invokeLater {
                 lastSnapshot = snap
+                updateStartButtonText(snap)
                 val cur = snap.current
-                if (cur == null) {
-                    // No active export — show placeholder and hide controls
-                    placeholder.isVisible = true
-                    nameLabel.isVisible = false
-                    jobIdLabel.isVisible = false
-                    progressBar.isVisible = false
-                    stats.isVisible = false
-
-                    nameLabel.text = ""
-                    jobIdLabel.text = ""
-                    progressBar.value = 0
-                    progressBar.string = ""
-                    progressLabel.text = "Idle"
-                    cancelButton.isEnabled = false
-                } else {
-                    // Active export — show controls and hide placeholder
-                    placeholder.isVisible = false
-                    nameLabel.isVisible = true
-                    jobIdLabel.isVisible = true
-                    progressBar.isVisible = true
-                    stats.isVisible = true
-
-                    val overlays = listOfNotNull(
-                        "Scoreboard".takeIf { cur.includeScoreboard },
-                        "Comments".takeIf { cur.includeComments },
-                    ).joinToString(" + ").takeIf { it.isNotEmpty() }?.let { "  ·  $it" }.orEmpty()
-                    val cut = RenderFormatting.formatCutMode(cur.idleTrim, cur.favoriteOnly)
-                    nameLabel.text = File(cur.outputPath).name + "  ·  " + cut + overlays
-                    jobIdLabel.text = "Job ID: ${cur.id}"
-                    progressBar.value = (cur.progress * 100).toInt()
-                    progressBar.string = "${(cur.progress * 100).toInt()}%"
-                    val eta = cur.etaSeconds?.let { formatEta(it) } ?: "--"
-                    val sz = RenderFormatting.formatSize(cur.bytesWritten)
-                    cancelButton.isEnabled = cur.status == RenderStatus.RUNNING
-                    when (cur.status) {
-                        RenderStatus.FAILED -> {
-                            val reason = cur.failureReason ?: "Unknown error"
-                            progressLabel.text = "FAILED  ·  $reason"
-                            if (lastFailureNotifiedJobId != cur.id) {
-                                lastFailureNotifiedJobId = cur.id
-                                lastFailureJob = cur
-                                dialogs.showError(this, reason, "Render failed")
-                            }
-                        }
-                        RenderStatus.COMPLETED -> {
-                            progressLabel.text = "Completed  ·  Size: $sz"
-                            refreshCompletedFromStore()
-                        }
-                        RenderStatus.CANCELED -> {
-                            progressLabel.text = "Canceled"
-                        }
-                        else -> {
-                            progressLabel.text = "ETA: $eta    Size: $sz"
-                        }
-                    }
-                }
+                placeholder.isVisible = cur == null
+                activeCard.isVisible = cur != null
+                activeOutputPath = cur?.outputPath
+                if (cur != null) showActiveExport(cur)
                 val q = snap.queued.size
-                renderQueue.setJobs(snap.queued)
-                renderQueueCardPanel.isVisible = q > 0
-                activeCardPanel.toolTipText = if (q > 0) "queued: $q" else null
-                renderQueueCardPanel.revalidate()
-                renderQueueCardPanel.repaint()
+                exportQueue.setJobs(snap.queued)
+                exportQueueCardPanel.isVisible = q > 0
+                activeCardPanel.toolTipText = if (q > 0) "Exports in the queue: $q" else null
                 rightTop.revalidate()
                 rightTop.repaint()
             }
         }
     }
 
+    /** Shows the settings, the size and the progress of the running export on the active card. */
+    private fun showActiveExport(job: RenderJob) {
+        val percent = (job.progress * 100).toInt()
+        // The card is in the Active Exports section, so a running export needs no badge.
+        // A badge shows only the states that are not a normal running export.
+        val status = when (job.status) {
+            RenderStatus.QUEUED -> "Starting"
+            RenderStatus.RUNNING, RenderStatus.COMPLETED -> null
+            RenderStatus.FAILED -> "Failed"
+            RenderStatus.CANCELED -> "Canceled"
+        }
+        activeCard.update(ExportCardInfo.of(job), status)
+        activeCard.setProgress(percent)
+        activeCard.cancelButton?.isEnabled = job.status == RenderStatus.RUNNING || job.status == RenderStatus.QUEUED
+        when (job.status) {
+            RenderStatus.FAILED -> {
+                val reason = job.failureReason ?: "Unknown error"
+                activeCard.setExtraRow("Error", reason)
+                if (lastFailureNotifiedJobId != job.id) {
+                    lastFailureNotifiedJobId = job.id
+                    dialogs.showError(this, reason, "Export failed")
+                }
+            }
+            RenderStatus.COMPLETED -> {
+                activeCard.setExtraRow(null, null)
+                refreshCompletedFromStore()
+            }
+            RenderStatus.CANCELED -> activeCard.setExtraRow(null, null)
+            else -> activeCard.setExtraRow("Time left", job.etaSeconds?.let(::formatEta) ?: "calculating…")
+        }
+    }
+
+    private fun cancelActiveExport() {
+        if (dialogs.confirm(this, "Cancel the current export? The partly written file is deleted.", "Confirm")) {
+            renderService.cancelCurrent()
+        }
+    }
+
     fun setProjectManifest(path: String?) {
         manifestPath = path
-        refreshResolutionOptions()
-        refreshFrameRateOptions()
-        refreshSourceBitrate()
+        refreshSourceInfo()
         updatePointsSummary()
         updateFavoriteOnlyAvailability()
         updateInitButtonState()
@@ -483,12 +379,92 @@ class SwingExportPanel(
         updateCommentsDefault()
     }
 
+    private fun contentControls(): JComponent {
+        val panel = JPanel()
+        panel.layout = BoxLayout(panel, BoxLayout.Y_AXIS)
+        panel.isOpaque = false
+        panel.alignmentX = 0f
+        val group = ButtonGroup()
+        listOf(fullVideoRadio, pointsRadio, favoritesRadio).forEach { radio ->
+            UiStyles.styleRadioButton(radio)
+            group.add(radio)
+        }
+        contentTable.maximumSize = Dimension(Int.MAX_VALUE, contentTable.preferredSize.height)
+        panel.add(contentTable)
+        panel.add(Box.createRigidArea(Dimension(0, 8)))
+        listOf(scoreboardCheck, commentsCheck, statsCardCheck, setSummariesCheck).forEach(UiStyles::styleCheckBox)
+        UiStyles.styleHelper(scoredLabel)
+        UiStyles.styleHelper(statsCardLabel)
+        UiStyles.styleHelper(setSummariesLabel)
+        // The scored count is next to the scoreboard option, because the scoreboard uses it.
+        // CENTER gives the note the rest of the width, so that its last characters are not cut off.
+        val scoreboardRow = JPanel(BorderLayout(8, 0)).apply {
+            isOpaque = false
+            alignmentX = 0f
+            add(scoreboardCheck, BorderLayout.WEST)
+            add(scoredLabel, BorderLayout.CENTER)
+        }
+        scoreboardRow.maximumSize = Dimension(Int.MAX_VALUE, scoreboardRow.preferredSize.height)
+        panel.add(scoreboardRow)
+        commentsCheck.alignmentX = 0f
+        panel.add(commentsCheck)
+        val statsCardRow = JPanel(BorderLayout(8, 0)).apply {
+            isOpaque = false
+            alignmentX = 0f
+            add(statsCardCheck, BorderLayout.WEST)
+            add(statsCardLabel, BorderLayout.CENTER)
+        }
+        statsCardRow.maximumSize = Dimension(Int.MAX_VALUE, statsCardRow.preferredSize.height)
+        panel.add(statsCardRow)
+        val setSummariesRow = JPanel(BorderLayout(8, 0)).apply {
+            isOpaque = false
+            alignmentX = 0f
+            add(setSummariesCheck, BorderLayout.WEST)
+            add(setSummariesLabel, BorderLayout.CENTER)
+        }
+        setSummariesRow.maximumSize = Dimension(Int.MAX_VALUE, setSummariesRow.preferredSize.height)
+        panel.add(setSummariesRow)
+        return panel
+    }
+
+    /** A block of the left column: a bold title, a thin line, and the content. */
+    private fun block(title: String, content: JComponent): JComponent {
+        val panel = JPanel()
+        panel.layout = BoxLayout(panel, BoxLayout.Y_AXIS)
+        panel.isOpaque = false
+        panel.alignmentX = 0f
+        panel.add(JLabel(title).apply {
+            font = font.deriveFont(Font.BOLD, font.size2D + 1f)
+            foreground = FG_PRIMARY
+            alignmentX = 0f
+        })
+        panel.add(Box.createRigidArea(Dimension(0, 4)))
+        panel.add(JSeparator().apply {
+            alignmentX = 0f
+            maximumSize = Dimension(Int.MAX_VALUE, 2)
+        })
+        panel.add(Box.createRigidArea(Dimension(0, 8)))
+        content.alignmentX = 0f
+        panel.add(content)
+        return panel
+    }
+
+    private fun idleTrimSelected(): Boolean = !fullVideoRadio.isSelected
+
+    private fun favoriteOnlySelected(): Boolean = favoritesRadio.isSelected
+
+    private fun onContentChanged() {
+        updateSetSummariesState()
+        updateOutputDuration()
+        updateInitButtonState()
+    }
+
     private fun onInitializeRender() {
         val readiness = initializationReadiness()
         if (!readiness.enabled) {
             dialogs.showInfo(
                 this,
-                readiness.disabledReason ?: "Render cannot start right now.",
+                readiness.disabledReason ?: "Export cannot start right now.",
                 INIT_BLOCKED_TITLE,
             )
             updateFavoriteOnlyAvailability()
@@ -513,35 +489,37 @@ class SwingExportPanel(
         val projectDir = if (manifestPath != null) EdlIO.projectDirFromManifest(manifestPath) else null
         val edl = try { if (projectDir != null) EdlIO.readForProjectDir(projectDir) else null } catch (_: Throwable) { null }
         val allValidPoints = ExportPlanner.validateEdl(edl)
-        val favoriteOnly = favoriteOnlyCheck.isSelected
+        val idleTrim = idleTrimSelected()
+        val favoriteOnly = favoriteOnlySelected()
         val keeps: List<PointV1> = ExportPlanner.selectedKeepPoints(
             validPoints = allValidPoints,
-            idleTrim = idleTrimCheck.isSelected,
+            idleTrim = idleTrim,
             favoriteOnly = favoriteOnly,
         )
         if (favoriteOnly && keeps.isEmpty()) {
-            dialogs.showInfo(this, "Cannot render only favorite points: no valid favorite points are available.", "Favorite export unavailable")
+            dialogs.showInfo(this, "Cannot export only favorite points: no valid favorite points are available.", "Favorite export unavailable")
             updateFavoriteOnlyAvailability()
             updateInitButtonState()
             return
         }
-        if (idleTrimCheck.isSelected && keeps.isEmpty()) {
-            if (!dialogs.confirm(this, "EDL is empty or invalid. Continue with full render?", "EDL warning")) return
+        if (idleTrim && keeps.isEmpty()) {
+            if (!dialogs.confirm(this, "The project has no valid points. Export the full video?", "No points")) return
         }
+        val quality = qualityPanel.selection()
+        val target = quality.target
+        val presets = ExportPresetsIO.load()
+        val selPreset = presets.firstOrNull { it.id == target.presetId } ?: presets[ExportPresetsIO.defaultBalancedIndex(presets)]
+
         // Choose output path
         val initialDir = settingsPreferences.loadOutputDirectory()
             ?: projectDir?.let { File(it) }
             ?: File(source).parentFile
-        val selPreset = presets.getOrNull(presetCombo.selectedIndex) ?: presets[ExportPresetsIO.defaultBalancedIndex(presets)]
         val suggestedFile = File(
             initialDir,
             ExportPlanner.suggestFilename(
                 projectName = manifest?.name ?: File(source).nameWithoutExtension,
                 presetId = selPreset.id,
-                resolutionLabel = (resCombo.selectedItem as? ExportResolutionOption)
-                    ?.resolution
-                    ?.label
-                    ?: "1080p",
+                resolutionLabel = target.resolution.label,
             )
         )
         var out = filePicker.chooseExportDestination(
@@ -559,17 +537,6 @@ class SwingExportPanel(
             if (!dialogs.confirm(this, "File exists. Overwrite?", "Confirm overwrite")) return
         }
 
-        val resolution = (resCombo.selectedItem as? ExportResolutionOption)?.resolution
-            ?: ExportPlanner.parseResolution("1080p")
-        val outputFrameRate = (frameRateCombo.selectedItem as? ExportFrameRateOption)
-            ?.frameRate
-            ?.ffmpegArgument
-        if (outputFrameRate == null) {
-            dialogs.showError(this, "Source video frame rate unavailable", "Cannot determine source FPS")
-            return
-        }
-        val encoderLabel = encoderPanel.selectedEncoderLabel().substringBefore(" — ")
-
         val score = try {
             if (projectDir != null) ScoreIO.readForProjectDir(projectDir) else ScoreV1()
         } catch (_: Throwable) {
@@ -582,19 +549,28 @@ class SwingExportPanel(
                 edl = edl,
                 score = score,
                 preset = selPreset,
-                resolution = resolution,
-                outputFrameRate = outputFrameRate,
-                encoderLabel = encoderLabel,
-                idleTrim = idleTrimCheck.isSelected,
+                resolution = target.resolution,
+                outputFrameRate = target.frameRate?.ffmpegArgument,
+                videoBitrateK = target.bitrateK,
+                encoderLabel = quality.encoder.jobLabel,
+                idleTrim = idleTrim,
                 favoriteOnly = favoriteOnly,
                 includeScoreboard = scoreboardCheck.isSelected,
                 includeComments = commentsCheck.isSelected,
                 outputPath = out.absolutePath,
+                sourceDurationMs = sourceInfo.durationMs,
+                includeStatsCard = statsCardCheck.isSelected,
+                includeSetSummaries = setSummariesCheck.isEnabled && setSummariesCheck.isSelected,
+                statsSettings = readCurrentStatsSettings(),
             )
         )
 
+        val queued = hasActiveExports(lastSnapshot)
         renderService.enqueue(plan.job)
-        dialogs.showInfo(this, "Render initialized: ${out.name}")
+        dialogs.showInfo(
+            this,
+            if (queued) "Export queued: ${out.name}. It starts when the current exports end." else "Export started: ${out.name}",
+        )
     }
 
     override fun close() {
@@ -603,77 +579,42 @@ class SwingExportPanel(
         queueSubscription = null
     }
 
-    private fun refreshFrameRateOptions() {
+    /** Reads the size, frame rate, bitrate and duration of the source video with ffprobe. */
+    private fun refreshSourceInfo() {
         val sourcePath = try {
             manifestPath?.let(ManifestIO::read)?.sourceVideo
         } catch (_: Throwable) {
             null
-        }
-        val sourceRate = sourcePath
-            ?.takeIf { File(it).isFile }
-            ?.let { ExportFrameRateProbe.probe(it, ApplicationLayout.current().ffprobeExecutable) }
-        val options = sourceRate?.let(ExportFrameRates::availableFor).orEmpty()
-        refreshingFrameRateOptions = true
-        try {
-            frameRateCombo.model = DefaultComboBoxModel(options.toTypedArray())
-            frameRateCombo.isEnabled = options.isNotEmpty()
-            frameRateCombo.selectedItem = ExportFrameRates.preferredOption(
-                options = options,
-                savedFrameRate = settingsPreferences.load().outputFrameRate,
-            )
-        } finally {
-            refreshingFrameRateOptions = false
-        }
-        // The guard above suppresses the combo listener, so the bitrate summary
-        // would otherwise keep the frame rate it was computed with before the probe.
-        updateQualitySummary(presetCombo.selectedIndex)
+        }?.takeIf { File(it).isFile }
+        if (sourcePath != null && sourcePath == probedSourcePath) return
+        probedSourcePath = sourcePath
+        sourceInfo = sourcePath
+            ?.let { ExportSourceProbe.probe(it, ApplicationLayout.current().ffprobeExecutable) }
+            ?: ExportSourceInfo.UNKNOWN
+        qualityPanel.setSource(sourceInfo)
     }
 
-    private fun selectedResolution() = (resCombo.selectedItem as? ExportResolutionOption)?.resolution
-        ?: ExportPlanner.parseResolution("1080p")
-
-    private fun updateQualitySummary(idx: Int) {
-        if (idx !in presets.indices) return
-        val p = presets[idx]
-        val resolution = selectedResolution()
-        val frameRate = (frameRateCombo.selectedItem as? ExportFrameRateOption)?.frameRate?.ffmpegArgument
-        Html.setWrapped(qualityLabel, ExportQualityProfiles.description(p, resolution.width, resolution.height, frameRate).orEmpty())
-    }
-
-    private fun refreshSourceBitrate() {
-        val sourcePath = try {
-            manifestPath?.let(ManifestIO::read)?.sourceVideo
-        } catch (_: Throwable) {
-            null
+    /** The duration of the exported video, for the file size estimates. */
+    private fun updateOutputDuration() {
+        val durationMs = if (!idleTrimSelected()) {
+            sourceInfo.durationMs
+        } else {
+            val validPoints = ExportPlanner.validateEdl(readCurrentProjectEdl())
+            val kept = ExportPlanner.selectedKeepPoints(validPoints, idleTrim = true, favoriteOnly = favoriteOnlySelected())
+            // Without valid points the export falls back to the full video.
+            if (kept.isEmpty()) sourceInfo.durationMs else ExportChunkPlanner.keptDurationMs(kept)
         }
-        val bitrate = sourcePath
-            ?.takeIf { File(it).isFile }
-            ?.let { ExportSourceBitrateProbe.probe(it, ApplicationLayout.current().ffprobeExecutable) }
-        sourceBitrateLabel.text = ExportSourceBitrates.label(bitrate)
-    }
-
-    private fun sectionLabel(text: String): JComponent {
-        val l = JLabel(text)
-        l.font = l.font.deriveFont(Font.BOLD)
-        l.foreground = FG_PRIMARY
-        l.alignmentX = 0f
-        return l
+        val cardMs = if (statsCardCheck.isSelected) currentStatsCard()?.durationMs ?: 0L else 0L
+        val setCardsMs = if (setSummariesCheck.isEnabled && setSummariesCheck.isSelected) {
+            currentSetSummaries().sumOf { it.card.durationMs }
+        } else {
+            0L
+        }
+        qualityPanel.setOutputDurationMs(durationMs?.plus(cardMs + setCardsMs))
     }
 
     private fun refreshCompletedFromStore() {
         completed.refreshFromStore()
-    }
-
-    private fun formatCompletedItem(item: CompletedRender): String {
-        val size = formatSize(item.bytesWritten)
-        val overlays = listOfNotNull(
-            "Scoreboard".takeIf { item.includeScoreboard },
-            "Comments".takeIf { item.includeComments },
-        ).joinToString(" + ").takeIf { it.isNotEmpty() }?.let { "  ·  $it" }.orEmpty()
-        val res = if (item.outHeight >= 2160 || item.outWidth >= 3840) "4K" else "1080p"
-        val proj = item.projectName?.takeIf { it.isNotBlank() }
-        val left = if (proj != null) "[$proj] ${item.fileName}" else item.fileName
-        return "$left$overlays  —  ${item.encoderLabel} / $res  —  $size"
     }
 
     private fun formatEta(secs: Long): String {
@@ -681,10 +622,6 @@ class SwingExportPanel(
         val m = (secs % 3600) / 60
         val s = secs % 60
         return String.format("%d:%02d:%02d", h, m, s)
-    }
-
-    private fun formatSize(bytes: Long): String {
-        return RenderFormatting.formatSize(bytes)
     }
 
     private fun validFavoriteCount(): Int {
@@ -696,15 +633,16 @@ class SwingExportPanel(
     }
 
     private fun updateFavoriteOnlyAvailability() {
-        val available = manifestPath != null && idleTrimCheck.isSelected
-        favoriteOnlyCheck.isEnabled = available
-        if (!available) favoriteOnlyCheck.isSelected = false
-        favoriteOnlyCheck.toolTipText = if (available && validFavoriteCount() > 0) {
-            "Render only points marked with a star."
-        } else if (available) {
-            "No valid favorite points are available. Selecting this option explains how to recover."
-        } else {
-            "Requires an open project with idle-trim enabled."
+        val available = manifestPath != null
+        favoritesRadio.isEnabled = available
+        if (!available && favoritesRadio.isSelected) {
+            pointsRadio.isSelected = true
+            lastContentRadio = pointsRadio
+        }
+        favoritesRadio.toolTipText = when {
+            !available -> "Requires an open project."
+            validFavoriteCount() > 0 -> "Export only the points that are marked with a star."
+            else -> "No valid favorite points are available. Mark a point with a star on the Points tab."
         }
     }
 
@@ -716,24 +654,6 @@ class SwingExportPanel(
         }
     }
 
-    private fun refreshResolutionOptions() {
-        val sourcePath = try {
-            manifestPath?.let(ManifestIO::read)?.sourceVideo
-        } catch (_: Throwable) {
-            null
-        }
-        val sourceResolution = sourcePath
-            ?.takeIf { File(it).isFile }
-            ?.let { ExportResolutionProbe.probe(it, ApplicationLayout.current().ffprobeExecutable) }
-        val options = ExportResolutions.availableFor(sourceResolution)
-        val savedResolution = settingsPreferences.load().resolution
-        resCombo.model = DefaultComboBoxModel(options.toTypedArray())
-        resCombo.selectedItem = ExportResolutions.preferredOption(
-            options = options,
-            savedResolution = savedResolution,
-        )
-    }
-
     private fun updateScoreboardDefault() {
         scoreboardCheck.isSelected = hasAnyScoredPoints()
     }
@@ -742,6 +662,82 @@ class SwingExportPanel(
     private fun updateCommentsDefault() {
         val saved = currentProjectDir()?.let(settingsPreferences::loadIncludeComments)
         commentsCheck.isSelected = saved ?: hasAnyComments()
+    }
+
+    /**
+     * Selects the checkbox if the project has a statistics card. A saved choice of the user has priority.
+     * The note shows how long the card is, or why the export has no card.
+     */
+    private fun updateStatsCardDefault() {
+        val card = currentStatsCard()
+        statsCardLabel.text = when {
+            card != null -> "${card.durationMs / 1000} s, " + if (card.pages.size == 1) "1 page" else "${card.pages.size} pages"
+            hasAnyScoredPoints() -> "No selected statistics"
+            else -> "No scored points"
+        }
+        val saved = currentProjectDir()?.let(settingsPreferences::loadIncludeStatsCard)
+        statsCardCheck.isSelected = card != null && (saved ?: true)
+        updateOutputDuration()
+    }
+
+    /** The statistics card of the current project at 1080p, or null when the export cannot have a card. */
+    private fun currentStatsCard(): StatsCardVideo? = try {
+        StatsCardVideo.of(readCurrentProjectEdl(), readCurrentProjectScore(), readCurrentStatsSettings(), 1920, 1080)
+    } catch (t: Throwable) {
+        logger.warn(t) { "Export: cannot make the statistics card" }
+        null
+    }
+
+    /** Selects the checkbox from the saved choice of the user. Set summaries are off by default. */
+    private fun updateSetSummariesDefault() {
+        val saved = currentProjectDir()?.let(settingsPreferences::loadIncludeSetSummaries)
+        setSummariesCheck.isSelected = saved ?: false
+        updateSetSummariesState()
+        updateOutputDuration()
+    }
+
+    /**
+     * Enables the checkbox when the selected content has at least one set card.
+     * The note shows how long the set cards are, or why the export has no set cards.
+     */
+    private fun updateSetSummariesState() {
+        val summaries = currentSetSummaries()
+        setSummariesCheck.isEnabled = summaries.isNotEmpty()
+        setSummariesLabel.text = when {
+            !idleTrimSelected() -> "Only for Only points and Only favorites"
+            summaries.isNotEmpty() -> {
+                val seconds = summaries.sumOf { it.card.durationMs } / 1000
+                (if (summaries.size == 1) "1 set" else "${summaries.size} sets") + ", $seconds s"
+            }
+            !hasAnyScoredPoints() -> "No scored points"
+            currentStatsCard() == null -> "No selected statistics"
+            else -> "No completed set in the video"
+        }
+    }
+
+    /** The set cards of the selected content at 1080p. A full video export has no set cards. */
+    private fun currentSetSummaries(): List<SetSummaryCard> = try {
+        if (!idleTrimSelected()) {
+            emptyList()
+        } else {
+            val edl = readCurrentProjectEdl()
+            val kept = ExportPlanner.selectedKeepPoints(
+                ExportPlanner.validateEdl(edl),
+                idleTrim = true,
+                favoriteOnly = favoriteOnlySelected(),
+            )
+            ExportPlanner.setSummaryCards(edl, readCurrentProjectScore(), readCurrentStatsSettings(), kept, 1920, 1080)
+        }
+    } catch (t: Throwable) {
+        logger.warn(t) { "Export: cannot make the set cards" }
+        emptyList()
+    }
+
+    private fun readCurrentStatsSettings(): StatsSettingsV1 = try {
+        currentProjectDir()?.let(StatsIO::readForProjectDir) ?: StatsSettingsV1()
+    } catch (t: Throwable) {
+        logger.warn(t) { "Export: cannot read stats.json" }
+        StatsSettingsV1()
     }
 
     private fun hasAnyComments(): Boolean =
@@ -788,33 +784,28 @@ class SwingExportPanel(
         }
     }
 
-    private fun updatePointsSummary() {
-        try {
-            val summary = loadExportSummary()
-
-            // Set texts
-            pointsCountLabel.text = "${summary.pointCount} points / ${summary.favoriteCount} favorites"
-            pointsTotalLabel.text = "total ${RenderFormatting.formatDuration(summary.totalMs)} / favorites ${RenderFormatting.formatDuration(summary.favoriteTotalMs)}"
-            pointsScoredLabel.text = "scored ${summary.scoredCount}/${summary.pointCount}"
-
-            // Colors
-            pointsCountLabel.foreground = if (summary.pointCount == 0) UiStyles.YELLOW else FG_PRIMARY
-            pointsScoredLabel.foreground = if (summary.allScored) UiStyles.GREEN else FG_PRIMARY
-            pointsTotalLabel.foreground = FG_PRIMARY
-            updateFavoriteOnlyAvailability()
-        } catch (_: Throwable) {
-            pointsCountLabel.text = ""
-            pointsTotalLabel.text = ""
-            pointsScoredLabel.text = ""
-            updateFavoriteOnlyAvailability()
+    private fun showScoredCount(summary: ExportPointSummary?) {
+        scoredLabel.text = when {
+            summary == null -> ""
+            summary.pointCount == 0 -> "(no points)"
+            else -> "(${summary.scoredCount}/${summary.pointCount} points scored)"
         }
+        scoredLabel.foreground = if (summary?.allScored == true) UiStyles.GREEN else UiStyles.FG_SECONDARY
     }
 
-    private fun formatSeconds(ms: Long): String {
-        return RenderFormatting.formatDuration(ms)
+    private fun updatePointsSummary() {
+        val summary = try {
+            if (manifestPath == null) null else loadExportSummary()
+        } catch (_: Throwable) {
+            null
+        }
+        contentTable.show(summary, sourceInfo.durationMs.takeIf { manifestPath != null })
+        showScoredCount(summary)
+        updateFavoriteOnlyAvailability()
+        updateOutputDuration()
     }
 
-    // Task 3.15 — Read project context and prerequisites for the Initialize button
+    // Task 3.15 — Read project context and prerequisites for the start button
     private fun initializationReadiness(): ExportReadiness = try {
         val mp = manifestPath
         val manifest = try { mp?.let(ManifestIO::read) } catch (_: Throwable) { null }
@@ -827,15 +818,15 @@ class SwingExportPanel(
         ExportPlanner.initializationReadiness(
             hasProject = !mp.isNullOrBlank(),
             sourceVideoExists = manifest?.sourceVideo?.let { File(it).isFile } == true,
-            idleTrim = idleTrimCheck.isSelected,
-            favoriteOnly = favoriteOnlyCheck.isSelected,
+            idleTrim = idleTrimSelected(),
+            favoriteOnly = favoriteOnlySelected(),
             validPoints = validPoints,
         )
     } catch (_: Throwable) {
-        ExportReadiness(false, "Initialization unavailable due to an unexpected error.")
+        ExportReadiness(false, "Export is not available because of an unexpected error.")
     }
 
-    // The button stays clickable even when a render cannot start; clicking it explains why.
+    // The button stays clickable even when an export cannot start; clicking it explains why.
     private fun updateInitButtonState() {
         val readiness = initializationReadiness()
         initButton.isEnabled = true
@@ -843,8 +834,28 @@ class SwingExportPanel(
         initButton.accessibleContext.accessibleDescription = readiness.disabledReason
     }
 
+    /** "Start export" when nothing runs, "Enqueue export" when an export runs or waits in the queue. */
+    private fun updateStartButtonText(snapshot: ActiveQueueSnapshot?) {
+        val text = if (hasActiveExports(snapshot)) ENQUEUE_EXPORT else START_EXPORT
+        if (initButton.text != text) {
+            initButton.text = text
+            initButton.revalidate()
+            initButton.repaint()
+        }
+    }
+
+    private fun hasActiveExports(snapshot: ActiveQueueSnapshot?): Boolean {
+        if (snapshot == null) return false
+        val current = snapshot.current
+        val running = current != null && (current.status == RenderStatus.RUNNING || current.status == RenderStatus.QUEUED)
+        return running || snapshot.queued.isNotEmpty()
+    }
+
     private companion object {
-        const val INIT_BUTTON_TOOLTIP = "Choose an output file and queue the render."
-        const val INIT_BLOCKED_TITLE = "Cannot start render"
+        const val LEFT_WIDTH = 440
+        const val START_EXPORT = "Start export"
+        const val ENQUEUE_EXPORT = "Enqueue export"
+        const val INIT_BUTTON_TOOLTIP = "Choose an output file and start the export."
+        const val INIT_BLOCKED_TITLE = "Cannot start export"
     }
 }

@@ -34,6 +34,10 @@ data class RenderJob(
     val outWidth: Int,
     val outHeight: Int,
     val outputFrameRate: String? = null,
+    // Target video bitrate in kilobits per second. Null uses the bitrate table of the preset.
+    val videoBitrateK: Int? = null,
+    // Estimated size of the output file in bytes. Null when the duration or the bitrate is not known.
+    val expectedBytes: Long? = null,
     val encoderLabel: String,
     val idleTrim: Boolean,
     val favoriteOnly: Boolean = false,
@@ -43,6 +47,10 @@ data class RenderJob(
     val outputPath: String,
     val includeComments: Boolean = false,
     val commentOverlayTimeline: List<CommentOverlaySpan> = emptyList(),
+    // The statistics card after the last point, on a frozen last frame. Null when the export has no card.
+    val statsCard: org.litvin.stats.StatsCardVideo? = null,
+    // The statistics card of each completed set, after the last kept point of the set.
+    val setSummaries: List<org.litvin.stats.SetSummaryCard> = emptyList(),
     // Runtime fields
     var status: RenderStatus = RenderStatus.QUEUED,
     var progress: Double = 0.0,          // 0.0 .. 1.0
@@ -281,23 +289,33 @@ object RenderQueueManager {
                 val defIdx = ExportPresetsIO.defaultBalancedIndex(presets)
                 val preset = presets.find { it.id.equals(job.presetId, ignoreCase = true) } ?: presets[defIdx]
                 val keeps = if (job.idleTrim) job.edlSnapshot else emptyList()
-                val chunks = org.litvin.export.ExportChunkPlanner.plan(keeps)
+                // The video chunks and the statistics cards, in output order. A card is one more pass on a
+                // frozen frame, so a job with a card always joins passes.
+                val passes = org.litvin.export.ExportPassPlanner.plan(
+                    keeps = keeps,
+                    setSummaries = job.setSummaries,
+                    endCard = job.statsCard,
+                    fullVideoDurationMs = probedDurationMs,
+                )
 
                 // Keep the last N stderr lines for diagnostics, across every pass of this job.
                 val tailSize = 200
                 val errTail = java.util.ArrayDeque<String>(tailSize)
 
-                val totalDurationMs: Long? = if (keeps.isNotEmpty()) {
+                val videoDurationMs: Long? = if (keeps.isNotEmpty()) {
                     org.litvin.export.ExportChunkPlanner.keptDurationMs(keeps)
                 } else {
                     probedDurationMs
                 }
+                val totalDurationMs: Long? = videoDurationMs?.plus(org.litvin.export.ExportPassPlanner.cardDurationMs(passes))
 
                 fun buildFor(
                     passKeeps: List<PointV1>,
                     target: java.io.File,
                     outputOffsetMs: Long,
                     chunkOutput: Boolean,
+                    freezeFrame: FFmpegCommandBuilder.FreezeFrame? = null,
+                    subtitlesPath: String? = assFile?.absolutePath,
                 ) = FFmpegCommandBuilder.build(
                     FFmpegCommandBuilder.BuildParams(
                         sourcePath = job.sourcePath,
@@ -309,26 +327,30 @@ object RenderQueueManager {
                         encoderLabel = job.encoderLabel,
                         idleTrim = job.idleTrim,
                         keeps = passKeeps,
-                        subtitlesAssPath = assFile?.absolutePath,
+                        subtitlesAssPath = subtitlesPath,
                         adjustments = jobAdjustments,
                         sourceWidth = sourceSize?.width,
                         sourceHeight = sourceSize?.height,
                         outputTimeOffsetMs = outputOffsetMs,
                         chunkOutput = chunkOutput,
+                        videoBitrateK = job.videoBitrateK,
+                        freezeFrame = freezeFrame,
                     )
                 )
 
                 val chunkFiles = mutableListOf<java.io.File>()
                 val concatListFile = java.io.File(partOut.absolutePath + ".concat.txt")
+                val cardAssFiles = mutableListOf<java.io.File>()
                 fun discardIntermediates() {
                     chunkFiles.forEach { file -> try { file.delete() } catch (_: Throwable) { } }
                     try { concatListFile.delete() } catch (_: Throwable) { }
+                    cardAssFiles.forEach { file -> try { file.delete() } catch (_: Throwable) { } }
                 }
 
                 var exit = 0
                 var abandoned = false
 
-                if (chunks.size <= 1) {
+                if (passes.size == 1) {
                     val build = buildFor(keeps, partOut, 0L, chunkOutput = false)
                     logger.debug { "ffmpeg command: ${build.preview}" }
                     val pass = runFfmpegPass(
@@ -347,28 +369,44 @@ object RenderQueueManager {
                         }
                     }
                 } else {
-                    logger.info { "Render job ${job.id}: ${keeps.size} segments over ${chunks.size} encode passes" }
+                    logger.info { "Render job ${job.id}: ${keeps.size} segments over ${passes.size} encode passes" }
                     var bytesBase = 0L
-                    for ((index, chunk) in chunks.withIndex()) {
+                    for ((index, pass) in passes.withIndex()) {
                         if (abortIfCanceled(request, partOut, assFile)) {
                             discardIntermediates()
                             abandoned = true
                             break
                         }
-                        val chunkFile = java.io.File(partOut.absolutePath + ".chunk$index.ts")
-                        if (chunkFile.exists()) chunkFile.delete()
-                        chunkFiles += chunkFile
-                        val build = buildFor(chunk.keeps, chunkFile, chunk.outputOffsetMs, chunkOutput = true)
-                        logger.debug { "ffmpeg chunk ${index + 1}/${chunks.size}: ${build.preview}" }
-                        val pass = runFfmpegPass(
-                            request, build.args, finalOut.parentFile, chunkFile, errTail, tailSize,
-                            totalDurationMs, chunk.outputOffsetMs, bytesBase,
+                        val passFile = java.io.File(partOut.absolutePath + ".chunk$index.ts")
+                        val build = when (pass) {
+                            is org.litvin.export.ExportPassPlanner.Video ->
+                                buildFor(pass.chunk.keeps, passFile, pass.chunk.outputOffsetMs, chunkOutput = true)
+                            is org.litvin.export.ExportPassPlanner.Card -> {
+                                // The card pages are burned in over a frozen frame, without the scoreboard.
+                                val cardAss = java.io.File(partOut.absolutePath + ".card$index.ass")
+                                cardAssFiles += cardAss
+                                try {
+                                    AssOverlayWriter.writeStatsCard(cardAss, pass.card, job.outWidth, job.outHeight)
+                                } catch (t: Throwable) {
+                                    logger.warn(t) { "Failed to prepare a statistics card; the export does not show it" }
+                                    continue
+                                }
+                                val freeze = FFmpegCommandBuilder.FreezeFrame(pass.freezeAtMs, pass.card.durationMs)
+                                buildFor(emptyList(), passFile, 0L, chunkOutput = true, freeze, cardAss.absolutePath)
+                            }
+                        }
+                        if (passFile.exists()) passFile.delete()
+                        chunkFiles += passFile
+                        logger.debug { "ffmpeg pass ${index + 1}/${passes.size}: ${build.preview}" }
+                        val result = runFfmpegPass(
+                            request, build.args, finalOut.parentFile, passFile, errTail, tailSize,
+                            totalDurationMs, pass.progressBaseMs, bytesBase,
                         )
-                        when (pass) {
-                            is PassResult.Exited -> exit = pass.code
+                        when (result) {
+                            is PassResult.Exited -> exit = result.code
                             is PassResult.StartFailed -> {
                                 discardIntermediates()
-                                reportStartFailure(request, pass.cause)
+                                reportStartFailure(request, result.cause)
                                 abandoned = true
                             }
                             PassResult.CanceledBeforeStart -> {
@@ -378,7 +416,7 @@ object RenderQueueManager {
                             }
                         }
                         if (abandoned || exit != 0) break
-                        bytesBase += if (chunkFile.exists()) chunkFile.length() else 0L
+                        bytesBase += if (passFile.exists()) passFile.length() else 0L
                     }
 
                     // Join the chunks into the real container. Copying the streams keeps the join a

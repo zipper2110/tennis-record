@@ -40,7 +40,6 @@ import java.util.concurrent.TimeUnit
 import java.util.prefs.AbstractPreferences
 import javax.swing.AbstractButton
 import javax.swing.JFrame
-import javax.swing.JComboBox
 import javax.swing.JLabel
 import javax.swing.JPanel
 import kotlin.test.assertEquals
@@ -183,9 +182,10 @@ class SwingApplicationFactoryTest {
             }
             handle = opened
 
-            val encoderLabels = findComponents(opened.frame, JComboBox::class.java)
-                .flatMap { combo -> (0 until combo.itemCount).map { combo.getItemAt(it).toString() } }
-            assertTrue(encoderLabels.any { "NVENC" in it }, "Injected encoder options were $encoderLabels")
+            val encoderCards = findComponents(opened.frame, org.litvin.ui.tabs.export.OptionCard::class.java)
+                .mapNotNull { it.name }
+                .filter { it.startsWith("export-encoder-") }
+            assertEquals(listOf("export-encoder-h264_nvenc", "export-encoder-libx264"), encoderCards)
         } finally {
             handle?.close()
             Window.getWindows().filterNot(windowsBefore::contains).forEach(Window::dispose)
@@ -262,7 +262,7 @@ class SwingApplicationFactoryTest {
             projectsRepository = projectsRepository,
             completedRenders = EmptyCompletedRendersRepository,
             adjustments = AdjustmentsSession(adjustmentsExecutor, 60_000),
-            encoderCapabilities = encoderCapabilities,
+            encoderCapabilities = java.util.concurrent.CompletableFuture.completedFuture(encoderCapabilities),
         )
     }
 

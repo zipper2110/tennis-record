@@ -7,7 +7,7 @@ class ExportPresetsTest {
     @Test
     fun exposesTheCodeOwnedRuntimeChoices() {
         assertEquals(
-            listOf("Data Saver", "Balanced", "High", "Very High", "Maximum"),
+            listOf("Original quality", "Balanced", "Fast export", "Custom"),
             ExportPresetsIO.load().map(ExportPreset::label),
         )
     }

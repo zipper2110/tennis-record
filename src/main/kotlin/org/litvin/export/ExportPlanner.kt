@@ -11,6 +11,9 @@ import org.litvin.points.EdlV1
 import org.litvin.points.PointV1
 import org.litvin.projects.ProjectManifestV1
 import org.litvin.scoring.ScoreV1
+import org.litvin.stats.SetSummaryCard
+import org.litvin.stats.StatsCardVideo
+import org.litvin.stats.StatsSettingsV1
 import java.io.File
 
 data class ExportResolution(
@@ -25,6 +28,10 @@ data class ExportPointSummary(
     val totalMs: Long,
     val favoriteTotalMs: Long,
     val scoredCount: Int,
+    val scoredTotalMs: Long = 0,
+    /** Points that an "Only points" export keeps: no empty or overlapping points. */
+    val validPointCount: Int = pointCount,
+    val validTotalMs: Long = totalMs,
 ) {
     val allScored: Boolean
         get() = pointCount > 0 && scoredCount == pointCount
@@ -52,12 +59,21 @@ data class ExportRenderPlanRequest(
     val preset: ExportPreset,
     val resolution: ExportResolution,
     val outputFrameRate: String? = null,
+    val videoBitrateK: Int? = null,
     val encoderLabel: String,
     val idleTrim: Boolean,
     val favoriteOnly: Boolean,
     val includeScoreboard: Boolean,
     val outputPath: String,
     val includeComments: Boolean = false,
+    /** Duration of the source video. A full video export uses it for the expected file size. */
+    val sourceDurationMs: Long? = null,
+    /** Adds the statistics card after the last point. */
+    val includeStatsCard: Boolean = false,
+    /** Adds a statistics card after the last exported point of each completed set. Only an export of points uses it. */
+    val includeSetSummaries: Boolean = false,
+    /** The rows of the statistics cards. */
+    val statsSettings: StatsSettingsV1 = StatsSettingsV1(),
 )
 
 object ExportPlanner {
@@ -77,14 +93,19 @@ object ExportPlanner {
 
     fun summarize(edl: EdlV1?, score: ScoreV1): ExportPointSummary {
         val points = edl?.points ?: emptyList()
-        val validFavorites = validateEdl(edl).filter { it.favorite }
+        val validPoints = validateEdl(edl)
+        val validFavorites = validPoints.filter { it.favorite }
         val outcomes = score.outcomes
+        val scored = points.filter { point -> outcomes.containsKey(point.id) }
         return ExportPointSummary(
             pointCount = points.size,
             favoriteCount = validFavorites.size,
             totalMs = points.sumOf { (it.endMs - it.startMs).coerceAtLeast(0).toLong() },
             favoriteTotalMs = validFavorites.sumOf { (it.endMs - it.startMs).toLong() },
-            scoredCount = points.count { point -> outcomes.containsKey(point.id) },
+            scoredCount = scored.size,
+            scoredTotalMs = scored.sumOf { (it.endMs - it.startMs).coerceAtLeast(0).toLong() },
+            validPointCount = validPoints.size,
+            validTotalMs = validPoints.sumOf { (it.endMs - it.startMs).toLong() },
         )
     }
 
@@ -161,14 +182,32 @@ object ExportPlanner {
         return when {
             favoriteOnly && keptPoints.isEmpty() -> ExportReadiness(
                 false,
-                "Favorite-only export is ON but no valid favorite points are available.",
+                "No valid favorite points are available. Mark a point as favorite, or select Only points.",
             )
             keptPoints.isEmpty() -> ExportReadiness(
                 false,
-                "EDL is empty/invalid while Idle-trim is ON. Add keep intervals or turn Idle-trim OFF.",
+                "The project has no valid points. Mark points on the Points tab, or select Full video.",
             )
             else -> ExportReadiness(true)
         }
+    }
+
+    /**
+     * The set cards that an export of [keptPoints] shows. A set without a kept point has no card,
+     * because the video does not show that set.
+     */
+    fun setSummaryCards(
+        edl: EdlV1?,
+        score: ScoreV1,
+        settings: StatsSettingsV1,
+        keptPoints: List<PointV1>,
+        outWidth: Int,
+        outHeight: Int,
+    ): List<SetSummaryCard> {
+        if (keptPoints.isEmpty()) return emptyList()
+        val keptIds = keptPoints.mapTo(HashSet()) { it.id }
+        return StatsCardVideo.setSummaries(edl, score, settings, outWidth, outHeight)
+            .filter { summary -> summary.pointIds.any { it in keptIds } }
     }
 
     fun buildRenderPlan(request: ExportRenderPlanRequest): ExportRenderPlan {
@@ -199,6 +238,25 @@ object ExportPlanner {
         } else {
             emptyList()
         }
+        val statsCard = if (request.includeStatsCard) {
+            StatsCardVideo.of(request.edl, request.score, request.statsSettings, request.resolution.width, request.resolution.height)
+        } else {
+            null
+        }
+        val setSummaries = if (request.includeSetSummaries && effectiveIdleTrim) {
+            setSummaryCards(request.edl, request.score, request.statsSettings, keptPoints, request.resolution.width, request.resolution.height)
+        } else {
+            emptyList()
+        }
+        val cardsMs = (statsCard?.durationMs ?: 0L) + setSummaries.sumOf { it.card.durationMs }
+        val outputDurationMs = if (effectiveIdleTrim) {
+            ExportChunkPlanner.keptDurationMs(keptPoints)
+        } else {
+            request.sourceDurationMs
+        }?.let { it + cardsMs }
+        val expectedBytes = request.videoBitrateK?.let { bitrateK ->
+            outputDurationMs?.let { ExportVideoOptions.estimatedBytes(bitrateK, it) }
+        }
 
         val job = RenderJob(
             projectId = request.manifest?.id,
@@ -209,6 +267,8 @@ object ExportPlanner {
             outWidth = request.resolution.width,
             outHeight = request.resolution.height,
             outputFrameRate = request.outputFrameRate,
+            videoBitrateK = request.videoBitrateK,
+            expectedBytes = expectedBytes,
             encoderLabel = request.encoderLabel,
             idleTrim = effectiveIdleTrim,
             favoriteOnly = request.favoriteOnly,
@@ -218,6 +278,8 @@ object ExportPlanner {
             outputPath = request.outputPath,
             includeComments = request.includeComments,
             commentOverlayTimeline = commentOverlayTimeline,
+            statsCard = statsCard,
+            setSummaries = setSummaries,
         )
 
         return ExportRenderPlan(

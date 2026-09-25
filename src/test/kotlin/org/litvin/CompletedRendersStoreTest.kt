@@ -20,11 +20,13 @@ class CompletedRendersStoreTest {
                 id = "job-1",
                 projectId = null,
                 sourcePath = "C:/vids/src.mp4",
-                edlSnapshot = emptyList(),
+                edlSnapshot = listOf(org.litvin.points.PointV1(id = "p1", startMs = 0, endMs = 1_000)),
                 presetId = "balanced",
                 outWidth = 1920,
                 outHeight = 1080,
                 outputFrameRate = "30000/1001",
+                videoBitrateK = 12_000,
+                expectedBytes = 9_000_000,
                 encoderLabel = "H.264 (libx264)",
                 idleTrim = true,
                 favoriteOnly = true,
@@ -53,6 +55,10 @@ class CompletedRendersStoreTest {
             assertTrue(item.includeScoreboard)
             assertTrue(item.includeComments)
             assertEquals(1_234L, item.createdAtEpochMs)
+            assertEquals("balanced", item.presetId)
+            assertEquals(12_000, item.videoBitrateK)
+            assertEquals(9_000_000L, item.expectedBytes)
+            assertEquals(1, item.pointCount)
 
             assertTrue(second.loadAll().isEmpty())
             first.clear()

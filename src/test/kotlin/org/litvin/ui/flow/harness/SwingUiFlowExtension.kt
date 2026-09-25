@@ -175,7 +175,7 @@ class SwingUiFlowExtension(
             projectsRepository = FileProjectsRepository(paths.projects),
             completedRenders = FileCompletedRendersRepository(paths.completedRenders),
             adjustments = adjustments,
-            encoderCapabilities = EncoderCapabilities.NONE,
+            encoderCapabilities = java.util.concurrent.CompletableFuture.completedFuture(EncoderCapabilities.NONE),
         )
 
         var application: SwingApplicationHandle? = null

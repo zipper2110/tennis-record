@@ -106,7 +106,8 @@ class IconBrowserDialog(owner: Window?) : JDialog(owner, "Icon Browser — Feath
 
 /**
  * A FlowLayout that supports wrapping nicely inside a scrollpane.
- * Source adapted from Rob Camick's WrapLayout (public domain-like).
+ * Source adapted from Rob Camick's WrapLayout (Java Tips Weblog, https://tips4java.wordpress.com).
+ * The blog permits use, change and distribution of its code without restriction.
  */
 class WrapLayout(align: Int = FlowLayout.LEFT, hgap: Int = 5, vgap: Int = 5) : FlowLayout(align, hgap, vgap) {
     override fun preferredLayoutSize(target: Container): Dimension {

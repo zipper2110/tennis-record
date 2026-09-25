@@ -111,9 +111,81 @@ object FFmpegCapabilities {
         return set
     }
 
-    fun preferredH264Encoder(encoders: Set<String>): String? {
-        return preferredH264Encoder(encoders, detectVideoAdapters())
+    /**
+     * Encodes a few frames of a generated black picture with [encoderId].
+     * An ffmpeg build can list a hardware encoder that does not work on this computer, for example
+     * AMF on a PC without an AMD GPU. Only a real encode shows that the encoder works.
+     */
+    fun canEncode(encoderId: String): Boolean {
+        val timeoutMs = System.getProperty("tr.ffmpeg.probe.timeout.ms")?.toLongOrNull() ?: 15_000L
+        return try {
+            val (_, exitCode, timedOut) = runAndCapture(
+                ffmpegCmd() + listOf(
+                    "-hide_banner", "-v", "error",
+                    "-f", "lavfi", "-i", "color=c=black:s=640x360:r=30",
+                    "-frames:v", "3", "-c:v", encoderId, "-f", "null", "-",
+                ),
+                timeoutMs,
+            )
+            (!timedOut && exitCode == 0).also { works ->
+                logger.info { "Test encode with $encoderId ${if (works) "succeeded" else "failed (exit=$exitCode)"}" }
+            }
+        } catch (t: Throwable) {
+            logger.warn(t) { "Test encode with $encoderId failed." }
+            false
+        }
     }
+
+    /**
+     * Returns the names of the graphics adapters, with the manufacturer, for example
+     * "NVIDIA GeForce RTX 3060 Laptop GPU". Returns an empty list if the names are not available.
+     */
+    fun videoAdapters(): List<String> {
+        val os = System.getProperty("os.name")?.lowercase().orEmpty()
+        if (!os.contains("windows")) return emptyList()
+        return try {
+            val (output, exitCode, timedOut) = runAndCapture(
+                listOf(
+                    "powershell.exe",
+                    "-NoProfile",
+                    "-NonInteractive",
+                    "-Command",
+                    // Java does not escape inner double quotes on Windows, so the command uses only single quotes.
+                    "Get-CimInstance Win32_VideoController | ForEach-Object { \$_.AdapterCompatibility + '|' + \$_.Name }",
+                ),
+                5_000L,
+            )
+            if (!timedOut && exitCode == 0) parseVideoAdapters(output) else emptyList()
+        } catch (t: Throwable) {
+            logger.debug(t) { "Could not detect Windows video adapters." }
+            emptyList()
+        }
+    }
+
+    /** Parses "manufacturer|name" lines. Removes virtual and basic display adapters. */
+    internal fun parseVideoAdapters(output: String): List<String> = output.lineSequence()
+        .mapNotNull { line ->
+            val vendor = line.substringBefore('|', "").trim()
+            val name = line.substringAfter('|').trim()
+                .replace("(R)", "", ignoreCase = true)
+                .replace("(TM)", "", ignoreCase = true)
+                .replace(Regex("\\s+"), " ")
+                .trim()
+            if (name.isEmpty()) return@mapNotNull null
+            val lower = "$vendor $name".lowercase()
+            if ("microsoft" in lower || "virtual" in lower || "remote" in lower) return@mapNotNull null
+            // The manufacturer field is often "Intel Corporation" or "Advanced Micro Devices, Inc.".
+            // Add a short manufacturer name only when the model name does not already have it.
+            val shortVendor = when {
+                "nvidia" in vendor.lowercase() -> "NVIDIA"
+                "intel" in vendor.lowercase() -> "Intel"
+                "advanced micro devices" in vendor.lowercase() || "amd" in vendor.lowercase() -> "AMD"
+                else -> vendor.substringBefore(',').trim()
+            }
+            if (shortVendor.isEmpty() || name.lowercase().contains(shortVendor.lowercase())) name else "$shortVendor $name"
+        }
+        .distinct()
+        .toList()
 
     internal fun preferredH264Encoder(encoders: Set<String>, videoAdapters: String): String? {
         val adapters = videoAdapters.lowercase()
@@ -125,27 +197,6 @@ object FFmpegCapabilities {
             "h264_amf" in encoders -> "h264_amf"
             "h264_qsv" in encoders -> "h264_qsv"
             else -> null
-        }
-    }
-
-    private fun detectVideoAdapters(): String {
-        val os = System.getProperty("os.name")?.lowercase().orEmpty()
-        if (!os.contains("windows")) return ""
-        return try {
-            val (output, exitCode, timedOut) = runAndCapture(
-                listOf(
-                    "powershell.exe",
-                    "-NoProfile",
-                    "-NonInteractive",
-                    "-Command",
-                    "(Get-CimInstance Win32_VideoController).Name",
-                ),
-                3_000L,
-            )
-            if (!timedOut && exitCode == 0) output else ""
-        } catch (t: Throwable) {
-            logger.debug(t) { "Could not detect Windows video adapters." }
-            ""
         }
     }
 }

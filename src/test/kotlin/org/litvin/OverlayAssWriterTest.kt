@@ -3,6 +3,9 @@ package org.litvin
 import org.litvin.scoring.ScoreboardPosition
 import org.litvin.scoring.ScoreboardSettingsV1
 import org.litvin.scoring.ScoreboardStyleId
+import org.litvin.export.scoreboard.ScoreboardScene
+import org.litvin.export.scoreboard.SceneItem
+import org.litvin.stats.StatsCardVideo
 import java.io.File
 import java.security.MessageDigest
 import kotlin.test.Test
@@ -130,6 +133,24 @@ class OverlayAssWriterTest {
         )
 
         assertTrue(tmp.readText().contains("\\N"))
+    }
+
+    @Test
+    fun eachStatsCardPageShowsForItsOwnTimeSlot() {
+        val tmp = File.createTempFile("stats", ".ass")
+        tmp.deleteOnExit()
+        fun page(rgb: Int) = ScoreboardScene(1920.0, 1080.0, listOf(SceneItem.Box(0.0, 0.0, 1920.0, 1080.0, rgb)))
+        val card = StatsCardVideo(listOf(page(0x111111), page(0x222222)), pageDurationMs = 6_000)
+
+        AssOverlayWriter.writeStatsCard(tmp, card, outWidth = 1280, outHeight = 720)
+
+        val text = tmp.readText()
+        val dialogues = text.lines().filter { it.startsWith("Dialogue:") }
+        assertEquals(2, dialogues.size)
+        assertTrue(dialogues[0].startsWith("Dialogue: 0,0:00:00.00,0:00:06.00,Board,"), dialogues[0])
+        assertTrue(dialogues[1].startsWith("Dialogue: 0,0:00:06.00,0:00:12.00,Board,"), dialogues[1])
+        assertTrue(text.contains("PlayResX: 1280"))
+        assertTrue(text.contains("PlayResY: 720"))
     }
 
     private fun sha256(data: ByteArray): String {

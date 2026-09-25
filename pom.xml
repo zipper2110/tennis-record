@@ -11,8 +11,8 @@
     <description>Turn tennis match recordings into compact scored videos.</description>
     <licenses>
         <license>
-            <name>GNU General Public License v3 or later</name>
-            <url>https://www.gnu.org/licenses/gpl-3.0.html</url>
+            <name>Elastic License 2.0</name>
+            <url>https://www.elastic.co/licensing/elastic-license</url>
             <distribution>repo</distribution>
         </license>
     </licenses>
