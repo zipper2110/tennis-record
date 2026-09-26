@@ -22,7 +22,11 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Install source download tools
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends subversion autoconf automake libtool jq xz-utils
+        run: |
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends subversion autoconf automake libtool libtool-bin pkgconf gettext autopoint jq xz-utils meson
+          # The LAME stage needs Autoconf 2.73. The BtbN build image installs the same package.
+          curl -fsSL -o /tmp/autoconf.deb https://archive.ubuntu.com/ubuntu/pool/main/a/autoconf/autoconf_2.73-2_all.deb
+          sudo dpkg -i /tmp/autoconf.deb
 
       - name: Collect FFmpeg corresponding source
         run: bash distribution/sources/collect-btbn-ffmpeg-sources.sh distribution/windows/native-dependencies.json target/ffmpeg-source
@@ -64,6 +68,10 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: windows-2022
     environment: windows-release
+    env:
+      # Signing is optional. Set the repository variable ARTIFACT_SIGNING_ENDPOINT
+      # (and the other Azure settings) to sign. Without it, the release is unsigned.
+      SIGNING_ENABLED: ${{ vars.ARTIFACT_SIGNING_ENDPOINT != '' }}
 
     steps:
       - name: Check out source
@@ -109,6 +117,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Packaged diagnostics failed." }
 
       - name: Sign in to Azure
+        if: env.SIGNING_ENABLED == 'true'
         uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
@@ -116,6 +125,7 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Sign application launchers
+        if: env.SIGNING_ENABLED == 'true'
         uses: azure/artifact-signing-action@v2
         with:
           endpoint: ${{ vars.ARTIFACT_SIGNING_ENDPOINT }}
@@ -135,6 +145,7 @@ jobs:
           ./distribution/windows/Build-Installer.ps1 -Version $version
 
       - name: Sign EXE installer
+        if: env.SIGNING_ENABLED == 'true'
         uses: azure/artifact-signing-action@v2
         with:
           endpoint: ${{ vars.ARTIFACT_SIGNING_ENDPOINT }}
@@ -155,18 +166,22 @@ jobs:
           name: native-sources
           path: target/distribution/sources
 
-      - name: Verify signatures and stage release files
+      - name: Check signatures and stage release files
         shell: pwsh
         run: |
           $releaseDir = New-Item -ItemType Directory -Force target/release
           $launchers = @("target/package/app-image/Tennis Record/Tennis Record.exe")
           $installer = Get-ChildItem target/package/installer -Filter *.exe | Select-Object -First 1
           if (-not $installer) { throw "Installer not found." }
-          foreach ($file in $launchers + $installer.FullName) {
-            $signature = Get-AuthenticodeSignature -LiteralPath $file
-            if ($signature.Status -ne "Valid") {
-              throw "Invalid Authenticode signature for $file`: $($signature.Status)"
+          if ($env:SIGNING_ENABLED -eq "true") {
+            foreach ($file in $launchers + $installer.FullName) {
+              $signature = Get-AuthenticodeSignature -LiteralPath $file
+              if ($signature.Status -ne "Valid") {
+                throw "Invalid Authenticode signature for $file`: $($signature.Status)"
+              }
             }
+          } else {
+            Write-Host "::warning::Code signing is not configured. The release files are unsigned."
           }
           Copy-Item -LiteralPath $installer.FullName -Destination $releaseDir
           Copy-Item distribution/THIRD-PARTY-NOTICES.txt -Destination $releaseDir
@@ -189,9 +204,11 @@ jobs:
           path: target/release/*
           if-no-files-found: error
 
-      - name: Publish GitHub release
+      - name: Create draft GitHub release
         uses: softprops/action-gh-release@v2
         with:
+          # A maintainer checks the draft and publishes it on the GitHub releases page.
+          draft: true
           generate_release_notes: true
           files: target/release/*
           fail_on_unmatched_files: true

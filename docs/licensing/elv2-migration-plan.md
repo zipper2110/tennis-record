@@ -361,4 +361,10 @@ ELv2 does not help the goal of this plan.
 - Get a lawyer review of the license files and the EULA terms.
 - Check codec patent licenses for H.264 (libx264) and AAC encoding. The
   hardware encoders (NVENC, QSV, AMF) can reduce this risk.
+- Decide on code signing. Since 2026-09-25, signing in the release workflow is
+  optional, and releases are unsigned. Azure Artifact Signing accepts
+  individual developers only from the USA and Canada, so it is not available
+  from Georgia. Options: an OV certificate with cloud signing (about $130-230
+  per year, one-year validity), or the Microsoft Store (free registration; the
+  Store signs MSIX packages). No certificate gives an instant SmartScreen pass.
 - Done when: the review is complete.

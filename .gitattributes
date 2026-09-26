@@ -1,0 +1,2 @@
+# Shell scripts run in Linux (GitHub Actions and Docker). Keep LF line endings.
+*.sh text eol=lf

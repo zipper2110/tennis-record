@@ -105,11 +105,18 @@ for SCRIPT in "${STAGE_SCRIPTS[@]}"; do
         echo "$STAGENAME: $(tr '\n' ' ' <<< "$STG")"
         continue
     fi
+    # An archive from an earlier run is complete, because tar writes to a
+    # temporary name first. Skip it, so that a failed run can continue.
+    if [[ -f "$OUT/stages/$STAGENAME.tar.xz" ]]; then
+        echo "Skipping $STAGENAME (the archive exists)" >&2
+        continue
+    fi
     echo "Collecting $STAGENAME" >&2
     STAGEDIR="$WORK/stage-$STAGENAME"
     mkdir -p "$STAGEDIR"
     ( cd "$STAGEDIR" && eval "set -e; $STG" )
-    tar -C "$STAGEDIR" --exclude=.git --exclude=.svn -cJf "$OUT/stages/$STAGENAME.tar.xz" .
+    tar -C "$STAGEDIR" --exclude=.git --exclude=.svn -cJf "$OUT/stages/$STAGENAME.tar.xz.partial" .
+    mv "$OUT/stages/$STAGENAME.tar.xz.partial" "$OUT/stages/$STAGENAME.tar.xz"
     rm -rf -- "$STAGEDIR"
 done
 
