@@ -8,7 +8,9 @@ on:
 
 jobs:
   build-and-test:
-    runs-on: ubuntu-latest
+    # Tennis Record is a Windows app. Some tests use Windows paths, and the Swing
+    # tests need a display. The release workflow uses the same runner.
+    runs-on: windows-2022
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
