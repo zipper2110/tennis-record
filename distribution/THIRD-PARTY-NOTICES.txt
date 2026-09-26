@@ -21,8 +21,9 @@ reserved.
 Source and build information: https://mpv.io/
 https://github.com/lpbborges/grid
 The corresponding source code of this build (mpv, FFmpeg, libplacebo, the
-build recipe, and the LGPL MSYS2 source packages) is published beside each
-Tennis Record release.
+build recipe, and the LGPL MSYS2 source packages) is published with a copy of
+the binaries in the natives release:
+https://github.com/zipper2110/tennis-record/releases/tag/natives-2026-09
 The bundled DLLs are unmodified. You can replace them with your own builds in
 the installation directory (natives/windows-x64/mpv).
 
@@ -33,8 +34,10 @@ variant, which is configured with --enable-gpl --enable-version3 and includes
 GPL components such as x264 and x265. Source/build information:
 https://github.com/BtbN/FFmpeg-Builds
 https://ffmpeg.org/
-The corresponding source code of this build is published beside each Tennis
-Record release.
+The corresponding source code of this build (FFmpeg, the build scripts, and
+the source of each library) is published with a copy of the binaries in the
+natives release:
+https://github.com/zipper2110/tennis-record/releases/tag/natives-2026-09
 Tennis Record runs FFmpeg only as separate programs (ffmpeg.exe and
 ffprobe.exe). The shared libraries and executables are unmodified and remain
 replaceable in the installation directory. The FFmpeg license text is

@@ -37,10 +37,24 @@ $manifest = Read-RepoFile "distribution\windows\native-dependencies.json" | Conv
 if ($manifest.mpv.license -notmatch "^LGPL-") {
     throw "native-dependencies.json mpv.license must be an LGPL license: '$($manifest.mpv.license)'"
 }
-# The LGPL requires the corresponding source. The native-sources release job publishes it.
-foreach ($field in @("sourceUrl", "sourceSha256", "sourceArchiveName")) {
-    if (-not $manifest.mpv.$field) {
-        throw "native-dependencies.json mpv.$field is required."
+# The GPL and the LGPL require the corresponding source. The natives release of this
+# repository keeps the bundled binaries and their source together.
+if ($manifest.nativesRelease.tag -notmatch "^natives-") {
+    throw "native-dependencies.json nativesRelease.tag must name a natives-* release."
+}
+$nativesDownload = "https://github.com/zipper2110/tennis-record/releases/download/$($manifest.nativesRelease.tag)/"
+foreach ($name in @("mpv", "ffmpeg")) {
+    $dependency = $manifest.$name
+    foreach ($field in @("sourceUrl", "sourceSha256", "sourceArchiveName")) {
+        if (-not $dependency.$field) {
+            throw "native-dependencies.json $name.$field is required."
+        }
+    }
+    foreach ($pair in @(@("url", "archiveName"), @("sourceUrl", "sourceArchiveName"))) {
+        $expected = $nativesDownload + $dependency.($pair[1])
+        if ($dependency.($pair[0]) -ne $expected) {
+            throw "native-dependencies.json $name.$($pair[0]) must be $expected"
+        }
     }
 }
 
@@ -50,6 +64,9 @@ if ($thirdParty -notmatch [regex]::Escape($manifest.mpv.variant)) {
 }
 if ($thirdParty -notmatch "GNU Lesser General Public License" -or $thirdParty -notmatch "License: Elastic License 2\.0") {
     throw "THIRD-PARTY-NOTICES.txt must list libmpv under the LGPL and Tennis Record under ELv2."
+}
+if ($thirdParty -notmatch [regex]::Escape($manifest.nativesRelease.url)) {
+    throw "THIRD-PARTY-NOTICES.txt must link the natives release $($manifest.nativesRelease.url)."
 }
 
 Write-Host "Elastic License 2.0 distribution license validation passed."

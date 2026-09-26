@@ -4,68 +4,13 @@ on:
   push:
     tags:
       - "v*.*.*"
-  # A manual run collects only the native sources. Use it to test that job.
-  workflow_dispatch:
 
 permissions:
   contents: write
   id-token: write
 
 jobs:
-  native-sources:
-    # GPL and LGPL require the corresponding source of the bundled native builds.
-    runs-on: ubuntu-24.04
-    timeout-minutes: 120
-
-    steps:
-      - name: Check out source
-        uses: actions/checkout@v5
-
-      - name: Install source download tools
-        run: |
-          sudo apt-get update && sudo apt-get install -y --no-install-recommends subversion autoconf automake libtool libtool-bin pkgconf gettext autopoint jq xz-utils meson
-          # The LAME stage needs Autoconf 2.73. The BtbN build image installs the same package.
-          curl -fsSL -o /tmp/autoconf.deb https://archive.ubuntu.com/ubuntu/pool/main/a/autoconf/autoconf_2.73-2_all.deb
-          sudo dpkg -i /tmp/autoconf.deb
-
-      - name: Collect FFmpeg corresponding source
-        run: bash distribution/sources/collect-btbn-ffmpeg-sources.sh distribution/windows/native-dependencies.json target/ffmpeg-source
-
-      - name: Fetch libmpv corresponding source
-        run: |
-          set -euo pipefail
-          manifest=distribution/windows/native-dependencies.json
-          mkdir -p target/distribution/sources
-          target="target/distribution/sources/$(jq -er .mpv.sourceArchiveName "$manifest")"
-          curl -fsSL --retry 3 -o "$target" "$(jq -er .mpv.sourceUrl "$manifest")"
-          echo "$(jq -er .mpv.sourceSha256 "$manifest")  $target" | sha256sum -c -
-
-      - name: Package native sources
-        run: |
-          set -euo pipefail
-          mkdir -p target/distribution/sources
-          name="ffmpeg-$(jq -r .ffmpeg.version distribution/windows/native-dependencies.json)-$(jq -r .ffmpeg.variant distribution/windows/native-dependencies.json)-source.tar"
-          tar -C target/ffmpeg-source -cf "target/distribution/sources/$name" .
-          # A GitHub release asset must be smaller than 2 GiB.
-          if [ "$(stat -c %s "target/distribution/sources/$name")" -gt 2000000000 ]; then
-            split -b 1900M -d "target/distribution/sources/$name" "target/distribution/sources/$name.part"
-            rm "target/distribution/sources/$name"
-            printf 'Join the parts before you extract them:\n  cat %s.part* > %s\n' "$name" "$name" > "target/distribution/sources/$name.README.txt"
-          fi
-          ( cd target/distribution/sources && sha256sum * > NATIVE-SOURCES.sha256 )
-          ls -l target/distribution/sources
-
-      - name: Upload native sources
-        uses: actions/upload-artifact@v4
-        with:
-          name: native-sources
-          path: target/distribution/sources/*
-          compression-level: 0
-          if-no-files-found: error
-
   windows-installer:
-    needs: native-sources
-    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: windows-2022
     environment: windows-release
     env:
@@ -91,6 +36,26 @@ jobs:
             throw "Release tag must use vMAJOR.MINOR.PATCH."
           }
           ./distribution/windows/Validate-Release.ps1
+
+      - name: Check native sources in the natives release
+        # The GPL and the LGPL require the corresponding source of the bundled
+        # native builds. The natives release keeps it. This step checks that each
+        # source file is there and that its SHA-256 matches the manifest.
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $manifest = Get-Content distribution/windows/native-dependencies.json -Raw | ConvertFrom-Json
+          "NATIVES_TAG=$($manifest.nativesRelease.tag)" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+          $assets =gh release view $manifest.nativesRelease.tag --repo "${{ github.repository }}" --json assets | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) { throw "The natives release $($manifest.nativesRelease.tag) is not available." }
+          foreach ($dependency in @($manifest.mpv, $manifest.ffmpeg)) {
+            $asset = $assets.assets | Where-Object { $_.name -eq $dependency.sourceArchiveName }
+            if (-not $asset) { throw "The natives release has no $($dependency.sourceArchiveName)." }
+            if ($asset.digest -ne "sha256:$($dependency.sourceSha256)") {
+              throw "SHA-256 mismatch for $($dependency.sourceArchiveName): $($asset.digest)"
+            }
+          }
 
       - name: Install WiX Toolset 3
         shell: pwsh
@@ -160,12 +125,6 @@ jobs:
           description: Tennis Record installer
           timeout: 900
 
-      - name: Download native sources
-        uses: actions/download-artifact@v4
-        with:
-          name: native-sources
-          path: target/distribution/sources
-
       - name: Check signatures and stage release files
         shell: pwsh
         run: |
@@ -189,7 +148,6 @@ jobs:
           Copy-Item LICENSE-NOTICE -Destination (Join-Path $releaseDir "LICENSE-NOTICE.txt")
           Copy-Item distribution/windows/native-dependencies.json -Destination $releaseDir
           Copy-Item target/tennis-record-sbom.json -Destination $releaseDir
-          Copy-Item target/distribution/sources/* -Destination $releaseDir
           $sourceArchive = Join-Path $releaseDir "tennis-record-${{ github.ref_name }}-source.zip"
           git archive --format=zip --output=$sourceArchive "${{ github.ref_name }}"
           if ($LASTEXITCODE -ne 0) { throw "Source archive creation failed." }
@@ -209,6 +167,9 @@ jobs:
         with:
           # A maintainer checks the draft and publishes it on the GitHub releases page.
           draft: true
+          body: |
+            The bundled FFmpeg and libmpv builds and their corresponding source code are in the natives release:
+            https://github.com/${{ github.repository }}/releases/tag/${{ env.NATIVES_TAG }}
           generate_release_notes: true
           files: target/release/*
           fail_on_unmatched_files: true

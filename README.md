@@ -107,9 +107,10 @@ See: [docs/solution-outline.md](docs/solution-outline.md)
   functionality that LICENSE-NOTICE describes.
 - Versions up to the `last-gpl` tag were released under the GNU General Public
   License version 3 or later.
-- Binary releases include the application source, the source of the bundled
-  FFmpeg and libmpv builds, an SBOM, native dependency provenance, and
-  third-party notices.
+- Binary releases include the application source, an SBOM, native dependency
+  provenance, and third-party notices. The bundled FFmpeg and libmpv builds
+  and their source are in the
+  [natives release](https://github.com/zipper2110/tennis-record/releases/tag/natives-2026-09).
 - libmpv (LGPL build, `-Dgpl=false`) — loaded in the app process, shipped
   unmodified, and replaceable by users.
 - FFmpeg (GPL build) — runs only as a separate `ffmpeg.exe` process. An

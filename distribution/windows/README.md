@@ -42,8 +42,11 @@ After you change the SVG, run this command to generate the ICO again:
   `Validate-Release.ps1` checks this.
 - Run FFmpeg only as a separate process. The GPL FFmpeg build is then an
   aggregate, and its license does not cover the app.
-- Publish the corresponding source beside every binary release: the app
-  source, the FFmpeg build source, and the libmpv build source.
+- Publish the corresponding source of every bundled binary. The app release
+  contains the app source. The natives release (see below) contains the
+  FFmpeg and libmpv binaries and their source. The release workflow checks
+  that the natives release has the source files, and it links the natives
+  release in the release notes.
 - Review the generated Maven dependency license/SBOM output before release.
 
 ## Natives release
@@ -57,8 +60,9 @@ Make a new natives release only when you change a pin in
 
 1. Start Docker Desktop. The FFmpeg source collection runs in a Linux
    container.
-2. Run the script. It downloads the source of each FFmpeg library stage. This
-   takes a long time and needs several GB of free disk space.
+2. Run the script. It downloads the pinned builds from their upstream URLs,
+   and the source of each FFmpeg library stage. This takes about one hour and
+   needs several GB of free disk space.
 
    ```powershell
    .\distribution\windows\New-NativesRelease.ps1
@@ -77,6 +81,14 @@ Make a new natives release only when you change a pin in
    releases must stay the latest release.
 8. Click "Publish release". A draft release is not visible to other users, and
    its download URLs do not work in the release workflow.
-9. Change the URLs in `native-dependencies.json` to the natives release
+9. In `native-dependencies.json`, set `nativesRelease` to the new tag and
+   URL. Move each upstream URL to `upstreamUrl` or `upstreamSourceUrl`. Set
+   `url` and `sourceUrl` to the natives release
    (`https://github.com/zipper2110/tennis-record/releases/download/<tag>/<file>`).
-   Do not change the SHA-256 values. The files are the same.
+   Set the FFmpeg `sourceSha256` from `SHA256SUMS.txt`. Do not change the
+   other SHA-256 values. The files are the same.
+10. Change the natives release link in `distribution/THIRD-PARTY-NOTICES.txt`.
+    `Validate-Release.ps1` checks the URLs and the link.
+
+If the FFmpeg source collection fails, fix the cause and run the script again
+with `-Resume`. It keeps the stage archives of the failed run.

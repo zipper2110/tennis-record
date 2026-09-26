@@ -90,9 +90,17 @@ $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
 Reset-Directory $outDir
 New-Item -ItemType Directory -Path $cacheDir -Force | Out-Null
 
-Save-Verified $manifest.ffmpeg.url $manifest.ffmpeg.sha256 $manifest.ffmpeg.archiveName
-Save-Verified $manifest.mpv.url $manifest.mpv.sha256 $manifest.mpv.archiveName
-Save-Verified $manifest.mpv.sourceUrl $manifest.mpv.sourceSha256 $manifest.mpv.sourceArchiveName
+# Download from the upstream URL. The url fields point to the natives release,
+# which does not exist yet when you pin new builds.
+function Get-UpstreamUrl($Dependency, [string]$Field) {
+    $upstreamField = "upstream" + $Field.Substring(0, 1).ToUpperInvariant() + $Field.Substring(1)
+    if ($Dependency.$upstreamField) { return $Dependency.$upstreamField }
+    return $Dependency.$Field
+}
+
+Save-Verified (Get-UpstreamUrl $manifest.ffmpeg "url") $manifest.ffmpeg.sha256 $manifest.ffmpeg.archiveName
+Save-Verified (Get-UpstreamUrl $manifest.mpv "url") $manifest.mpv.sha256 $manifest.mpv.archiveName
+Save-Verified (Get-UpstreamUrl $manifest.mpv "sourceUrl") $manifest.mpv.sourceSha256 $manifest.mpv.sourceArchiveName
 
 $ffmpegSourceName = "ffmpeg-$($manifest.ffmpeg.version)-$($manifest.ffmpeg.variant)-source.tar"
 if (-not $SkipFfmpegSource) {
@@ -137,10 +145,10 @@ corresponding source code. This is not a Tennis Record release.
 Binaries (unmodified copies of the pinned upstream builds):
 - $($manifest.ffmpeg.archiveName)
   FFmpeg $($manifest.ffmpeg.version), BtbN $($manifest.ffmpeg.variant) build. License: GPL version 3 or later.
-  Upstream: $($manifest.ffmpeg.url)
+  Upstream: $(Get-UpstreamUrl $manifest.ffmpeg "url")
 - $($manifest.mpv.archiveName)
   libmpv $($manifest.mpv.version). License: $($manifest.mpv.license).
-  Upstream: $($manifest.mpv.url)
+  Upstream: $(Get-UpstreamUrl $manifest.mpv "url")
 
 Corresponding source:
 - $ffmpegSourceName
@@ -153,7 +161,7 @@ Corresponding source:
 - $($manifest.mpv.sourceArchiveName)
   The libmpv build source: mpv, FFmpeg, libplacebo, the build recipe, and the
   source packages of the LGPL MSYS2 libraries.
-  Upstream: $($manifest.mpv.sourceUrl)
+  Upstream: $(Get-UpstreamUrl $manifest.mpv "sourceUrl")
 
 native-dependencies.json pins each file by SHA-256. SHA256SUMS.txt lists the
 SHA-256 of each file in this release. THIRD-PARTY-NOTICES.txt lists the

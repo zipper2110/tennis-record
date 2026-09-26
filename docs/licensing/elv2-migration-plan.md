@@ -280,6 +280,9 @@ The GPL calls this an "aggregate" (GPLv3 section 5).
   downloads it before it stages the release files. A manual run
   (`workflow_dispatch`) runs only `native-sources`, so you can test it without
   a release.
+- **Changed 2026-09-26.** The natives release replaces the job
+  `native-sources` (see L-4.5). The workflow no longer collects sources and
+  no longer copies `target/distribution/sources/`.
 
 ### L-4.2 Publish the FFmpeg source with each release
 
@@ -302,6 +305,11 @@ The GPL calls this an "aggregate" (GPLv3 section 5).
   stages (zlib, x264, vulkan-loader).
 - Expected size: 1-2 GB. The job splits the `.tar` file into parts if it is
   larger than the 2 GiB asset limit of GitHub.
+- **Changed 2026-09-26.** The full collection ran locally in Docker
+  (`New-NativesRelease.ps1`, Ubuntu 26.04 like the BtbN build image). All 97
+  stages worked. The result is one 858 MB `.tar` file. It is in the natives
+  release (L-4.5), not in each app release. The collection needed Autoconf
+  2.73 (LAME), `meson` (glib), and `pkgconf` and `gettext` (LAME macros).
 
 ### L-4.3 Publish the libmpv source with each release
 
@@ -310,6 +318,34 @@ The GPL calls this an "aggregate" (GPLv3 section 5).
   the grid source archive (`mpv.sourceUrl`), checks `mpv.sourceSha256`, and
   adds it to the release files.
 - The zhongfly build was rejected for this reason (see L-1.1).
+- **Changed 2026-09-26.** The natives release keeps a copy of the grid source
+  archive (L-4.5).
+
+### L-4.5 Keep the native binaries and sources in a natives release
+
+- Upstream hosting is not permanent. BtbN removes daily builds after about
+  two weeks. The GPL requires the source for as long as we offer the binary.
+- `distribution/windows/New-NativesRelease.ps1` downloads the pinned builds
+  from their upstream URLs, checks each SHA-256, and collects the FFmpeg
+  source in Docker. You upload the files to a GitHub release by hand.
+  `distribution/windows/README.md` has the steps.
+- **Done 2026-09-26.** The release `natives-2026-09` is published:
+  https://github.com/zipper2110/tennis-record/releases/tag/natives-2026-09
+  It has the FFmpeg and libmpv binaries, their source, the manifest, the
+  notices, a README, and `SHA256SUMS.txt`. The SHA-256 of each uploaded
+  file matches the local file.
+- `native-dependencies.json` has `nativesRelease` (tag and URL). Each `url`
+  and `sourceUrl` points to the natives release. The upstream URLs are in
+  `upstreamUrl` and `upstreamSourceUrl`. The FFmpeg entry has new
+  `sourceArchiveName`, `sourceUrl` and `sourceSha256` fields.
+- `Validate-Release.ps1` checks that each binary and source URL points to the
+  natives release and that `THIRD-PARTY-NOTICES.txt` links it.
+- The release workflow checks that the natives release has each source file
+  with the SHA-256 of the manifest (`gh release view`). It links the natives
+  release in the release notes.
+- Note: the natives release is marked as the latest release. The first app
+  release becomes the latest release when you publish it with "Set as the
+  latest release" selected.
 
 ### L-4.4 Keep FFmpeg out of the app process
 

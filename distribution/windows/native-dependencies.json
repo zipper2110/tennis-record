@@ -1,17 +1,23 @@
 {
   "schemaVersion": 1,
   "architecture": "windows-x64",
+  "nativesRelease": {
+    "tag": "natives-2026-09",
+    "url": "https://github.com/zipper2110/tennis-record/releases/tag/natives-2026-09"
+  },
   "mpv": {
     "version": "v0.41.0-grid-b4",
     "variant": "grid-libmpv-windows-x86_64",
     "license": "LGPL-2.1-or-later",
     "archiveName": "libmpv-windows-v0.41.0-b4-x86_64.tar.gz",
-    "url": "https://github.com/lpbborges/grid/releases/download/libmpv-windows-v0.41.0-b4/libmpv-windows-x86_64.tar.gz",
+    "url": "https://github.com/zipper2110/tennis-record/releases/download/natives-2026-09/libmpv-windows-v0.41.0-b4-x86_64.tar.gz",
+    "upstreamUrl": "https://github.com/lpbborges/grid/releases/download/libmpv-windows-v0.41.0-b4/libmpv-windows-x86_64.tar.gz",
     "sha256": "c0e0c8dd9aa232c270614785f088dc7371434cfc3762912fcbc2c83fc0bb7d2d",
     "buildRepository": "https://github.com/lpbborges/grid",
     "buildTag": "libmpv-windows-v0.41.0-b4",
     "sourceArchiveName": "libmpv-windows-v0.41.0-b4-source.tar.xz",
-    "sourceUrl": "https://github.com/lpbborges/grid/releases/download/libmpv-windows-v0.41.0-b4/libmpv-windows-source.tar.xz",
+    "sourceUrl": "https://github.com/zipper2110/tennis-record/releases/download/natives-2026-09/libmpv-windows-v0.41.0-b4-source.tar.xz",
+    "upstreamSourceUrl": "https://github.com/lpbborges/grid/releases/download/libmpv-windows-v0.41.0-b4/libmpv-windows-source.tar.xz",
     "sourceSha256": "162ab04fa08de2ecd6e212f95857ac4b58b80617296e2b2048f2b28b1a360ed7",
     "extractedDirectory": ".",
     "flattenDirectories": [
@@ -28,7 +34,8 @@
     "version": "n9.0.2-3-ga5923073bf",
     "variant": "win64-gpl-shared-9.0",
     "archiveName": "ffmpeg-n9.0.2-3-ga5923073bf-win64-gpl-shared-9.0.zip",
-    "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-09-20-13-11/ffmpeg-n9.0.2-3-ga5923073bf-win64-gpl-shared-9.0.zip",
+    "url": "https://github.com/zipper2110/tennis-record/releases/download/natives-2026-09/ffmpeg-n9.0.2-3-ga5923073bf-win64-gpl-shared-9.0.zip",
+    "upstreamUrl": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-09-20-13-11/ffmpeg-n9.0.2-3-ga5923073bf-win64-gpl-shared-9.0.zip",
     "sha256": "d60e8896f647443412d585e2008e32c6c6ca55a7b584f5048a045a3cf142f798",
     "buildRepository": "https://github.com/BtbN/FFmpeg-Builds.git",
     "buildCommit": "3e6685eda92f9288c15ac320139622dcedca09a4",
@@ -39,6 +46,9 @@
     ],
     "sourceRepository": "https://github.com/FFmpeg/FFmpeg.git",
     "sourceCommit": "a5923073bfd8f25b7300d93af3f8e690174ebd30",
+    "sourceArchiveName": "ffmpeg-n9.0.2-3-ga5923073bf-win64-gpl-shared-9.0-source.tar",
+    "sourceUrl": "https://github.com/zipper2110/tennis-record/releases/download/natives-2026-09/ffmpeg-n9.0.2-3-ga5923073bf-win64-gpl-shared-9.0-source.tar",
+    "sourceSha256": "29eb47592e070f41c3497dc7d11efd70f6b68aa6c5ea70df55c65d47eb251e8f",
     "extractedDirectory": "ffmpeg-n9.0.2-3-ga5923073bf-win64-gpl-shared-9.0",
     "directories": [
       "bin"
